@@ -27,18 +27,18 @@ from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 from spatialdata._store import (
-    ZarrStore,
-    make_zarr_store,
-    make_zarr_store_from_group,
+    PathLike,
+    normalize_path,
     open_read_store,
     open_zarr_for_read,
+    path_from_group,
 )
 from spatialdata._types import Raster_T
 
 
 def _read_zarr_group_spatialdata_element(
     root_group: zarr.Group,
-    root_store: ZarrStore,
+    root_store: PathLike,
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: Callable[..., Any],
@@ -60,7 +60,7 @@ def _read_zarr_group_spatialdata_element(
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
-                elem_store = root_store.child(elem_group.path)
+                elem_store = root_store / elem_group.path
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -159,7 +159,7 @@ def read_zarr(
     -------
     A SpatialData object.
     """
-    zarr_store = make_zarr_store_from_group(store) if isinstance(store, zarr.Group) else make_zarr_store(store)
+    zarr_store = path_from_group(store) if isinstance(store, zarr.Group) else normalize_path(store)
 
     images: dict[str, Raster_T] = {}
     labels: dict[str, Raster_T] = {}
@@ -239,7 +239,7 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata._set_zarr_store(zarr_store)
+    sdata._path = zarr_store
     return sdata
 
 

@@ -30,7 +30,7 @@ from spatialdata._core.validation import (
     validate_table_attr_keys,
 )
 from spatialdata._logging import logger
-from spatialdata._store import ZarrStore, make_zarr_store, open_read_store, open_write_store
+from spatialdata._store import PathLike, normalize_path, open_read_store, open_write_store
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
@@ -123,7 +123,6 @@ class SpatialData:
         attrs: Mapping[Any, Any] | None = None,
     ) -> None:
         self._path: Path | UPath | None = None
-        self._zarr_store: ZarrStore | None = None
 
         self._shared_keys: set[str | None] = set()
         self._images: Images = Images(shared_keys=self._shared_keys)
@@ -556,28 +555,12 @@ class SpatialData:
 
     @path.setter
     def path(self, value: str | Path | UPath | None) -> None:
-        if value is None:
-            self._set_zarr_store(None)
-        else:
-            self._set_zarr_store(make_zarr_store(value))
+        self._path = None if value is None else normalize_path(value)
 
-    def _set_zarr_store(self, zarr_store: ZarrStore | None) -> None:
-        self._zarr_store = zarr_store
-        self._path = None if zarr_store is None else zarr_store.path
-
-    def _get_zarr_store(self) -> ZarrStore | None:
-        if self._zarr_store is not None:
-            return self._zarr_store
-        if self.path is None:
-            return None
-        self._zarr_store = make_zarr_store(self.path)
-        return self._zarr_store
-
-    def _require_zarr_store(self) -> ZarrStore:
-        zarr_store = self._get_zarr_store()
-        if zarr_store is None:
+    def _require_path(self) -> PathLike:
+        if self._path is None:
             raise ValueError("The SpatialData object is not backed by a Zarr store.")
-        return zarr_store
+        return self._path
 
     def locate_element(self, element: SpatialElement) -> list[str]:
         """
@@ -1007,7 +990,7 @@ class SpatialData:
         -------
         A list of paths of the elements saved in the Zarr store.
         """
-        zarr_store = self._require_zarr_store()
+        zarr_store = self._require_path()
         elements_in_zarr = []
 
         def find_groups(obj: zarr.Group, path: str) -> None:
@@ -1237,12 +1220,11 @@ class SpatialData:
             if self.path is None:
                 raise ValueError("file_path must be provided when SpatialData.path is not set.")
             file_path = self.path
-        zarr_store = make_zarr_store(file_path)
-        file_path = zarr_store.path
+        file_path = normalize_path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 
-        with open_write_store(zarr_store) as store:
+        with open_write_store(file_path) as store:
             zarr_format = parsed["SpatialData"].zarr_format
             zarr_group = zarr.create_group(store=store, overwrite=overwrite, zarr_format=zarr_format)
             self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
@@ -1260,7 +1242,7 @@ class SpatialData:
             )
 
         if self.path != file_path and update_sdata_path:
-            self._set_zarr_store(zarr_store)
+            self._path = file_path
 
         if consolidate_metadata:
             self.write_consolidated_metadata()
@@ -1513,7 +1495,7 @@ class SpatialData:
                 "more elements in the SpatialData object. Deleting the data would corrupt the SpatialData object."
             )
 
-        zarr_store = self._require_zarr_store()
+        zarr_store = self._require_path()
 
         # delete the element
         with open_write_store(zarr_store) as store:
@@ -1542,7 +1524,7 @@ class SpatialData:
 
     def has_consolidated_metadata(self) -> bool:
         return_value = False
-        with open_read_store(self._require_zarr_store()) as store:
+        with open_read_store(self._require_path()) as store:
             group = zarr.open_group(store, mode="r")
             if getattr(group.metadata, "consolidated_metadata", None):
                 return_value = True
@@ -1738,7 +1720,7 @@ class SpatialData:
 
         if zarr_group is None:
             assert self.is_backed(), "The SpatialData object must be backed by a Zarr store to write attrs."
-            with open_write_store(self._require_zarr_store()) as store:
+            with open_write_store(self._require_path()) as store:
                 zarr_group = zarr.open_group(store=store, mode="r+")
                 self.write_attrs(sdata_format=sdata_format, zarr_group=zarr_group)
             return

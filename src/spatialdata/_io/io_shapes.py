@@ -25,7 +25,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
-from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group, open_zarr_for_read
+from spatialdata._store import PathLike, arrow_filesystem, arrow_path, normalize_path, open_zarr_for_read, path_from_group
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -34,11 +34,11 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: str | Path | UPath | ZarrStore,
+    store: str | Path | UPath | PathLike,
 ) -> GeoDataFrame:
     """Read shapes from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
-    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
-    resolved_store = _resolve_zarr_store(zarr_store.path)
+    path = normalize_path(store) if not isinstance(store, (Path, UPath)) else store
+    resolved_store = _resolve_zarr_store(path)
     f = open_zarr_for_read(resolved_store, as_group=False)
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
@@ -59,8 +59,8 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        parquet_store = zarr_store.child("shapes.parquet")
-        with parquet_store.arrow_filesystem().open_input_file(parquet_store.arrow_path()) as src:
+        parquet_path = path / "shapes.parquet"
+        with arrow_filesystem(parquet_path).open_input_file(arrow_path(parquet_path)) as src:
             geo_df = read_parquet(src)
     else:
         raise ValueError(
@@ -173,12 +173,12 @@ def _write_shapes_v02_v03(
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    parquet_store = make_zarr_store_from_group(group).child("shapes.parquet")
+    parquet_path = path_from_group(group) / "shapes.parquet"
 
     # Temporarily remove transformations from attrs to avoid serialization issues
     transforms = shapes.attrs[TRANSFORM_KEY]
     del shapes.attrs[TRANSFORM_KEY]
-    with parquet_store.arrow_filesystem().open_output_stream(parquet_store.arrow_path()) as sink:
+    with arrow_filesystem(parquet_path).open_output_stream(arrow_path(parquet_path)) as sink:
         shapes.to_parquet(sink, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 

@@ -15,7 +15,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
-from spatialdata._store import ZarrStore, make_zarr_store, make_zarr_store_from_group, open_zarr_for_read
+from spatialdata._store import PathLike, arrow_filesystem, arrow_path, normalize_path, open_zarr_for_read, path_from_group
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -24,18 +24,18 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: str | Path | UPath | ZarrStore,
+    store: str | Path | UPath | PathLike,
 ) -> DaskDataFrame:
     """Read points from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
-    zarr_store = store if isinstance(store, ZarrStore) else make_zarr_store(store)
-    resolved_store = _resolve_zarr_store(zarr_store.path)
+    path = normalize_path(store) if not isinstance(store, (Path, UPath)) else store
+    resolved_store = _resolve_zarr_store(path)
     f = open_zarr_for_read(resolved_store, as_group=False)
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    parquet_store = zarr_store.child("points.parquet")
+    parquet_path = path / "points.parquet"
     # Passing filesystem= to read_parquet makes pyarrow convert dictionary columns into pandas
     # categoricals eagerly per partition and marks them known=True with an empty category list.
     # This happens for ANY pyarrow filesystem (both LocalFileSystem and PyFileSystem(FSSpecHandler(.))
@@ -46,8 +46,8 @@ def _read_points(
     # "unknown" right here so that write_points recomputes categories consistently across partitions.
     # TODO: allow reading in the metadata without materializing the data.
     points = read_parquet(
-        parquet_store.arrow_path(),
-        filesystem=parquet_store.arrow_filesystem(),
+        arrow_path(parquet_path),
+        filesystem=arrow_filesystem(parquet_path),
     )
     assert isinstance(points, DaskDataFrame)
     for column_name in points.columns:
@@ -89,7 +89,7 @@ def write_points(
     transformations = _get_transformations(points)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
-    parquet_store = make_zarr_store_from_group(group).child("points.parquet")
+    parquet_path = path_from_group(group) / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -105,8 +105,8 @@ def write_points(
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
     points_without_transform.to_parquet(
-        parquet_store.arrow_path(),
-        filesystem=parquet_store.arrow_filesystem(),
+        arrow_path(parquet_path),
+        filesystem=arrow_filesystem(parquet_path),
     )
 
     attrs = element_format.attrs_to_dict(points.attrs)
