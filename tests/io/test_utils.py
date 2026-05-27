@@ -5,11 +5,14 @@ import tempfile
 from contextlib import nullcontext
 
 import dask.dataframe as dd
+import numpy as np
+import pandas as pd
 import pytest
 from upath import UPath
 
-from spatialdata import read_zarr
+from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import get_dask_backing_files, handle_read_errors
+from spatialdata.models import PointsModel
 
 
 def test_backing_files_points(points):
@@ -141,3 +144,23 @@ def test_handle_read_errors(on_bad_files: str, actual_error: Exception, expectat
         with handle_read_errors(on_bad_files=on_bad_files, location="location", exc_types=KeyError):
             if actual_error is not None:
                 raise actual_error
+
+
+def test_repr_points_shows_row_count():
+    """repr() must show the concrete row count, not <Delayed>, for backed points."""
+    with tempfile.TemporaryDirectory() as tmp:
+        parquet_path = os.path.join(tmp, "points.parquet")
+        n_rows = 400
+        rng = np.random.default_rng(0)
+        df = pd.DataFrame({"x": rng.random(n_rows), "y": rng.random(n_rows)})
+        # aggregate_files=True produces a list-of-piece-dicts graph, the case reported in #1084
+        dd.from_pandas(df, npartitions=4).to_parquet(parquet_path, write_index=False)
+        ddf = dd.read_parquet(parquet_path, aggregate_files=True)
+
+        points = PointsModel.parse(ddf)
+        sdata = SpatialData(points={"pts": points})
+        sdata.write(os.path.join(tmp, "example.zarr"))
+
+        r = repr(sdata)
+        assert f"({n_rows}," in r, f"expected row count {n_rows} in repr, got: {r}"
+        assert "<Delayed>" not in r, f"repr still contains <Delayed>: {r}"

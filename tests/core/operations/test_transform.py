@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 from dask import config
 from geopandas.testing import geom_almost_equals
@@ -146,7 +147,7 @@ def test_transform_raster(full_sdata: SpatialData, element_type: str, multiscale
         assert element_type == "labels"
         sdata = SpatialData(labels={k: v for k, v in full_sdata.labels.items() if isinstance(v, datatype)})
 
-    affine = _get_affine(small_translation=False)
+    affine = _get_affine(small_translation=True)
 
     _postpone_transformation(
         sdata, from_coordinate_system="global", to_coordinate_system="transformed", transformation=affine
@@ -590,6 +591,53 @@ def test_transform_elements_and_entire_spatial_data_object(full_sdata: SpatialDa
     _ = full_sdata.transform_to_coordinate_system("my_space", maintain_positioning=maintain_positioning)
 
 
+def test_transform_points_duplicate_index_gh1105(tmp_path: str):
+    """Regression test for https://github.com/scverse/spatialdata/issues/1105.
+
+    Points loaded from multiple parquet files (e.g. Xenium transcripts) have a per-file 0-based
+    index, so the global dask DataFrame index has duplicate labels. The old implementation passed
+    ``index=transformed.index`` to ``pd.Series``, which materialised the duplicate dask Index and
+    caused ``ValueError: cannot reindex on an axis with duplicate labels`` when assigning back.
+    """
+    import dask.dataframe as dd
+
+    n_per_partition = 50
+    n_partitions = 4
+    rng = np.random.default_rng(0)
+
+    # Simulate multi-file parquet: each partition's index starts at 0
+    parts = [
+        pd.DataFrame(
+            {
+                "x": rng.random(n_per_partition).astype("float32"),
+                "y": rng.random(n_per_partition).astype("float32"),
+                "gene": [f"gene_{j}" for j in range(n_per_partition)],
+            }
+        )
+        for _ in range(n_partitions)
+    ]
+    # test also the case of non-contiguous indices
+    for part in parts:
+        part.index = part.index.to_list()[:-1] + [100]
+    ddf = dd.from_map(lambda df: df, parts)
+    assert not ddf.index.compute().is_unique, "test setup: index must have duplicates"
+
+    scale_factor = 4
+    points = PointsModel.parse(ddf)
+    set_transformation(points, Scale([scale_factor, scale_factor], axes=("x", "y")), to_coordinate_system="global")
+
+    result = transform(points, to_coordinate_system="global")
+    result_pd = result.compute()
+
+    # Index must be preserved as-is (duplicate [0..49] × 4)
+    assert list(result_pd.index) == list(ddf.compute().index)
+    # Non-axis column must survive unchanged
+    assert list(result_pd["gene"]) == list(ddf.compute()["gene"])
+    # Axis values must be correctly scaled
+    expected_x = ddf.compute()["x"].values * scale_factor
+    np.testing.assert_allclose(result_pd["x"].values, expected_x, rtol=1e-5)
+
+
 def test_transform_points_with_multiple_partitions(full_sdata: SpatialData, tmp_path: str):
     tmpdir = Path(tmp_path) / "tmp.zarr"
     points_memory = full_sdata["points_0"].compute()
@@ -796,3 +844,29 @@ def test_transform_until_0_0_15(points):
 
     transform(points, transformation=t0, maintain_positioning=True)
     transform(points, to_coordinate_system="global", maintain_positioning=True)
+
+
+@pytest.mark.parametrize(
+    "element_fixture,kwargs",
+    [
+        ("image2d", {"images": {}}),
+        ("image2d_multiscale", {"images": {}}),
+        ("labels2d", {"labels": {}}),
+        ("labels2d_multiscale", {"labels": {}}),
+        ("circles", {"shapes": {}}),
+        ("points_0", {"points": {}}),
+    ],
+)
+def test_write_fails_after_removing_all_transformations(
+    full_sdata: SpatialData, tmp_path: Path, element_fixture: str, kwargs: dict
+) -> None:
+    """Writing should fail when all transformations are removed from an element already in a SpatialData."""
+    # Build a valid SpatialData first (passes __setitem__ validation)
+    container_key = next(iter(kwargs))
+    sdata = SpatialData(**{container_key: {element_fixture: full_sdata[element_fixture]}})
+
+    # Mutate in-place after construction, bypassing __setitem__ validation
+    remove_transformation(sdata[element_fixture], remove_all=True)
+
+    with pytest.raises(ValueError, match="transform"):
+        sdata.write(tmp_path / "sdata.zarr")

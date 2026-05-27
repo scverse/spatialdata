@@ -246,6 +246,41 @@ def test_left_inner_right_exclusive_join(sdata_query_aggregation):
     assert element_dict["by_polygons"] is None
 
 
+def test_join_updates_spatialdata_attrs(sdata_query_aggregation):
+    sdata = sdata_query_aggregation
+    # table annotates ["values_circles", "values_polygons"]
+    original_regions = sdata["table"].uns["spatialdata_attrs"]["region"]
+    assert set(original_regions) == {"values_circles", "values_polygons"}
+
+    # left join on a single element: region list must shrink to just that element
+    _, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names="values_circles", table_name="table", how="left"
+    )
+    assert table.uns["spatialdata_attrs"]["region"] == ["values_circles"]
+
+    # inner join on a single element
+    _, table = join_spatialelement_table(
+        sdata=sdata, spatial_element_names="values_circles", table_name="table", how="inner"
+    )
+    assert table.uns["spatialdata_attrs"]["region"] == ["values_circles"]
+
+    # right_exclusive join: pass a truncated circles element so some table rows have no match.
+    # values_circles has 9 instances (0-8); keep only 5 → 4 table rows are exclusive.
+    # Use sdata=None mode so we can pass a truncated element under the original region name.
+    _, table = join_spatialelement_table(
+        spatial_element_names=["values_circles"],
+        spatial_elements=[sdata["values_circles"].iloc[:5]],
+        table=sdata["table"],
+        how="right_exclusive",
+    )
+    assert table is not None
+    assert table.n_obs == 4
+    assert table.uns["spatialdata_attrs"]["region"] == ["values_circles"]
+
+    # original table metadata must be unchanged
+    assert set(sdata["table"].uns["spatialdata_attrs"]["region"]) == {"values_circles", "values_polygons"}
+
+
 def test_join_spatialelement_table_fail(full_sdata):
     with pytest.raises(ValueError, match=" not supported for join operation."):
         join_spatialelement_table(
@@ -403,8 +438,8 @@ def test_match_rows_inner_join_non_matching_element(sdata_query_aggregation):
 
 def test_match_rows_inner_join_non_matching_table(sdata_query_aggregation):
     sdata = sdata_query_aggregation
-    table = sdata["table"][3:]
-    original_instance_id = table.obs["instance_id"]
+    table = sdata["table"][3:].copy()
+    original_instance_id = table.obs["instance_id"].copy()
     reversed_instance_id = [6, 7, 8, 3, 4, 5] + list(reversed(range(12)))
     table.obs["instance_id"] = reversed_instance_id
     sdata["table"] = table
@@ -1214,7 +1249,7 @@ def test_filter_by_table_query_edge_cases(complex_sdata):
         assert var_name.startswith("feature_") and int(var_name.split("_")[1]) < 5
 
     # Test 6: Invalid element_names (element doesn't exist)
-    with pytest.raises(AssertionError, match="elements_dict must not be empty"):
+    with pytest.raises(KeyError, match="shapes_table"):
         filter_by_table_query(
             sdata=sdata,
             table_name="shapes_table",

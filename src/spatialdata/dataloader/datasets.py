@@ -127,7 +127,9 @@ class ImageTilesDataset(Dataset):
         from spatialdata import bounding_box_query
         from spatialdata._core.operations.rasterize import rasterize as rasterize_fn
 
-        self._validate(sdata, regions_to_images, regions_to_coordinate_systems, return_annotations, table_name)
+        self.sdata = sdata
+        self._rasterize = rasterize
+        self._validate(regions_to_images, regions_to_coordinate_systems, return_annotations, table_name)
         self._preprocess(tile_scale, tile_dim_in_units, rasterize, table_name)
 
         if rasterize_kwargs is not None and len(rasterize_kwargs) > 0 and rasterize is False:
@@ -151,14 +153,12 @@ class ImageTilesDataset(Dataset):
 
     def _validate(
         self,
-        sdata: SpatialData,
         regions_to_images: dict[str, str],
         regions_to_coordinate_systems: dict[str, str],
         return_annotations: str | list[str] | None,
         table_name: str | None,
     ) -> None:
         """Validate input parameters."""
-        self.sdata = sdata
         if return_annotations is not None and table_name is None:
             raise ValueError("`table_name` must be provided if `return_annotations` is not `None`.")
 
@@ -173,8 +173,8 @@ class ImageTilesDataset(Dataset):
             image_name = regions_to_images[region_name]
 
             # get elements
-            region_elem = sdata[region_name]
-            image_elem = sdata[image_name]
+            region_elem = self.sdata[region_name]
+            image_elem = self.sdata[image_name]
 
             # check that the elements are supported
             if get_model(region_elem) == PointsModel:
@@ -199,13 +199,13 @@ class ImageTilesDataset(Dataset):
                 )
 
             if table_name is not None:
-                _, region_key, instance_key = get_table_keys(sdata.tables[table_name])
+                _, region_key, instance_key = get_table_keys(self.sdata.tables[table_name])
                 if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
                     indices = get_element_instances(region_elem).tolist()
                 else:
                     indices = region_elem.index.tolist()
-                table = sdata.tables[table_name]
-                if not isinstance(sdata.tables[table_name].obs[region_key].dtype, CategoricalDtype):
+                table = self.sdata.tables[table_name]
+                if not isinstance(self.sdata.tables[table_name].obs[region_key].dtype, CategoricalDtype):
                     raise TypeError(
                         f"The `regions_element` column `{region_key}` in the table must be a categorical dtype. "
                         f"Please convert it."
@@ -228,8 +228,10 @@ class ImageTilesDataset(Dataset):
         table_name: str | None,
     ) -> None:
         """Preprocess the dataset."""
+        from spatialdata import bounding_box_query
+
         if table_name is not None:
-            _, region_key, instance_key = get_table_keys(self.sdata.tables[table_name])
+            _, region_key, _ = get_table_keys(self.sdata.tables[table_name])
             filtered_table = self.sdata.tables[table_name][
                 self.sdata.tables[table_name].obs[region_key].isin(self.regions)
             ]  # filtered table for the data loader
@@ -249,6 +251,18 @@ class ImageTilesDataset(Dataset):
                 tile_scale=tile_scale,
                 tile_dim_in_units=tile_dim_in_units,
             )
+            if not rasterize:
+                # Pre-compute all per-tile slice selections in a single vectorized call.
+                # Passing 2-D min/max arrays triggers the multi-box path in bounding_box_query,
+                # which returns a list of {axis: slice} dicts — one per tile.
+                tile_coords["selection"] = bounding_box_query(
+                    self.sdata[image_name],
+                    ("x", "y"),
+                    min_coordinate=tile_coords[["minx", "miny"]].values,
+                    max_coordinate=tile_coords[["maxx", "maxy"]].values,
+                    target_coordinate_system=cs,
+                    return_request_only=True,
+                )
             tile_coords_df.append(tile_coords)
 
             inst = circles.index.values
@@ -276,7 +290,7 @@ class ImageTilesDataset(Dataset):
         self.dataset_index = pd.concat(index_df).reset_index(drop=True)
         assert len(self.tiles_coords) == len(self.dataset_index)
         if table_name:
-            self.dataset_table = ad.concat(*tables_l)
+            self.dataset_table = ad.concat(tables_l)
             assert len(self.tiles_coords) == len(self.dataset_table)
 
         dims_ = set(chain(*dims_l))
@@ -356,13 +370,17 @@ class ImageTilesDataset(Dataset):
         t_coords = self.tiles_coords.iloc[idx]
 
         image = self.sdata[row["image"]]
-        tile = self._crop_image(
-            image,
-            axes=tuple(self.dims),
-            min_coordinate=t_coords[[f"min{i}" for i in self.dims]].values,
-            max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
-            target_coordinate_system=row["cs"],
-        )
+        if self._rasterize:
+            tile = self._crop_image(
+                image,
+                axes=tuple(self.dims),
+                min_coordinate=t_coords[[f"min{i}" for i in self.dims]].values,
+                max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
+                target_coordinate_system=row["cs"],
+            )
+        else:
+            # Use pre-computed slice selection (vectorized at init time).
+            tile = image.sel(t_coords["selection"])
         if self.transform is not None:
             out = self._return(idx, tile)
             return self.transform(out)

@@ -11,6 +11,7 @@ from typing import Any, Literal
 import dask.array as da
 import numpy as np
 import pandas as pd
+import xarray as xr
 from anndata import AnnData
 from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -58,31 +59,6 @@ def get_element_annotators(sdata: SpatialData, element_name: str) -> set[str]:
     return table_names
 
 
-def _filter_table_by_element_names(table: AnnData | None, element_names: str | list[str]) -> AnnData | None:
-    """
-    Filter an AnnData table to keep only the rows that are in the coordinate system.
-
-    Parameters
-    ----------
-    table
-        The table to filter; if None, returns None
-    element_names
-        The element_names to keep in the tables obs.region column
-
-    Returns
-    -------
-    The filtered table, or None if the input table was None
-    """
-    if table is None or not table.uns.get(TableModel.ATTRS_KEY):
-        return None
-    table_mapping_metadata = table.uns[TableModel.ATTRS_KEY]
-    region_key = table_mapping_metadata[TableModel.REGION_KEY_KEY]
-    table.obs = pd.DataFrame(table.obs)
-    table = table[table.obs[region_key].isin(element_names)].copy()
-    table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
-    return table
-
-
 @singledispatch
 def get_element_instances(
     element: SpatialElement,
@@ -112,7 +88,8 @@ def _(
     return_background: bool = False,
 ) -> pd.Index:
     model = get_model(element)
-    assert model in [Labels2DModel, Labels3DModel], "Expected a `Labels` element. Found an `Image` instead."
+    if model not in [Labels2DModel, Labels3DModel]:
+        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
     if isinstance(element, DataArray):
         # get unique labels value (including 0 if present)
         instances = da.unique(element.data).compute()
@@ -143,88 +120,43 @@ def _(
     return element.index
 
 
-# TODO: replace function use throughout repo by `join_sdata_spatialelement_table`
-# TODO: benchmark against join operations before removing
-def _filter_table_by_elements(
-    table: AnnData | None, elements_dict: dict[str, dict[str, Any]], match_rows: bool = False
-) -> AnnData | None:
+def _filter_table_by_elements(table: AnnData | None, elements_dict: dict[str, dict[str, Any]]) -> AnnData | None:
     """
-    Filter an AnnData table to keep only the rows that are in the elements.
+    Filter an AnnData table to keep only the rows annotating elements in elements_dict.
 
     Parameters
     ----------
     table
         The table to filter; if None, returns None
     elements_dict
-        The elements to use to filter the table
-    match_rows
-        If True, reorder the table rows to match the order of the elements
+        The elements to use to filter the table, structured as ``{element_type: {name: element}}``.
+        Image elements are ignored since tables cannot annotate images.
 
     Returns
     -------
-    The filtered table (eventually with reordered rows), or None if the input table was None.
+    The filtered table, or None if the input table is None or no rows match.
     """
-    assert set(elements_dict.keys()).issubset({"images", "labels", "shapes", "points"})
-    assert len(elements_dict) > 0, "elements_dict must not be empty"
-    assert any(len(elements) > 0 for elements in elements_dict.values()), (
-        "elements_dict must contain at least one dict which contains at least one element"
-    )
     if table is None:
         return None
-    to_keep = np.zeros(len(table), dtype=bool)
-    region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
-    instance_key = table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
-    instances = None
-    for _, elements in elements_dict.items():
-        for name, element in elements.items():
-            if get_model(element) == Labels2DModel or get_model(element) == Labels3DModel:
-                if isinstance(element, DataArray):
-                    # get unique labels value (including 0 if present)
-                    instances = da.unique(element.data).compute()
-                else:
-                    assert isinstance(element, DataTree)
-                    v = element["scale0"].values()
-                    assert len(v) == 1
-                    xdata = next(iter(v))
-                    # can be slow
-                    instances = da.unique(xdata.data).compute()
-                instances = np.sort(instances)
-            elif get_model(element) == ShapesModel:
-                instances = element.index.to_numpy()
-            elif get_model(element) == PointsModel:
-                instances = element.compute().index.to_numpy()
-            else:
-                continue
-            indices = ((table.obs[region_key] == name) & (table.obs[instance_key].isin(instances))).to_numpy()
-            to_keep = to_keep | indices
-    original_table = table
-    table.obs = pd.DataFrame(table.obs)
-    table = table[to_keep, :]
-    if match_rows:
-        assert instances is not None
-        assert isinstance(instances, np.ndarray)
-        assert np.sum(to_keep) != 0, "No row matches in the table annotates the element"
-        if np.sum(to_keep) != len(instances):
-            if len(elements_dict) > 1 or len(elements_dict) == 1 and len(next(iter(elements_dict.values()))) > 1:
-                raise NotImplementedError("Sorting is not supported when filtering by multiple elements")
-            # case in which the instances in the table and the instances in the element don't correspond
-            assert "element" in locals()
-            assert "name" in locals()
-            n0 = np.setdiff1d(instances, table.obs[instance_key].to_numpy())
-            n1 = np.setdiff1d(table.obs[instance_key].to_numpy(), instances)
-            assert len(n1) == 0, f"The table contains {len(n1)} instances that are not in the element: {n1}"
-            # some instances have not a corresponding row in the table
-            instances = np.setdiff1d(instances, n0)
-        assert np.sum(to_keep) == len(instances)
-        assert sorted(set(instances.tolist())) == sorted(set(table.obs[instance_key].tolist()))  # type: ignore[type-var]
-        table_df = pd.DataFrame({instance_key: table.obs[instance_key], "position": np.arange(len(instances))})
-        merged = pd.merge(table_df, pd.DataFrame(index=instances), left_on=instance_key, right_index=True, how="right")
-        matched_positions = merged["position"].to_numpy()
-        table = table[matched_positions, :]
-    table = table.copy()
-    _inplace_fix_subset_categorical_obs(subset_adata=table, original_adata=original_table)
-    table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = table.obs[region_key].unique().tolist()
-    return table
+    elements_by_name = {
+        name: element
+        for element_type, name_to_element in elements_dict.items()
+        if element_type != "images"
+        for name, element in name_to_element.items()
+    }
+    if not elements_by_name:
+        return None
+    # Suppress "element not annotated by table" warnings: the table may annotate
+    # only a subset of the elements passed in, which is expected here.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        _, filtered = join_spatialelement_table(
+            spatial_element_names=list(elements_by_name.keys()),
+            spatial_elements=list(elements_by_name.values()),
+            table=table,
+            how="left",
+        )
+    return filtered if filtered is not None and len(filtered) > 0 else None
 
 
 def _get_joined_table_indices(
@@ -252,7 +184,7 @@ def _get_joined_table_indices(
     -------
         The indices that of the table that match the SpatialElement indices.
     """
-    mask = table_instance_key_column.isin(element_indices)
+    mask = np.isin(table_instance_key_column.values, element_indices)
     if joined_indices is None:
         if match_rows == "left":
             _, joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
@@ -293,7 +225,7 @@ def _get_masked_element(
     -------
     The masked spatial element based on the provided indices and match rows.
     """
-    mask = table_instance_key_column.isin(element_indices)
+    mask = np.isin(table_instance_key_column.values, element_indices)
     masked_table_instance_key_column = table_instance_key_column[mask]
     mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
     if match_rows in ["left", "right"]:
@@ -311,13 +243,19 @@ def _get_masked_element(
 
 
 def _right_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    groups_df = table.obs.groupby(by=region_column_name, observed=False)
-    mask = []
+    # reset_index so group_df.index gives integer positions — safe with duplicate obs names
+    obs = table.obs.reset_index()
+    groups_df = obs.groupby(by=region_column_name, observed=False)
+    keep = np.zeros(len(table), dtype=bool)
+    has_match = False
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
             if name in regions:
@@ -327,10 +265,10 @@ def _right_exclusive_join_spatialelement_table(
                     element_indices = element.index
                 else:
                     element_indices = get_element_instances(element)
-
-                element_dict[element_type][name] = None
                 submask = ~table_instance_key_column.isin(element_indices)
-                mask.append(submask)
+                keep[group_df.index[submask.values]] = True
+                has_match = True
+                element_dict[element_type][name] = None
             else:
                 warnings.warn(
                     f"The element `{name}` is not annotated by the table. Skipping", UserWarning, stacklevel=2
@@ -338,18 +276,20 @@ def _right_exclusive_join_spatialelement_table(
                 element_dict[element_type][name] = None
                 continue
 
-    if len(mask) != 0:
-        mask = pd.concat(mask)
-        exclusive_table = table[mask, :].copy() if mask.sum() != 0 else None  # type: ignore[attr-defined]
-    else:
-        exclusive_table = None
-
+    exclusive_table = table[keep, :] if has_match and keep.any() else None
     _inplace_fix_subset_categorical_obs(subset_adata=exclusive_table, original_adata=table)
+    if exclusive_table is not None:
+        exclusive_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+            exclusive_table.obs[region_column_name].unique().tolist()
+        )
     return element_dict, exclusive_table
 
 
 def _right_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "left":
         warnings.warn("Matching rows 'left' is not supported for 'right' join.", UserWarning, stacklevel=2)
@@ -365,11 +305,18 @@ def _right_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    warnings.warn(
-                        f"Element type `labels` not supported for 'right' join. Skipping `{name}`",
-                        UserWarning,
-                        stacklevel=2,
-                    )
+                    if filter_label_pixels is True:
+                        element_dict[element_type][name] = _filter_labels_element(
+                            element, table_instance_key_column.tolist()
+                        )
+                    elif filter_label_pixels is None:
+                        warnings.warn(
+                            f"Element type `labels` not supported for 'right' join, pixels are not filtered;"
+                            f" pass `filter_label_pixels=True` to filter or `filter_label_pixels=False` to silence"
+                            f" this warning. Skipping `{name}`",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                     continue
 
                 masked_element = _get_masked_element(element_indices, element, table_instance_key_column, match_rows)
@@ -383,7 +330,10 @@ def _right_join_spatialelement_table(
 
 
 def _inner_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
@@ -399,11 +349,18 @@ def _inner_join_spatialelement_table(
                 if element_type in ["points", "shapes"]:
                     element_indices = element.index
                 else:
-                    warnings.warn(
-                        f"Element type `labels` not supported for 'inner' join. Skipping `{name}`",
-                        UserWarning,
-                        stacklevel=2,
-                    )
+                    if filter_label_pixels is True:
+                        element_dict[element_type][name] = _filter_labels_element(
+                            element, table_instance_key_column.tolist()
+                        )
+                    elif filter_label_pixels is None:
+                        warnings.warn(
+                            f"Element type `labels` not supported for 'inner' join, pixels are not filtered;"
+                            f" pass `filter_label_pixels=True` to filter or `filter_label_pixels=False` to silence"
+                            f" this warning. Skipping `{name}`",
+                            UserWarning,
+                            stacklevel=2,
+                        )
                     continue
 
                 masked_element = _get_masked_element(element_indices, element, table_instance_key_column, match_rows)
@@ -425,11 +382,18 @@ def _inner_join_spatialelement_table(
     joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
 
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
+    if joined_table is not None:
+        joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+            joined_table.obs[region_column_name].unique().tolist()
+        )
     return element_dict, joined_table
 
 
 def _left_exclusive_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
@@ -462,7 +426,10 @@ def _left_exclusive_join_spatialelement_table(
 
 
 def _left_join_spatialelement_table(
-    element_dict: dict[str, dict[str, Any]], table: AnnData, match_rows: Literal["left", "no", "right"]
+    element_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    match_rows: Literal["left", "no", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "right":
         warnings.warn("Matching rows 'right' is not supported for 'left' join.", UserWarning, stacklevel=2)
@@ -498,7 +465,10 @@ def _left_join_spatialelement_table(
             joined_indices = joined_indices.astype(int)
     joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
-
+    if joined_table is not None:
+        joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+            joined_table.obs[region_column_name].unique().tolist()
+        )
     return element_dict, joined_table
 
 
@@ -586,6 +556,7 @@ def join_spatialelement_table(
     table: AnnData | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "left",
     match_rows: Literal["no", "left", "right"] = "no",
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     """
     Join SpatialElement(s) and table together in SQL like manner.
@@ -629,6 +600,11 @@ def join_spatialelement_table(
     match_rows
         Whether to match the indices of the element and table and if so how. If ``'left'``, element_indices take
         priority and if ``'right'`` table instance ids take priority.
+    filter_label_pixels
+        Controls pixel-level filtering of label elements for ``'right'`` and ``'inner'`` joins.
+        If ``True``, pixels whose instance id is not present in the table are set to zero.
+        If ``None`` (default), label elements are returned unfiltered and a warning is issued.
+        If ``False``, label elements are returned unfiltered silently (no warning).
 
     Returns
     -------
@@ -687,19 +663,28 @@ def join_spatialelement_table(
     if sdata is not None:
         elements_dict = _create_sdata_elements_dict_for_join(sdata, spatial_element_names)
     else:
-        derived_sdata = SpatialData.init_from_elements(dict(zip(spatial_element_names, spatial_elements, strict=True)))
-        element_types = ["labels", "shapes", "points"]
+        _model_to_type = {
+            Labels2DModel: "labels",
+            Labels3DModel: "labels",
+            ShapesModel: "shapes",
+            PointsModel: "points",
+        }
         elements_dict = defaultdict(lambda: defaultdict(dict))
-        for element_type in element_types:
-            for name, element in getattr(derived_sdata, element_type).items():
+        for name, element in zip(spatial_element_names, spatial_elements, strict=True):
+            element_type = _model_to_type.get(get_model(element))
+            if element_type is not None:
                 elements_dict[element_type][name] = element
 
-    elements_dict_joined, table = _call_join(elements_dict, table, how, match_rows)
+    elements_dict_joined, table = _call_join(elements_dict, table, how, match_rows, filter_label_pixels)
     return elements_dict_joined, table
 
 
 def _call_join(
-    elements_dict: dict[str, dict[str, Any]], table: AnnData, how: str, match_rows: Literal["no", "left", "right"]
+    elements_dict: dict[str, dict[str, Any]],
+    table: AnnData,
+    how: str,
+    match_rows: Literal["no", "left", "right"],
+    filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
         "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
@@ -714,7 +699,7 @@ def _call_join(
     # if how in JoinTypes.__dict__["_member_names_"]:
     # hotfix for bug with Python 3.13:
     if how in JoinTypes.__dict__:
-        elements_dict, table = getattr(JoinTypes, how)(elements_dict, table, match_rows)
+        elements_dict, table = getattr(JoinTypes, how)(elements_dict, table, match_rows, filter_label_pixels)
     else:
         raise TypeError(f"`{how}` is not a valid type of join.")
 
@@ -797,6 +782,7 @@ def match_sdata_to_table(
     table_name: str,
     table: AnnData | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+    filter_label_pixels: bool | None = None,
 ) -> SpatialData:
     """
     Filter the elements of a SpatialData object to match only the rows present in the table.
@@ -812,6 +798,10 @@ def match_sdata_to_table(
         `table_name` is used to name the table in the returned `SpatialData` object.
     how
         The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
+    filter_label_pixels
+        Controls pixel-level filtering of label elements. ``True`` filters pixels, ``None`` (default) leaves them
+        unfiltered and warns, ``False`` leaves them unfiltered silently. See
+        :func:`spatialdata.join_spatialelement_table` for details.
 
     Notes
     -----
@@ -823,7 +813,7 @@ def match_sdata_to_table(
     _, region_key, instance_key = get_table_keys(table)
     annotated_regions = SpatialData.get_annotated_regions(table)
     filtered_elements, filtered_table = join_spatialelement_table(
-        sdata, spatial_element_names=annotated_regions, table=table, how=how
+        sdata, spatial_element_names=annotated_regions, table=table, how=how, filter_label_pixels=filter_label_pixels
     )
     filtered_table = TableModel.parse(
         filtered_table,
@@ -847,6 +837,7 @@ def filter_by_table_query(
     var_names_expr: Predicates | None = None,
     layer: str | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
+    filter_label_pixels: bool | None = None,
 ) -> SpatialData:
     """Filter the SpatialData object based on a set of table queries.
 
@@ -875,6 +866,10 @@ def filter_by_table_query(
         The layer of the :class:`anndata.AnnData` to filter the SpatialData object by, only used with `x_expr`.
     how
         The type of join to perform. See :func:`spatialdata.join_spatialelement_table`. Default is "right".
+    filter_label_pixels
+        Controls pixel-level filtering of label elements. ``True`` filters pixels, ``None`` (default) leaves them
+        unfiltered and warns, ``False`` leaves them unfiltered silently. See
+        :func:`spatialdata.join_spatialelement_table` for details.
 
     Returns
     -------
@@ -899,7 +894,13 @@ def filter_by_table_query(
         obs=obs_expr, var=var_expr, x=x_expr, obs_names=obs_names_expr, var_names=var_names_expr, layer=layer
     )
 
-    return match_sdata_to_table(sdata=sdata_subset, table_name=table_name, table=filtered_table, how=how)
+    return match_sdata_to_table(
+        sdata=sdata_subset,
+        table_name=table_name,
+        table=filtered_table,
+        how=how,
+        filter_label_pixels=filter_label_pixels,
+    )
 
 
 @dataclass
@@ -1099,3 +1100,50 @@ def get_values(
         return df
 
     raise ValueError(f"Unknown origin {origin}")
+
+
+def _mask_block(block: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
+    # Use apply_ufunc for efficient processing
+    # Create a copy to avoid modifying read-only array
+    result = block.copy()
+    result[np.isin(result, ids_to_remove)] = 0
+    return result
+
+
+def _set_instance_ids_in_labels_to_zero(image: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
+    processed = xr.apply_ufunc(
+        partial(_mask_block, ids_to_remove=ids_to_remove),
+        image,
+        input_core_dims=[["y", "x"]],
+        output_core_dims=[["y", "x"]],
+        vectorize=True,
+        dask="parallelized",
+        output_dtypes=[image.dtype],
+        dataset_fill_value=0,
+        dask_gufunc_kwargs={"allow_rechunk": True},
+    )
+
+    # Create a new DataArray to ensure persistence
+    return xr.DataArray(
+        data=processed.data,
+        coords=image.coords,
+        dims=image.dims,
+        attrs=image.attrs.copy(),  # Preserve all attributes
+    )
+
+
+def _filter_labels_element(element: DataArray | DataTree, ids_to_keep: list[int]) -> DataArray | DataTree:
+    if get_model(element) is Labels3DModel:
+        raise NotImplementedError("Pixel-level filtering of 3D labels is not supported.")
+    element_instances = get_element_instances(element)
+    ids_to_remove = [i for i in element_instances if i not in set(ids_to_keep)]
+    if isinstance(element, DataArray):
+        return Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(element, ids_to_remove))
+    scales = list(element.keys())
+    scale_factors = [
+        round(element[scales[i]].image.shape[0] / element[scales[i + 1]].image.shape[0]) for i in range(len(scales) - 1)
+    ]
+    return Labels2DModel.parse(
+        _set_instance_ids_in_labels_to_zero(element[scales[0]].image, ids_to_remove),
+        scale_factors=scale_factors,
+    )

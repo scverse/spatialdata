@@ -47,7 +47,7 @@ class TestMultiTable:
         n_obs = full_sdata["table"].n_obs
         full_sdata["table"].obs["instance_id"] = range(n_obs)
         # introduce null values
-        full_sdata["table"].obs.loc[0, "instance_id"] = None
+        full_sdata["table"].obs.at[full_sdata["table"].obs_names[0], "instance_id"] = None
         with pytest.raises(ValueError, match="must not contain null values, but it does."):
             full_sdata.validate_table_in_spatialdata(table=full_sdata["table"])
 

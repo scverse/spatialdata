@@ -676,6 +676,106 @@ def test_query_points_multiple_partitions(points, with_polygon_query: bool):
     assert np.array_equal(q0.index.compute(), q1.index.compute())
 
 
+def test_query_points_multiple_boxes_in_transformed_coordinate_system():
+    from spatialdata.transformations import Affine
+
+    points_element = _make_points(np.array([[10, 10], [20, 30], [20, 30], [40, 50]]))
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[1, 0, 100], [0, 1, -50], [0, 0, 1]]),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    points_result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([[118, -22], [138, -2], [200, 200]]),
+        max_coordinate=np.array([[122, -18], [142, 2], [210, 210]]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(points_result[0]["x"].compute(), [20, 20])
+    np.testing.assert_allclose(points_result[0]["y"].compute(), [30, 30])
+    np.testing.assert_allclose(points_result[1]["x"].compute(), [40])
+    np.testing.assert_allclose(points_result[1]["y"].compute(), [50])
+    assert points_result[2] is None
+
+
+def test_query_points_bounding_box_in_transformed_coordinate_system():
+    from spatialdata.transformations import Affine
+
+    # Points: A(3,3), B(9,3), C(8,3)
+    points_element = _make_points(np.array([[3, 3], [9, 3], [8, 3]]))
+
+    # Transformation: rotate 45°, then translate (-3√2, -3√2)
+    # Combined affine matrix T @ R:
+    #   A(3,3) → (-3√2,  0  )
+    #   B(9,3) → ( 0,    3√2)
+    #   C(8,3) → (-√2/2, 5√2/2)
+    s = np.sqrt(2) / 2
+    t = -3 * np.sqrt(2)
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[s, -s, t], [s, s, t], [0, 0, 1]]),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    # Query box in aligned space: x ∈ [-10, 10], y ∈ [5√2/2 ± 0.5]
+    # Only C maps into this box (y ≈ 3.54 vs B y ≈ 4.24 which is just above).
+    y_center = 5 * np.sqrt(2) / 2
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([-10.0, y_center - 0.5]),
+        max_coordinate=np.array([10.0, y_center + 0.5]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(result["x"].compute(), [8])
+    np.testing.assert_allclose(result["y"].compute(), [3])
+
+
+def test_query_points_bounding_box_negative_scale_transform():
+    """Regression test: negative-scale (axis-flip) transforms must not raise ValueError.
+
+    Before the fix the scaling path raised ValueError instead of swapping the
+    inverted interval back to min < max after inverting through the negative scale.
+    """
+    from spatialdata.transformations import Affine
+
+    # Points (1, 0) and (5, 0). Under x-flip: (1,0)→(−1,0), (5,0)→(−5,0).
+    points_element = _make_points(np.array([[1, 0], [5, 0]]))
+    set_transformation(
+        points_element,
+        transformation=Affine(
+            np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float),
+            input_axes=("x", "y"),
+            output_axes=("x", "y"),
+        ),
+        to_coordinate_system="aligned",
+    )
+
+    # Query aligned x ∈ (−2, 0), y ∈ (−1, 1) → only (1, 0) maps to (−1, 0) which is inside.
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.array([-2.0, -1.0]),
+        max_coordinate=np.array([0.0, 1.0]),
+        target_coordinate_system="aligned",
+    )
+
+    np.testing.assert_allclose(result["x"].compute(), [1])
+    np.testing.assert_allclose(result["y"].compute(), [0])
+
+
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize(
     "name",

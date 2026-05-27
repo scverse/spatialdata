@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+import os
+import sys
+
+# Disable numba JIT for the test suite (the test data is small so initializing the JIT is slower than using plain
+# Python). Force-set (not setdefault) so the runner environment cannot accidentally override with "0".
+os.environ["NUMBA_DISABLE_JIT"] = "1"
+# If a pytest plugin already imported numba before this conftest ran, patch the cached config value too.
+if "numba.core.config" in sys.modules:
+    sys.modules["numba.core.config"].NUMBA_DISABLE_JIT = 1
+
+import copy as _copy
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +44,25 @@ from spatialdata.models import (
     TableModel,
 )
 
+
+def _fast_deepcopy_sdata(sd: SpatialData) -> SpatialData:
+    """
+    Fast deepcopy for SpatialData objects in tests.
+
+    Uses copy.deepcopy (which skips model re-validation) and manually restores
+    the attrs that copy.deepcopy loses for DaskDataFrame (issue #503) and
+    GeoDataFrame (issue #286).
+    """
+    points_attrs = {k: _copy.deepcopy(v._attrs) for k, v in sd.points.items()}
+    shapes_attrs = {k: _copy.deepcopy(v.attrs) for k, v in sd.shapes.items()}
+    sd_copy = _copy.deepcopy(sd)
+    for k, attrs in points_attrs.items():
+        sd_copy.points[k]._attrs = attrs
+    for k, attrs in shapes_attrs.items():
+        sd_copy.shapes[k].attrs = attrs
+    return sd_copy
+
+
 SEED = 0
 RNG = default_rng(seed=SEED)
 
@@ -41,14 +71,24 @@ MULTIPOLYGON_PATH = Path(__file__).parent / "data/polygon.json"
 POINT_PATH = Path(__file__).parent / "data/points.json"
 
 
-@pytest.fixture()
-def images() -> SpatialData:
+@pytest.fixture(scope="session")
+def _images_session() -> SpatialData:
     return SpatialData(images=_get_images())
 
 
 @pytest.fixture()
-def labels() -> SpatialData:
+def images(_images_session: SpatialData) -> SpatialData:
+    return _fast_deepcopy_sdata(_images_session)
+
+
+@pytest.fixture(scope="session")
+def _labels_session() -> SpatialData:
     return SpatialData(labels=_get_labels())
+
+
+@pytest.fixture()
+def labels(_labels_session: SpatialData) -> SpatialData:
+    return _fast_deepcopy_sdata(_labels_session)
 
 
 @pytest.fixture()
@@ -87,14 +127,30 @@ def tables() -> list[AnnData]:
     return _tables
 
 
-@pytest.fixture()
-def full_sdata() -> SpatialData:
+@pytest.fixture(scope="session")
+def _full_sdata_session() -> SpatialData:
     return SpatialData(
         images=_get_images(),
         labels=_get_labels(),
         shapes=_get_shapes(),
         points=_get_points(),
         tables=_get_tables(region="labels2d", region_key="region", instance_key="instance_id"),
+    )
+
+
+@pytest.fixture()
+def full_sdata(_full_sdata_session: SpatialData) -> SpatialData:
+    return _fast_deepcopy_sdata(_full_sdata_session)
+
+
+@pytest.fixture(scope="session")
+def _sdata_full_session() -> SpatialData:
+    return SpatialData(
+        images=_get_images(),
+        labels=_get_labels(),
+        shapes=_get_shapes(),
+        points=_get_points(),
+        tables=_get_tables(region="labels2d"),
     )
 
 
@@ -110,15 +166,9 @@ def full_sdata() -> SpatialData:
     ]
     # + ["empty_" + x for x in ["table"]] # TODO: empty table not supported yet
 )
-def sdata(request) -> SpatialData:
+def sdata(request, _sdata_full_session: SpatialData) -> SpatialData:
     if request.param == "full":
-        return SpatialData(
-            images=_get_images(),
-            labels=_get_labels(),
-            shapes=_get_shapes(),
-            points=_get_points(),
-            tables=_get_tables(region="labels2d"),
-        )
+        return _fast_deepcopy_sdata(_sdata_full_session)
     if request.param == "empty":
         return SpatialData()
     return request.getfixturevalue(request.param)
@@ -304,18 +354,38 @@ def _get_new_table(spatial_element: None | str | Sequence[str], instance_id: Non
     return TableModel.parse(adata=adata, spatial_element=spatial_element, instance_id=instance_id)
 
 
-@pytest.fixture()
-def labels_blobs() -> ArrayLike:
-    """Create a 2D labels."""
+@pytest.fixture(scope="session")
+def _labels_blobs_session() -> ArrayLike:
     return BlobsDataset()._labels_blobs()
 
 
 @pytest.fixture()
-def sdata_blobs() -> SpatialData:
+def labels_blobs(_labels_blobs_session: ArrayLike) -> ArrayLike:
     """Create a 2D labels."""
+    return deepcopy(_labels_blobs_session)
+
+
+@pytest.fixture(scope="session")
+def _sdata_blobs_session() -> SpatialData:
     from spatialdata.datasets import blobs
 
-    return deepcopy(blobs(256, 300, 3))
+    return blobs(256, 300, 3)
+
+
+@pytest.fixture()
+def sdata_blobs(_sdata_blobs_session: SpatialData) -> SpatialData:
+    """Create a 2D labels."""
+    return _fast_deepcopy_sdata(_sdata_blobs_session)
+
+
+@pytest.fixture()
+def blobs_factory(_sdata_blobs_session: SpatialData) -> Callable[[], SpatialData]:
+    """Return a factory that creates cheap fresh copies of the session-scoped blobs dataset."""
+
+    def _make() -> SpatialData:
+        return _fast_deepcopy_sdata(_sdata_blobs_session)
+
+    return _make
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
@@ -542,7 +612,8 @@ def complex_sdata() -> SpatialData:
             "instance_id": range(1, 51),  # Skip background (0)
             "cell_type": pd.Categorical(RNG.choice(["T cell", "B cell", "Macrophage"], size=50)),
             "size": RNG.uniform(10, 100, size=50),
-        }
+        },
+        index=[str(i) for i in range(50)],
     )
 
     var1 = pd.DataFrame(
@@ -577,7 +648,8 @@ def complex_sdata() -> SpatialData:
             "category": pd.Categorical(RNG.choice(["A", "B", "C"], size=total_items)),
             "value": RNG.normal(size=total_items),
             "count": RNG.poisson(10, size=total_items),
-        }
+        },
+        index=[str(i) for i in range(total_items)],
     )
 
     var2 = pd.DataFrame(
@@ -608,7 +680,8 @@ def complex_sdata() -> SpatialData:
             "cluster": pd.Categorical(RNG.choice(["cluster_1", "cluster_2", "cluster_3"], size=40)),
             "sample": pd.Categorical(["sample_A"] * 20 + ["sample_B"] * 20),
             "qc_pass": RNG.choice([True, False], p=[0.8, 0.2], size=40),
-        }
+        },
+        index=[str(i) for i in range(40)],
     )
 
     var3 = pd.DataFrame(
