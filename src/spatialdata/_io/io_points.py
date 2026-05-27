@@ -15,7 +15,14 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
-from spatialdata._store import PathLike, arrow_filesystem, arrow_path, normalize_path, open_zarr_for_read, path_from_group
+from spatialdata._store import (
+    PathLike,
+    arrow_filesystem,
+    arrow_path,
+    normalize_path,
+    open_zarr_for_read,
+    path_from_group,
+)
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
