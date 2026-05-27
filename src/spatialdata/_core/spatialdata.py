@@ -30,7 +30,7 @@ from spatialdata._core.validation import (
     validate_table_attr_keys,
 )
 from spatialdata._logging import logger
-from spatialdata._store import PathLike, normalize_path, open_read_store, open_write_store
+from spatialdata._store import PathLike, normalize_path, open_read_store, open_write_store, path_from_store
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
@@ -1148,7 +1148,7 @@ class SpatialData:
     @_deprecation_alias(format="sdata_formats", version="0.7.0")
     def write(
         self,
-        file_path: str | Path | UPath,
+        file_path: str | Path | zarr.storage.StoreLike,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         update_sdata_path: bool = True,
@@ -1162,7 +1162,14 @@ class SpatialData:
         Parameters
         ----------
         file_path
-            The path to the Zarr store to write to.
+            Where to write. One of:
+
+            - A local filesystem path (``str`` or :class:`pathlib.Path`)
+            - A zarr store (e.g. :class:`zarr.storage.LocalStore`,
+              :class:`zarr.storage.FsspecStore`) carrying its own filesystem (and
+              credentials) — the supported form for remote backends like
+              S3 / Azure / GCS. Stores without a filesystem path (e.g.
+              :class:`zarr.storage.MemoryStore`) are not currently supported.
         overwrite
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
             already exists.
@@ -1214,7 +1221,21 @@ class SpatialData:
         parsed = _parse_formats(sdata_formats)
         _validate_compressor_args(raster_compressor)
 
-        file_path = normalize_path(file_path)
+        # Resolve all input forms (str / Path / StoreLike) to a path the internal per-element
+        # write machinery can use. For zarr stores, derive a backing path via path_from_store;
+        # stores without a filesystem path (e.g. MemoryStore) are rejected here because the
+        # per-element machinery currently re-opens stores from the path.
+        if isinstance(file_path, zarr.abc.store.Store):
+            derived = path_from_store(file_path)
+            if derived is None:
+                raise NotImplementedError(
+                    f"Writing to a store of type {type(file_path).__name__} is not supported "
+                    "because it does not expose a filesystem path. Pass a LocalStore, FsspecStore, "
+                    "or a path/UPath instead."
+                )
+            file_path = derived
+        else:
+            file_path = normalize_path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
 

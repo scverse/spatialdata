@@ -1,28 +1,17 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
-from upath import UPath
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
-    _resolve_zarr_store,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
-from spatialdata._store import (
-    PathLike,
-    arrow_filesystem,
-    arrow_path,
-    normalize_path,
-    open_zarr_for_read,
-    path_from_group,
-)
+from spatialdata._store import arrow_fs_and_path
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -30,19 +19,13 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_points(
-    store: str | Path | UPath | PathLike,
-) -> DaskDataFrame:
-    """Read points from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
-    path = normalize_path(store) if not isinstance(store, (Path, UPath)) else store
-    resolved_store = _resolve_zarr_store(path)
-    f = open_zarr_for_read(resolved_store, as_group=False)
-
-    version = _parse_version(f, expect_attrs_key=True)
+def _read_points(group: zarr.Group) -> DaskDataFrame:
+    """Read a points element from an open zarr group."""
+    version = _parse_version(group, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    parquet_path = path / "points.parquet"
+    fs, parquet_path = arrow_fs_and_path(group, "points.parquet")
     # Passing filesystem= to read_parquet makes pyarrow convert dictionary columns into pandas
     # categoricals eagerly per partition and marks them known=True with an empty category list.
     # This happens for ANY pyarrow filesystem (both LocalFileSystem and PyFileSystem(FSSpecHandler(.))
@@ -52,10 +35,7 @@ def _read_points(
     # (dictionary<values=null> vs dictionary<values=string>). We demote the categoricals back to
     # "unknown" right here so that write_points recomputes categories consistently across partitions.
     # TODO: allow reading in the metadata without materializing the data.
-    points = read_parquet(
-        arrow_path(parquet_path),
-        filesystem=arrow_filesystem(parquet_path),
-    )
+    points = read_parquet(parquet_path, filesystem=fs)
     assert isinstance(points, DaskDataFrame)
     for column_name in points.columns:
         c = points[column_name]
@@ -64,10 +44,10 @@ def _read_points(
     if points.index.name == "__null_dask_index__":
         points = points.rename_axis(None)
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    transformations = _get_transformations_from_ngff_dict(group.attrs.asdict()["coordinateTransformations"])
     _set_transformations(points, transformations)
 
-    attrs = points_format.attrs_from_dict(f.attrs.asdict())
+    attrs = points_format.attrs_from_dict(group.attrs.asdict())
     if len(attrs):
         points.attrs["spatialdata_attrs"] = attrs
     return points
@@ -96,7 +76,7 @@ def write_points(
     transformations = _get_transformations(points)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
-    parquet_path = path_from_group(group) / "points.parquet"
+    fs, parquet_path = arrow_fs_and_path(group, "points.parquet")
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -111,10 +91,7 @@ def write_points(
 
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
-    points_without_transform.to_parquet(
-        arrow_path(parquet_path),
-        filesystem=arrow_filesystem(parquet_path),
-    )
+    points_without_transform.to_parquet(parquet_path, filesystem=fs)
 
     attrs = element_format.attrs_to_dict(points.attrs)
     attrs["version"] = element_format.spatialdata_format_version

@@ -70,6 +70,88 @@ def arrow_filesystem(path: PathLike) -> pafs.FileSystem:
     return pafs.LocalFileSystem()
 
 
+def path_from_store(store: Any) -> PathLike | None:
+    """Derive the user-facing path from a zarr store, or ``None`` for stores without one.
+
+    - ``LocalStore`` → ``Path(store.root)``
+    - ``FsspecStore`` → ``UPath("{protocol}://{store.path}", fs=sync_fs)``
+    - Anything else (``MemoryStore``, custom stores) → ``None`` (no meaningful path)
+
+    The fsspec branch unwraps ``AsyncFileSystemWrapper`` so the returned ``UPath``
+    carries the original sync filesystem (required by pyarrow's ``FSSpecHandler``).
+    """
+    if isinstance(store, LocalStore):
+        return Path(store.root)
+    if isinstance(store, FsspecStore):
+        protocol = getattr(store.fs, "protocol", None)
+        if isinstance(protocol, (list, tuple)):
+            protocol = protocol[0] if protocol else "file"
+        elif protocol is None:
+            protocol = "file"
+        fs = store.fs
+        while True:
+            inner = getattr(fs, "sync_fs", None)
+            if inner is None or inner is fs:
+                break
+            fs = inner
+        return UPath(f"{protocol}://{store.path}", fs=fs)
+    return None
+
+
+def store_from_group(group: zarr.Group, *, read_only: bool = True) -> Any:
+    """Return a zarr store re-rooted at ``group.path``.
+
+    For consumers (e.g. ``ome_zarr.io.ZarrLocation``, ``anndata.read_zarr``) that
+    need a store and don't understand sub-paths inside one. Falls back to returning
+    the parent store unchanged for stores we cannot re-root (``MemoryStore`` etc.).
+    """
+    from spatialdata._io._utils import join_fsspec_store_path
+
+    parent = group.store
+    if isinstance(parent, LocalStore):
+        return LocalStore(Path(parent.root) / group.path, read_only=read_only)
+    if isinstance(parent, FsspecStore):
+        return FsspecStore(
+            parent.fs,
+            path=join_fsspec_store_path(parent.path, group.path),
+            read_only=read_only,
+        )
+    return parent
+
+
+def arrow_fs_and_path(group: zarr.Group, *child_parts: str) -> tuple[pafs.FileSystem, str]:
+    """Derive a pyarrow filesystem + path for I/O at ``group/<child_parts>``.
+
+    Used by parquet readers/writers (points, shapes) so they can locate their backing
+    file without going through a ``UPath``: the zarr group already carries its store
+    (and thus the filesystem), so we derive both directly.
+
+    TODO(async-pyarrow-fs): drop the ``sync_fs`` unwrap when either pyarrow's
+    FSSpecHandler learns to drive an async fs, or zarr exposes the original sync fs
+    directly (https://github.com/zarr-developers/zarr-python/issues/2073).
+    """
+    from spatialdata._io._utils import join_fsspec_store_path
+
+    store = group.store
+    child = "/".join(child_parts)
+
+    if isinstance(store, LocalStore):
+        local_path = Path(store.root) / group.path / child if child else Path(store.root) / group.path
+        return pafs.LocalFileSystem(), str(local_path)
+
+    if isinstance(store, FsspecStore):
+        fs = store.fs
+        while True:
+            inner = getattr(fs, "sync_fs", None)
+            if inner is None or inner is fs:
+                break
+            fs = inner
+        sub = f"{group.path}/{child}" if child else group.path
+        return pafs.PyFileSystem(pafs.FSSpecHandler(fs)), join_fsspec_store_path(store.path, sub)
+
+    raise ValueError(f"Cannot derive a pyarrow filesystem for store of type {type(store).__name__}")
+
+
 @contextmanager
 def open_read_store(path: PathLike) -> Any:
     """Open *path* as a read-only zarr backend store.

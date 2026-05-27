@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
-from upath import UPath
 
-from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._io.format import (
     CurrentTablesFormat,
     TablesFormats,
@@ -18,21 +14,18 @@ from spatialdata._io.format import (
     TablesFormatV02,
     _parse_version,
 )
-from spatialdata._store import PathLike, normalize_path, open_zarr_for_read
 from spatialdata.models import TableModel, get_table_keys
 
 
-def _read_table(store: str | Path | UPath | PathLike) -> AnnData:
-    path = normalize_path(store) if not isinstance(store, (Path, UPath)) else store
-    resolved_store = _resolve_zarr_store(path)
-    table = read_anndata_zarr(resolved_store)
+def _read_table(group: zarr.Group) -> AnnData:
+    """Read a table element from an open zarr group."""
+    # anndata's read_zarr accepts a StoreLike; pass the group's store sub-rooted at group.path.
+    # The simplest portable way: pass the group itself, which anndata supports.
+    table = read_anndata_zarr(group)
 
-    f = open_zarr_for_read(resolved_store, as_group=False)
-    version = _parse_version(f, expect_attrs_key=False)
+    version = _parse_version(group, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]
-
-    f.store.close()
 
     if isinstance(table_format, TablesFormatV01 | TablesFormatV02):
         if TableModel.ATTRS_KEY in table.uns:

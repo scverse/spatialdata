@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any, Literal, TypeGuard, cast
 
 import dask.array as da
@@ -16,12 +15,10 @@ from ome_zarr.writer import write_image as write_image_ngff
 from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
-from upath import UPath
 from xarray import DataArray, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
-    _resolve_zarr_store,
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import (
@@ -29,7 +26,7 @@ from spatialdata._io.format import (
     RasterFormatType,
     get_ome_zarr_format,
 )
-from spatialdata._store import PathLike, normalize_path
+from spatialdata._store import store_from_group
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
@@ -163,11 +160,12 @@ def _prepare_storage_options(
 
 
 def _read_multiscale(
-    store: str | Path | UPath | PathLike, raster_type: Literal["image", "labels"], reader_format: Format
+    group: zarr.Group, raster_type: Literal["image", "labels"], reader_format: Format
 ) -> DataArray | DataTree:
     assert raster_type in ["image", "labels"]
-    path = normalize_path(store) if not isinstance(store, (Path, UPath)) else store
-    resolved_store = _resolve_zarr_store(path)
+    # ome_zarr.io.ZarrLocation needs a store rooted at this group's location, not at the
+    # SpatialData container root, so we re-root the parent store at ``group.path``.
+    resolved_store = store_from_group(group, read_only=True)
 
     nodes: list[Node] = []
     image_loc = ZarrLocation(resolved_store, fmt=reader_format)

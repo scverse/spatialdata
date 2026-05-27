@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -9,11 +8,9 @@ from geopandas import GeoDataFrame, read_parquet
 from natsort import natsorted
 from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
-from upath import UPath
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
-    _resolve_zarr_store,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
@@ -25,14 +22,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
-from spatialdata._store import (
-    PathLike,
-    arrow_filesystem,
-    arrow_path,
-    normalize_path,
-    open_zarr_for_read,
-    path_from_group,
-)
+from spatialdata._store import arrow_fs_and_path
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -40,41 +30,36 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_shapes(
-    store: str | Path | UPath | PathLike,
-) -> GeoDataFrame:
-    """Read shapes from a zarr store (path, hierarchical URI string, or remote ``UPath``)."""
-    path = normalize_path(store) if not isinstance(store, (Path, UPath)) else store
-    resolved_store = _resolve_zarr_store(path)
-    f = open_zarr_for_read(resolved_store, as_group=False)
-    version = _parse_version(f, expect_attrs_key=True)
+def _read_shapes(group: zarr.Group) -> GeoDataFrame:
+    """Read a shapes element from an open zarr group."""
+    version = _parse_version(group, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]
 
     if isinstance(shape_format, ShapesFormatV01):
-        coords = np.array(f["coords"])
-        index = np.array(f["Index"])
-        typ = shape_format.attrs_from_dict(f.attrs.asdict())
+        coords = np.array(group["coords"])
+        index = np.array(group["Index"])
+        typ = shape_format.attrs_from_dict(group.attrs.asdict())
         if typ.name == "POINT":
-            radius = np.array(f["radius"])
+            radius = np.array(group["radius"])
             geometry = from_ragged_array(typ, coords)
             geo_df = GeoDataFrame({"geometry": geometry, "radius": radius}, index=index)
         else:
-            offsets_keys = [k for k in f if k.startswith("offset")]
+            offsets_keys = [k for k in group if k.startswith("offset")]
             offsets_keys = natsorted(offsets_keys)
-            offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
+            offsets = tuple(np.array(group[k]).flatten() for k in offsets_keys)
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        parquet_path = path / "shapes.parquet"
-        with arrow_filesystem(parquet_path).open_input_file(arrow_path(parquet_path)) as src:
+        fs, parquet_path = arrow_fs_and_path(group, "shapes.parquet")
+        with fs.open_input_file(parquet_path) as src:
             geo_df = read_parquet(src)
     else:
         raise ValueError(
             f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."
         )
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    transformations = _get_transformations_from_ngff_dict(group.attrs.asdict()["coordinateTransformations"])
     _set_transformations(geo_df, transformations)
     return geo_df
 
@@ -180,12 +165,12 @@ def _write_shapes_v02_v03(
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    parquet_path = path_from_group(group) / "shapes.parquet"
+    fs, parquet_path = arrow_fs_and_path(group, "shapes.parquet")
 
     # Temporarily remove transformations from attrs to avoid serialization issues
     transforms = shapes.attrs[TRANSFORM_KEY]
     del shapes.attrs[TRANSFORM_KEY]
-    with arrow_filesystem(parquet_path).open_output_stream(arrow_path(parquet_path)) as sink:
+    with fs.open_output_stream(parquet_path) as sink:
         shapes.to_parquet(sink, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 

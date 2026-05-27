@@ -27,18 +27,14 @@ from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
 from spatialdata._store import (
-    PathLike,
-    normalize_path,
-    open_read_store,
     open_zarr_for_read,
-    path_from_group,
+    path_from_store,
 )
 from spatialdata._types import Raster_T
 
 
 def _read_zarr_group_spatialdata_element(
     root_group: zarr.Group,
-    root_store: PathLike,
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: Callable[..., Any],
@@ -60,7 +56,6 @@ def _read_zarr_group_spatialdata_element(
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
-                elem_store = root_store / elem_group.path
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -76,12 +71,12 @@ def _read_zarr_group_spatialdata_element(
                     if element_type in ["image", "labels"]:
                         reader_format = get_raster_format_for_read(elem_group, sdata_version)
                         element = read_func(
-                            elem_store,
+                            elem_group,
                             cast(Literal["image", "labels"], element_type),
                             reader_format,
                         )
                     elif element_type in ["shapes", "points", "tables"]:
-                        element = read_func(elem_store)
+                        element = read_func(elem_group)
                     else:
                         raise ValueError(f"Unknown element type {element_type}")
                     element_container[subgroup_name] = element
@@ -129,17 +124,24 @@ def get_raster_format_for_read(
 
 
 def read_zarr(
-    store: str | Path | UPath | zarr.Group,
+    store: str | Path | zarr.Group | zarr.storage.StoreLike,
     selection: None | tuple[str] = None,
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> SpatialData:
     """
-    Read a SpatialData dataset from a zarr store (on-disk or remote).
+    Read a SpatialData dataset from a zarr store (local or remote).
 
     Parameters
     ----------
     store
-        Path, URL, or zarr.Group to the zarr store (on-disk or remote).
+        One of:
+
+        - A local filesystem path (``str`` or :class:`pathlib.Path`)
+        - A zarr store (e.g. :class:`zarr.storage.LocalStore`,
+          :class:`zarr.storage.FsspecStore`, :class:`zarr.storage.MemoryStore`)
+          carrying its own filesystem (and credentials) — the supported form for
+          remote backends like S3 / Azure / GCS
+        - An already-open :class:`zarr.Group`
 
     selection
         List of elements to read from the zarr store (images, labels, points, shapes, table). If None, all elements are
@@ -159,7 +161,21 @@ def read_zarr(
     -------
     A SpatialData object.
     """
-    zarr_store = path_from_group(store) if isinstance(store, zarr.Group) else normalize_path(store)
+    # Coerce all input forms to (resolved_store, backing_path) where backing_path is the
+    # user-facing path (Path | UPath | None) for `sdata.path` and resolved_store is the
+    # actual zarr backend store we open the root group from.
+    if isinstance(store, zarr.Group):
+        # Already open: re-root the underlying store at this group's path.
+        from spatialdata._store import store_from_group
+
+        resolved_store: Any = store_from_group(store, read_only=True)
+    elif isinstance(store, zarr.abc.store.Store):
+        resolved_store = store
+    else:
+        from spatialdata._io._utils import _resolve_zarr_store
+
+        resolved_store = _resolve_zarr_store(store, read_only=True)
+    backing_path = path_from_store(resolved_store)
 
     images: dict[str, Raster_T] = {}
     labels: dict[str, Raster_T] = {}
@@ -167,7 +183,7 @@ def read_zarr(
     shapes: dict[str, GeoDataFrame] = {}
     tables: dict[str, AnnData] = {}
 
-    with open_read_store(zarr_store) as resolved_store:
+    try:
         # Use the consolidated + zarr-v3-pinned fast path. See ``open_zarr_for_read`` for why
         # pinning ``zarr_format=3`` matters over remote backends (avoids five small v2-metadata
         # probes per open) and how the fallback keeps legacy / non-consolidated stores working.
@@ -212,7 +228,6 @@ def read_zarr(
         ) in group_readers.items():
             _read_zarr_group_spatialdata_element(
                 root_group=root_group,
-                root_store=zarr_store,
                 sdata_version=sdata_version,
                 selector=selector,
                 read_func=read_func,
@@ -230,6 +245,11 @@ def read_zarr(
             attrs.pop("spatialdata_attrs")
         else:
             attrs = None
+    finally:
+        # Only close stores we constructed ourselves; if the caller handed us a store or Group,
+        # they retain ownership.
+        if not isinstance(store, (zarr.Group, zarr.abc.store.Store)):
+            resolved_store.close()
 
     sdata = SpatialData(
         images=images,
@@ -239,7 +259,7 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata._path = zarr_store
+    sdata._path = backing_path
     return sdata
 
 
