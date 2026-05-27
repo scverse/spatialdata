@@ -1148,7 +1148,7 @@ class SpatialData:
     @_deprecation_alias(format="sdata_formats", version="0.7.0")
     def write(
         self,
-        file_path: str | Path | UPath | None = None,
+        file_path: str | Path | UPath,
         overwrite: bool = False,
         consolidate_metadata: bool = True,
         update_sdata_path: bool = True,
@@ -1162,12 +1162,10 @@ class SpatialData:
         Parameters
         ----------
         file_path
-            The path to the Zarr store to write to. If ``None``, uses :attr:`path` (must be set).
+            The path to the Zarr store to write to.
         overwrite
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
-            already exists. For remote paths (:class:`upath.UPath`), ``overwrite=True`` is required because we cannot
-            reliably check whether the remote target exists; passing ``overwrite=False`` raises ``NotImplementedError``.
-            Pass ``overwrite=True`` to explicitly acknowledge that the write may clobber pre-existing data.
+            already exists.
         consolidate_metadata
             If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
             file at the root directory of the store. This makes the data cloud accessible, which is required for certain
@@ -1216,10 +1214,6 @@ class SpatialData:
         parsed = _parse_formats(sdata_formats)
         _validate_compressor_args(raster_compressor)
 
-        if file_path is None:
-            if self.path is None:
-                raise ValueError("file_path must be provided when SpatialData.path is not set.")
-            file_path = self.path
         file_path = normalize_path(file_path)
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
         self._validate_all_elements()
