@@ -1636,6 +1636,10 @@ class SpatialData:
         else:
             raise ValueError(f"Can't set channel names for element of type '{element_type}'.")
 
+        # See ``write_transformations`` for why this refresh is needed after an in-place attrs write.
+        if self.has_consolidated_metadata():
+            self.write_consolidated_metadata()
+
     def write_transformations(self, element_name: str | None = None) -> None:
         """
         Write transformations to disk for a single element, or for all elements, without rewriting the data.
@@ -1699,6 +1703,12 @@ class SpatialData:
             )
         else:
             raise ValueError(f"Unknown element type {type(element)}")
+
+        # Consolidated metadata caches every element's attrs at the root; an in-place attrs
+        # write to an element leaves that cache stale, so the next ``read_zarr`` would return
+        # the old transformation. Refresh if the store had consolidated metadata.
+        if self.has_consolidated_metadata():
+            self.write_consolidated_metadata()
 
     def _element_type_from_element_name(self, element_name: str) -> str:
         self._validate_element_names_are_unique()

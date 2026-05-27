@@ -363,11 +363,12 @@ def _extract_parquet_paths_from_task(obj: Any) -> list[str]:
         # lower pin is bumped past the PR-#1006 cut-off and CI covers only the new shape.
         if "piece" in obj:
             piece = obj["piece"]
+            # piece is ``(parquet_file, row_groups, filters)`` -- ``row_groups`` and ``filters`` may
+            # be ``None`` (single-file unfiltered) or ``[0]/[]`` (``aggregate_files=True``); both are
+            # whole-file reads and not interesting to us here, so we only validate the extension.
             if isinstance(piece, tuple) and len(piece) >= 1 and isinstance(piece[0], str):
                 parquet_file = piece[0]
-                check0 = piece[1] if len(piece) > 1 else None
-                check1 = piece[2] if len(piece) > 2 else None
-                if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
+                if not parquet_file.endswith(".parquet"):
                     raise ValueError(
                         f"Unable to parse the parquet file from the dask task {obj!r}. Please report this bug."
                     )

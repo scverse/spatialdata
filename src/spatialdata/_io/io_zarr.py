@@ -29,6 +29,7 @@ from spatialdata._logging import logger
 from spatialdata._store import (
     open_zarr_for_read,
     path_from_store,
+    store_from_group,
 )
 from spatialdata._types import Raster_T
 
@@ -69,6 +70,9 @@ def _read_zarr_group_spatialdata_element(
                     ),
                 ):
                     if element_type in ["image", "labels"]:
+                        # Raster readers go through ome_zarr's ZarrLocation which independently
+                        # re-resolves the element's metadata, so corruption of the element's own
+                        # zarr.json surfaces there as a clean OSError. Pass the cached group here.
                         reader_format = get_raster_format_for_read(elem_group, sdata_version)
                         element = read_func(
                             elem_group,
@@ -76,7 +80,14 @@ def _read_zarr_group_spatialdata_element(
                             reader_format,
                         )
                     elif element_type in ["shapes", "points", "tables"]:
-                        element = read_func(elem_group)
+                        # Non-raster readers consume ``group.attrs`` directly; the parent's
+                        # consolidated-metadata cache would otherwise mask a corrupted or
+                        # missing element-level ``zarr.json`` / ``.zattrs``. Re-open from the
+                        # store so the corruption surfaces as OSError / JSONDecodeError.
+                        elem_group_fresh = open_zarr_for_read(
+                            store_from_group(elem_group, read_only=True), as_group=True
+                        )
+                        element = read_func(elem_group_fresh)
                     else:
                         raise ValueError(f"Unknown element type {element_type}")
                     element_container[subgroup_name] = element
