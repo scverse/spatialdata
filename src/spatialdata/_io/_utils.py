@@ -601,9 +601,9 @@ def _resolve_zarr_store(
             )
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, UPath):
-        # Check before StoreLike to avoid UnionType isinstance.
+        # Check before Store to avoid UnionType isinstance (zarr's ``StoreLike`` is a type alias).
         return FsspecStore(_ensure_async_fs(path.fs), path=path.path, read_only=read_only, **kwargs)
-    if isinstance(path, zarr.storage.StoreLike):
+    if isinstance(path, zarr.abc.store.Store):
         # Already a concrete store (LocalStore, FsspecStore, MemoryStore, ...). Do not pass it as ``fs=`` to
         # FsspecStore -- that only accepts an async fsspec filesystem and raises on stores (e.g. ``async_impl``).
         return path

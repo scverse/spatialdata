@@ -21,55 +21,6 @@ def normalize_path(path: str | PathLike, storage_options: dict[str, Any] | None 
     raise TypeError("Path must be a `str`, `Path`, or `UPath` object.")
 
 
-def path_from_group(group: zarr.Group) -> PathLike:
-    """Derive a ``PathLike`` from an open ``zarr.Group``, including its subgroup path.
-
-    Handles both ``LocalStore`` and ``FsspecStore`` backends. For fsspec stores,
-    unwraps any ``AsyncFileSystemWrapper`` to recover the original sync filesystem
-    so that the returned ``UPath`` can be passed to pyarrow's ``FSSpecHandler``
-    (which is strictly synchronous).
-
-    TODO(async-pyarrow-fs): drop the sync-unwrap once pyarrow's FSSpecHandler learns
-    to drive an async fs, or zarr exposes the original sync fs directly on FsspecStore
-    (tracked at https://github.com/zarr-developers/zarr-python/issues/2073).
-    """
-    from spatialdata._io._utils import join_fsspec_store_path
-
-    store = group.store
-
-    if isinstance(store, LocalStore):
-        return Path(store.root) / group.path
-
-    if isinstance(store, FsspecStore):
-        protocol = getattr(store.fs, "protocol", None)
-        if isinstance(protocol, (list, tuple)):
-            protocol = protocol[0] if protocol else "file"
-        elif protocol is None:
-            protocol = "file"
-        fs = store.fs
-        while True:
-            inner = getattr(fs, "sync_fs", None)
-            if inner is None or inner is fs:
-                break
-            fs = inner
-        path = join_fsspec_store_path(store.path, group.path)
-        return UPath(f"{protocol}://{path}", fs=fs)
-
-    raise ValueError(f"Unsupported store type for zarr.Group: {type(group.store)}")
-
-
-def arrow_path(path: PathLike) -> str:
-    """Return the raw path string suitable for a pyarrow filesystem call."""
-    return path.path if isinstance(path, UPath) else str(path)
-
-
-def arrow_filesystem(path: PathLike) -> pafs.FileSystem:
-    """Return a pyarrow filesystem matching the fsspec backend embedded in ``path``."""
-    if isinstance(path, UPath):
-        return pafs.PyFileSystem(pafs.FSSpecHandler(path.fs))
-    return pafs.LocalFileSystem()
-
-
 def path_from_store(store: Any) -> PathLike | None:
     """Derive the user-facing path from a zarr store, or ``None`` for stores without one.
 

@@ -9,10 +9,12 @@ from zarr.storage import FsspecStore, LocalStore, MemoryStore
 
 from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._store import (
+    arrow_fs_and_path,
     normalize_path,
     open_read_store,
     open_write_store,
-    path_from_group,
+    path_from_store,
+    store_from_group,
 )
 
 
@@ -54,15 +56,41 @@ def test_open_read_and_write_store_roundtrip(tmp_path: Path) -> None:
         assert group.attrs["answer"] == 42
 
 
-def test_path_from_group_local(tmp_path: Path) -> None:
+def test_path_from_store_local(tmp_path: Path) -> None:
+    """Path derivation from a LocalStore returns the on-disk root as a Path."""
+    path = tmp_path / "store.zarr"
+
+    with open_write_store(path) as store:
+        zarr.create_group(store=store, overwrite=True)
+        assert path_from_store(store) == path
+
+
+def test_store_from_group_local_subroots(tmp_path: Path) -> None:
+    """`store_from_group` returns a LocalStore re-rooted at the group's path."""
     path = tmp_path / "store.zarr"
 
     with open_write_store(path) as store:
         root = zarr.create_group(store=store, overwrite=True)
         group = root.require_group("images").require_group("image")
 
-    result = path_from_group(group)
-    assert result == tmp_path / "store.zarr" / "images" / "image"
+        sub = store_from_group(group, read_only=True)
+        assert isinstance(sub, LocalStore)
+        assert Path(sub.root) == path / "images" / "image"
+        assert sub.read_only is True
+
+
+def test_arrow_fs_and_path_local(tmp_path: Path) -> None:
+    """`arrow_fs_and_path` returns a LocalFileSystem and a joined local path string."""
+    import pyarrow.fs as pafs
+
+    path = tmp_path / "store.zarr"
+    with open_write_store(path) as store:
+        root = zarr.create_group(store=store, overwrite=True)
+        group = root.require_group("points").require_group("p1")
+
+        fs, parquet_path = arrow_fs_and_path(group, "points.parquet")
+        assert isinstance(fs, pafs.LocalFileSystem)
+        assert parquet_path == str(path / "points" / "p1" / "points.parquet")
 
 
 def test_resolve_zarr_store_returns_existing_zarr_stores_unchanged() -> None:
@@ -90,20 +118,20 @@ def test_resolve_zarr_store_forwards_read_only_remote() -> None:
     assert store.read_only is True
 
 
-def test_path_from_group_remote() -> None:
-    """Remote zarr.Group inputs keep a usable UPath and reopen through the same protocol."""
+def test_path_from_store_remote() -> None:
+    """`path_from_store` on a remote FsspecStore yields a UPath with the original sync fs."""
     import fsspec
     from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
 
     fs = fsspec.filesystem("memory")
     async_fs = AsyncFileSystemWrapper(fs, asynchronous=True)
-    base = FsspecStore(async_fs, path="/")
-    root = zarr.open_group(store=base, mode="a")
-    group = root.require_group("points").require_group("points")
+    store = FsspecStore(async_fs, path="/some/remote.zarr")
 
-    result = path_from_group(group)
+    result = path_from_store(store)
     assert isinstance(result, UPath)
     assert getattr(result.fs, "protocol", None) == "memory"
 
-    with open_read_store(result) as store:
-        assert isinstance(store, FsspecStore)
+
+def test_path_from_store_memory_returns_none() -> None:
+    """Stores without a meaningful filesystem path (MemoryStore, custom) return None."""
+    assert path_from_store(MemoryStore()) is None
