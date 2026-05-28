@@ -11,7 +11,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
-from spatialdata._store import arrow_fs_and_path
+from spatialdata._store import parquet_fs_and_path
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -25,22 +25,14 @@ def _read_points(group: zarr.Group) -> DaskDataFrame:
     assert version is not None
     points_format = PointsFormats[version]
 
-    fs, parquet_path = arrow_fs_and_path(group, "points.parquet")
-    # Passing filesystem= to read_parquet makes pyarrow convert dictionary columns into pandas
-    # categoricals eagerly per partition and marks them known=True with an empty category list.
-    # This happens for ANY pyarrow filesystem (both LocalFileSystem and PyFileSystem(FSSpecHandler(.))
-    # return the same broken categorical), so it is a property of the filesystem= handoff itself,
-    # not of local-vs-remote. Left as is, it would make write_points' cat.as_known() a no-op and
-    # the next to_parquet(filesystem=.) would fail with a per-partition schema mismatch
-    # (dictionary<values=null> vs dictionary<values=string>). We demote the categoricals back to
-    # "unknown" right here so that write_points recomputes categories consistently across partitions.
+    fs, parquet_path = parquet_fs_and_path(group, "points.parquet")
+    # Use the fsspec filesystem (see parquet_fs_and_path): dask's pyarrow-FS reader would
+    # otherwise return known-empty categoricals and wrong per-partition lengths. The fsspec
+    # path returns categories as unknown (so write_points' as_known() recomputes them) and
+    # preserves partition boundaries (so transform() on multi-partition points works).
     # TODO: allow reading in the metadata without materializing the data.
     points = read_parquet(parquet_path, filesystem=fs)
     assert isinstance(points, DaskDataFrame)
-    for column_name in points.columns:
-        c = points[column_name]
-        if c.dtype == "category" and c.cat.known:
-            points[column_name] = c.cat.as_unknown()
     if points.index.name == "__null_dask_index__":
         points = points.rename_axis(None)
 
@@ -76,7 +68,7 @@ def write_points(
     transformations = _get_transformations(points)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
-    fs, parquet_path = arrow_fs_and_path(group, "points.parquet")
+    fs, parquet_path = parquet_fs_and_path(group, "points.parquet")
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the

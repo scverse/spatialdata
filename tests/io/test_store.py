@@ -9,10 +9,10 @@ from zarr.storage import FsspecStore, LocalStore, MemoryStore
 
 from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._store import (
-    arrow_fs_and_path,
     normalize_path,
     open_read_store,
     open_write_store,
+    parquet_fs_and_path,
     path_from_store,
     store_from_group,
 )
@@ -79,17 +79,17 @@ def test_store_from_group_local_subroots(tmp_path: Path) -> None:
         assert sub.read_only is True
 
 
-def test_arrow_fs_and_path_local(tmp_path: Path) -> None:
-    """`arrow_fs_and_path` returns a LocalFileSystem and a joined local path string."""
-    import pyarrow.fs as pafs
+def test_parquet_fs_and_path_local(tmp_path: Path) -> None:
+    """`parquet_fs_and_path` returns an fsspec LocalFileSystem and a joined local path string."""
+    from fsspec.implementations.local import LocalFileSystem
 
     path = tmp_path / "store.zarr"
     with open_write_store(path) as store:
         root = zarr.create_group(store=store, overwrite=True)
         group = root.require_group("points").require_group("p1")
 
-        fs, parquet_path = arrow_fs_and_path(group, "points.parquet")
-        assert isinstance(fs, pafs.LocalFileSystem)
+        fs, parquet_path = parquet_fs_and_path(group, "points.parquet")
+        assert isinstance(fs, LocalFileSystem)
         assert parquet_path == str(path / "points" / "p1" / "points.parquet")
 
 

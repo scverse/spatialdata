@@ -22,7 +22,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
-from spatialdata._store import arrow_fs_and_path
+from spatialdata._store import parquet_fs_and_path
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -51,8 +51,8 @@ def _read_shapes(group: zarr.Group) -> GeoDataFrame:
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        fs, parquet_path = arrow_fs_and_path(group, "shapes.parquet")
-        with fs.open_input_file(parquet_path) as src:
+        fs, parquet_path = parquet_fs_and_path(group, "shapes.parquet")
+        with fs.open(parquet_path, "rb") as src:
             geo_df = read_parquet(src)
     else:
         raise ValueError(
@@ -165,12 +165,12 @@ def _write_shapes_v02_v03(
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    fs, parquet_path = arrow_fs_and_path(group, "shapes.parquet")
+    fs, parquet_path = parquet_fs_and_path(group, "shapes.parquet")
 
     # Temporarily remove transformations from attrs to avoid serialization issues
     transforms = shapes.attrs[TRANSFORM_KEY]
     del shapes.attrs[TRANSFORM_KEY]
-    with fs.open_output_stream(parquet_path) as sink:
+    with fs.open(parquet_path, "wb") as sink:
         shapes.to_parquet(sink, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 

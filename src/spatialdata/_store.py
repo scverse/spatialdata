@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypeAlias
 
-import pyarrow.fs as pafs
 import zarr
 from upath import UPath
 from zarr.storage import FsspecStore, LocalStore
@@ -70,16 +69,22 @@ def store_from_group(group: zarr.Group, *, read_only: bool = True) -> Any:
     return parent
 
 
-def arrow_fs_and_path(group: zarr.Group, *child_parts: str) -> tuple[pafs.FileSystem, str]:
-    """Derive a pyarrow filesystem + path for I/O at ``group/<child_parts>``.
+def parquet_fs_and_path(group: zarr.Group, *child_parts: str) -> tuple[Any, str]:
+    """Derive a (sync) fsspec filesystem + path for parquet I/O at ``group/<child_parts>``.
 
-    Used by parquet readers/writers (points, shapes) so they can locate their backing
-    file without going through a ``UPath``: the zarr group already carries its store
-    (and thus the filesystem), so we derive both directly.
+    Used by the parquet readers/writers (points, shapes) so they can locate their backing
+    file without going through a ``UPath``: the zarr group already carries its store (and
+    thus the filesystem), so we derive both directly.
 
-    TODO(async-pyarrow-fs): drop the ``sync_fs`` unwrap when either pyarrow's
-    FSSpecHandler learns to drive an async fs, or zarr exposes the original sync fs
-    directly (https://github.com/zarr-developers/zarr-python/issues/2073).
+    We deliberately return the *fsspec* filesystem (not a pyarrow one): dask's
+    ``ReadParquetPyarrowFS`` path eagerly materializes pyarrow dictionary columns into
+    ``known=True`` empty categoricals and reports wrong per-partition lengths, both of
+    which break downstream code (e.g. ``transform()`` on multi-partition points). Routing
+    dask/geopandas through the fsspec filesystem uses their default parquet engine, which
+    preserves categories-unknown and correct partition boundaries.
+
+    The ``sync_fs`` unwrap recovers the original synchronous filesystem from zarr's
+    ``AsyncFileSystemWrapper`` (dask/geopandas parquet I/O is synchronous).
     """
     from spatialdata._io._utils import join_fsspec_store_path
 
@@ -87,8 +92,10 @@ def arrow_fs_and_path(group: zarr.Group, *child_parts: str) -> tuple[pafs.FileSy
     child = "/".join(child_parts)
 
     if isinstance(store, LocalStore):
+        import fsspec
+
         local_path = Path(store.root) / group.path / child if child else Path(store.root) / group.path
-        return pafs.LocalFileSystem(), str(local_path)
+        return fsspec.filesystem("file"), str(local_path)
 
     if isinstance(store, FsspecStore):
         fs = store.fs
@@ -98,9 +105,9 @@ def arrow_fs_and_path(group: zarr.Group, *child_parts: str) -> tuple[pafs.FileSy
                 break
             fs = inner
         sub = f"{group.path}/{child}" if child else group.path
-        return pafs.PyFileSystem(pafs.FSSpecHandler(fs)), join_fsspec_store_path(store.path, sub)
+        return fs, join_fsspec_store_path(store.path, sub)
 
-    raise ValueError(f"Cannot derive a pyarrow filesystem for store of type {type(store).__name__}")
+    raise ValueError(f"Cannot derive a filesystem for store of type {type(store).__name__}")
 
 
 @contextmanager
