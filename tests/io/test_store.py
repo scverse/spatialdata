@@ -3,10 +3,12 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
 import zarr
 from upath import UPath
 from zarr.storage import FsspecStore, LocalStore, MemoryStore
 
+from spatialdata import SpatialData
 from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._store import (
     normalize_path,
@@ -16,6 +18,7 @@ from spatialdata._store import (
     path_from_store,
     store_from_group,
 )
+from spatialdata.testing import assert_spatial_data_objects_are_identical
 
 
 def test_normalize_path_local_string(tmp_path: Path) -> None:
@@ -135,3 +138,37 @@ def test_path_from_store_remote() -> None:
 def test_path_from_store_memory_returns_none() -> None:
     """Stores without a meaningful filesystem path (MemoryStore, custom) return None."""
     assert path_from_store(MemoryStore()) is None
+
+
+# ---------------------------------------------------------------------------
+# Public-API: passing a zarr StoreLike directly to write() / read_zarr().
+# This is the headline capability of the refactor -- users hand us a configured
+# zarr store (e.g. FsspecStore with embedded credentials) instead of a UPath.
+# ---------------------------------------------------------------------------
+
+
+def test_write_and_read_via_local_store(points: SpatialData, tmp_path: Path) -> None:
+    """`write(store)` and `read_zarr(store)` round-trip through a zarr LocalStore.
+
+    Exercises the StoreLike branches in ``write()`` (path_from_store) and
+    ``read_zarr()`` (use the store directly), and that ``sdata.path`` is derived
+    from the store.
+    """
+    store_path = tmp_path / "store.zarr"
+
+    write_store = LocalStore(str(store_path))
+    points.write(write_store, overwrite=True)
+    # sdata.path is derived from the store, as a plain Path
+    assert points.path == store_path
+
+    read_store = LocalStore(str(store_path), read_only=True)
+    read = SpatialData.read(read_store)
+    assert read.path == store_path
+    assert_spatial_data_objects_are_identical(points, read)
+
+
+def test_write_to_memory_store_raises() -> None:
+    """A store with no filesystem path (MemoryStore) is rejected with a clear error."""
+    sdata = SpatialData()
+    with pytest.raises(NotImplementedError, match="does not expose a filesystem path"):
+        sdata.write(MemoryStore())

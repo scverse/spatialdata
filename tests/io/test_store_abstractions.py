@@ -30,6 +30,7 @@ cloud-native follow-up must not regress.
 
 from __future__ import annotations
 
+import pytest
 from fsspec.implementations.memory import MemoryFileSystem
 from upath import UPath
 
@@ -94,7 +95,7 @@ class TestReadIsSideEffectFree:
 class TestMemoryUPathRoundtrip:
     """Round-trip ``SpatialData`` objects through a memory-backed ``UPath``.
 
-    Every code path from ``make_zarr_store`` -> ``_resolve_zarr_store`` ->
+    Every code path from ``normalize_path`` -> ``_resolve_zarr_store`` ->
     ``open_write_store`` / ``open_read_store`` -> ``zarr.open_group(FsspecStore)`` ->
     ``io_raster`` / ``io_shapes`` / ``io_points`` / ``io_table`` is exercised identically
     to how it would be against S3/Azure/GCS. If any of these regresses for remote backends,
@@ -104,6 +105,12 @@ class TestMemoryUPathRoundtrip:
     ``UPath`` (per the guard in ``_validate_can_safely_write_to_path``): remote existence
     checks are unreliable across fsspec backends, so the caller must explicitly opt in.
     """
+
+    def test_remote_write_without_overwrite_raises(self, images: SpatialData) -> None:
+        """Writing to a remote UPath with ``overwrite=False`` is rejected (existence is unreliable)."""
+        upath = _fresh_memory_upath("guard")
+        with pytest.raises(NotImplementedError, match="requires overwrite=True"):
+            images.write(upath)  # overwrite defaults to False
 
     def test_roundtrip_images_only(self, images: SpatialData) -> None:
         upath = _fresh_memory_upath("images")
