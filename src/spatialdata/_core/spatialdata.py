@@ -1064,9 +1064,7 @@ class SpatialData:
             file_path = Path(file_path)
 
         if not isinstance(file_path, (Path, UPath)):
-            raise ValueError(
-                f"file_path must be a `str`, `Path`, or `UPath` object, got {type(file_path).__name__}."
-            )
+            raise ValueError(f"file_path must be a `str`, `Path`, or `UPath` object, got {type(file_path).__name__}.")
 
         # Local UPath variants (PosixUPath / WindowsUPath) wrap a plain filesystem path; they
         # have reliable existence semantics and must go through the same local validation as
