@@ -17,7 +17,7 @@ def normalize_path(path: str | PathLike, storage_options: dict[str, Any] | None 
         return UPath(path, **(storage_options or {})) if "://" in path else Path(path)
     if isinstance(path, (Path, UPath)):
         return path
-    raise TypeError("Path must be a `str`, `Path`, or `UPath` object.")
+    raise TypeError(f"path must be a `str`, `Path`, or `UPath` object, got {type(path).__name__}.")
 
 
 def path_from_store(store: Any) -> PathLike | None:

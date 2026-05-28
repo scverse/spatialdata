@@ -1064,7 +1064,9 @@ class SpatialData:
             file_path = Path(file_path)
 
         if not isinstance(file_path, (Path, UPath)):
-            raise ValueError(f"file_path must be a string, Path or UPath object, type(file_path) = {type(file_path)}.")
+            raise ValueError(
+                f"file_path must be a `str`, `Path`, or `UPath` object, got {type(file_path).__name__}."
+            )
 
         # Local UPath variants (PosixUPath / WindowsUPath) wrap a plain filesystem path; they
         # have reliable existence semantics and must go through the same local validation as
@@ -1276,7 +1278,9 @@ class SpatialData:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
         if not isinstance(zarr_container_path, (Path, UPath)):
-            raise ValueError(f"zarr_container_path must be a Path or UPath, got {type(zarr_container_path).__name__}.")
+            raise ValueError(
+                f"zarr_container_path must be a `Path` or `UPath` object, got {type(zarr_container_path).__name__}."
+            )
         file_path_of_element = zarr_container_path / element_type / element_name
         self._validate_can_safely_write_to_path(
             file_path=file_path_of_element, overwrite=overwrite, saving_an_element=True
