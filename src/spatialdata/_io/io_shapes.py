@@ -9,6 +9,7 @@ from geopandas import GeoDataFrame, read_parquet
 from natsort import natsorted
 from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
+from zarr.core.group import Group as ZarrGroup
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -31,10 +32,14 @@ from spatialdata.transformations._utils import (
 
 
 def _read_shapes(
-    store: str | Path,
+    store: str | Path | ZarrGroup,
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
-    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    # fix for zipstore
+    if isinstance(store, ZarrGroup):
+        f = store
+    else:
+        f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]
@@ -54,9 +59,28 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = f.store_path.store.root
-        path = Path(store_root) / f.path / "shapes.parquet"
-        geo_df = read_parquet(path)
+        # fix for zipstores
+        if isinstance(f.store, zarr.storage.ZipStore):
+            import io
+
+            target_key = f"{f.path}/shapes.parquet" if f.path else "shapes.parquet"
+            target_key = target_key.strip('/')
+            if hasattr(f.store, "_zf") and f.store._zf is not None:
+                parquet_bytes = f.store._zf.read(target_key)
+            else:
+                from zarr.core.buffer import default_buffer_prototype
+                from zarr.core.sync import sync
+
+                buffer_obj = sync(f.store.get(target_key, prototype=default_buffer_prototype()))
+                parquet_bytes = buffer_obj.to_bytes() if buffer_obj else None
+            if parquet_bytes is None:
+                raise FileNotFoundError(f"Could not extract shapes.parquet inside zipped group path: {target_key}")
+            geo_df = read_parquet(io.BytesIO(parquet_bytes))
+        # original method
+        else:
+            store_root = f.store_path.store.root
+            path = Path(store_root) / f.path / "shapes.parquet"
+            geo_df = read_parquet(path)
     else:
         raise ValueError(
             f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."

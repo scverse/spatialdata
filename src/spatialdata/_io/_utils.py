@@ -495,11 +495,17 @@ def _resolve_zarr_store(
         path = UPath(path)
 
     if isinstance(path, PosixUPath | WindowsUPath):
+        # if it is a zipped store, use ZipStore
+        if path.suffix == '.zip':
+            store = ZipStore(path.path)
+            store.root = path.path
+            return store
         # if the input is a local path, use LocalStore
         return LocalStore(path.path)
 
-    if isinstance(path.store, ZipStore):
-        path = zarr.open_group(store=store, mode='r')
+    if isinstance(path, ZipStore):
+        path.root =path.path
+        return path
 
     if isinstance(path, zarr.Group):
         # if the input is a zarr.Group, wrap it with a store
@@ -513,6 +519,8 @@ def _resolve_zarr_store(
         if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
             # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
             return path.store.store
+        if isinstance(path.store, ZipStore):
+            return ZipStore(path.store)
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, zarr.storage.StoreLike):
         # if the input already a store, wrap it in an FSStore

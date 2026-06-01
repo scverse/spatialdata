@@ -6,6 +6,7 @@ import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
+from zarr.core.group import Group as ZarrGroup
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -21,10 +22,14 @@ from spatialdata.transformations._utils import (
 
 
 def _read_points(
-    store: str | Path,
+    store: str | Path | ZarrGroup,
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    # fix for zipstore
+    if isinstance(store, ZarrGroup):
+        f = store
+    else:
+        f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
