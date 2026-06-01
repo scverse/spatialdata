@@ -23,7 +23,7 @@ from geopandas import GeoDataFrame
 from upath import UPath
 from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
-from zarr.storage import FsspecStore, LocalStore
+from zarr.storage import FsspecStore, LocalStore, ZipStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
@@ -497,6 +497,9 @@ def _resolve_zarr_store(
     if isinstance(path, PosixUPath | WindowsUPath):
         # if the input is a local path, use LocalStore
         return LocalStore(path.path)
+
+    if isinstance(path.store, ZipStore):
+        path = zarr.open_group(store=store, mode='r')
 
     if isinstance(path, zarr.Group):
         # if the input is a zarr.Group, wrap it with a store
