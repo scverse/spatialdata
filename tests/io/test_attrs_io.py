@@ -17,6 +17,7 @@ FORMAT_V01 = SpatialDataContainerFormats["0.1"]
 FORMAT_V02 = SpatialDataContainerFormats["0.2"]
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", [FORMAT_V01, FORMAT_V02])
 class TestAttrsIO:
     """Test SpatialData.attrs read/write for all container formats."""
@@ -94,6 +95,7 @@ class TestAttrsIO:
             assert sdata_read3.attrs["initial_key"] == "initial_value"
 
 
+@pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
 def test_attrs_v1_to_v2() -> None:
     """Test that attrs are preserved when converting from V01 to V02."""
     with tempfile.TemporaryDirectory() as tmpdir:

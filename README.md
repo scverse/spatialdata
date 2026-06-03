@@ -6,7 +6,7 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/scverse/spatialdata/main.svg)](https://results.pre-commit.ci/latest/github/scverse/spatialdata/main)
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
 [![documentation badge](https://readthedocs.org/projects/scverse-spatialdata/badge/?version=latest)](https://spatialdata.scverse.org/en/latest/)
-[![DOI](https://zenodo.org/badge/487366481.svg)](https://zenodo.org/badge/latestdoi/487366481)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20056407.svg)](https://doi.org/10.5281/zenodo.20056407)
 [![Downloads](https://static.pepy.tech/badge/spatialdata)](https://pepy.tech/project/spatialdata)
 [![Release](https://github.com/scverse/spatialdata/actions/workflows/release.yaml/badge.svg?event=release)](https://github.com/scverse/spatialdata/actions/workflows/release.yaml)
 [![Documentation][badge-pypi]][link-pypi]
@@ -15,11 +15,15 @@
 [badge-pypi]: https://badge.fury.io/py/spatialdata.svg
 [link-pypi]: https://pypi.org/project/spatialdata/
 
-SpatialData is a data framework that comprises a FAIR storage format and a collection of python libraries for performant access, alignment, and processing of uni- and multi-modal spatial omics datasets. This repository contains the core spatialdata library. See the links below to learn more about other packages in the SpatialData ecosystem.
+SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets. It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
+
+This repository contains the core spatialdata library. See the links below to learn more about other packages in the SpatialData ecosystem.
 
 - [spatialdata-io](https://github.com/scverse/spatialdata-io): load data from common spatial omics technologies into spatialdata.
 - [spatialdata-plot](https://github.com/scverse/spatialdata-plot): Static plotting library for spatialdata.
 - [napari-spatialdata](https://github.com/scverse/napari-spatialdata): napari plugin for interactive exploration and annotation of spatial data.
+- [SpatialData (R)](https://github.com/HelenaLC/SpatialData): R implementation of the SpatialData framework.
+- [SpatialData.js](https://github.com/Taylor-CCB-Group/SpatialData.js): JavaScript/TypeScript implementation of the SpatialData framework.
 
 [//]: # "numfocus-fiscal-sponsor-attribution"
 

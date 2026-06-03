@@ -65,6 +65,32 @@ git checkout - && git stash pop
 asv compare main HEAD
 ```
 
+### Dataloader benchmarks
+
+Dataloader benchmarks live in `benchmarks/benchmark_dataloader.py`. They use a synthetic in-memory `SpatialData` (2048×2048 image, 500 circle regions) and compute two metrics:
+
+- `time_init` — constructing `ImageTilesDataset` (includes bounding-box pre-computation).
+- `time_fetch` — iterating over all 500 tiles once (pure `__getitem__` calls, no `DataLoader` overhead).
+
+Run both in your current environment:
+
+```bash
+asv run --python=same --show-stderr -b TimeDataloader
+```
+
+Or a single method:
+
+```bash
+asv run --python=same --show-stderr -b TimeDataloader.time_init
+asv run --python=same --show-stderr -b TimeDataloader.time_fetch
+```
+
+Compare against `main` in one shot:
+
+```bash
+asv continuous --show-stderr -v -b TimeDataloader main HEAD
+```
+
 ### Querying benchmarks
 
 Querying using a bounding box without a spatial index is highly impacted by large amounts of points (transcripts), more than table rows (cells).

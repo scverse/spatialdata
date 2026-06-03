@@ -13,7 +13,6 @@ from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.operations._utils import transform_to_data_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
-from spatialdata.datasets import blobs
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_table_keys
 from spatialdata.testing import assert_elements_dict_are_identical, assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import get_transformation, set_transformation
@@ -157,11 +156,14 @@ def test_filter_by_coordinate_system(full_sdata: SpatialData) -> None:
 def test_filter_by_coordinate_system_also_table(full_sdata: SpatialData) -> None:
     from spatialdata.models import TableModel
 
-    rng = np.random.default_rng(seed=0)
-    full_sdata["table"].obs["annotated_shapes"] = pd.Categorical(
-        rng.choice(["circles", "poly"], size=full_sdata["table"].shape[0])
-    )
-    adata = full_sdata["table"]
+    adata = full_sdata["table"].copy()
+
+    circles_instances = full_sdata["circles"].index.values
+    poly_instances = full_sdata["poly"].index.values
+
+    adata = adata[: len(circles_instances) + len(poly_instances), :].copy()
+    adata.obs["annotated_shapes"] = ["circles"] * len(circles_instances) + ["poly"] * len(poly_instances)
+    adata.obs["instance_id"] = np.concatenate([circles_instances, poly_instances])
     del adata.uns[TableModel.ATTRS_KEY]
     full_sdata["table"] = TableModel.parse(
         adata,
@@ -369,9 +371,9 @@ def test_concatenate_sdatas(full_sdata: SpatialData) -> None:
 
 @pytest.mark.parametrize("concatenate_tables", [True, False])
 @pytest.mark.parametrize("obs_names_make_unique", [True, False])
-def test_concatenate_sdatas_from_iterable(concatenate_tables: bool, obs_names_make_unique: bool) -> None:
-    sdata0 = blobs()
-    sdata1 = blobs()
+def test_concatenate_sdatas_from_iterable(blobs_factory, concatenate_tables: bool, obs_names_make_unique: bool) -> None:
+    sdata0 = blobs_factory()
+    sdata1 = blobs_factory()
 
     sdatas = {"sample0": sdata0, "sample1": sdata1}
     with pytest.raises(KeyError, match="Images must have unique names across the SpatialData objects"):
@@ -435,8 +437,8 @@ def test_concatenate_two_tables_each_annotating_two_elements() -> None:
     assert len(sdata["table"]) == 4 * len(poly0_a)
 
 
-def test_concatenate_sdatas_single_item() -> None:
-    sdata = blobs()
+def test_concatenate_sdatas_single_item(sdata_blobs) -> None:
+    sdata = sdata_blobs
 
     def _n_elements(sdata: SpatialData) -> int:
         return len([0 for _, _, _ in sdata.gen_elements()])
@@ -450,9 +452,9 @@ def test_concatenate_sdatas_single_item() -> None:
 
 
 @pytest.mark.parametrize("merge_coordinate_systems_on_name", [True, False])
-def test_concatenate_merge_coordinate_systems_on_name(merge_coordinate_systems_on_name):
-    blob1 = blobs()
-    blob2 = blobs()
+def test_concatenate_merge_coordinate_systems_on_name(blobs_factory, merge_coordinate_systems_on_name):
+    blob1 = blobs_factory()
+    blob2 = blobs_factory()
 
     if merge_coordinate_systems_on_name:
         with pytest.raises(
@@ -529,9 +531,9 @@ def test_del_item(full_sdata: SpatialData) -> None:
         _ = full_sdata["not_present"]
 
 
-def test_no_shared_transformations() -> None:
+def test_no_shared_transformations(sdata_blobs) -> None:
     """Test transformation dictionary copy for transformations not to be shared."""
-    sdata = blobs()
+    sdata = sdata_blobs
     element_name = "blobs_image"
     test_space = "test"
     set_transformation(sdata.images[element_name], Identity(), to_coordinate_system=test_space)
@@ -619,14 +621,16 @@ def test_transform_to_data_extent(full_sdata: SpatialData, maintain_positioning:
         "poly",
     ]
     full_sdata = full_sdata.subset(elements)
-    points = full_sdata["points_0"].compute()
+    points = (
+        full_sdata["points_0"].compute().copy()
+    )  # .copy() avoids SettingWithCopyWarning when adding column below (pandas CoW)
     points["z"] = points["x"]
     points = PointsModel.parse(points)
     full_sdata["points_0_3d"] = points
     sdata = transform_to_data_extent(
         full_sdata,
         "global",
-        target_width=1000,
+        target_width=100,
         maintain_positioning=maintain_positioning,
     )
 

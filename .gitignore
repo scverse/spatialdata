@@ -46,14 +46,20 @@ spatialdata-sandbox
 # version file
 _version.py
 
+# agents configurations
+.claude/settings.local.json
+
+# benchmarking and profiling
+.asv/
+profile.speedscope.json
+
 # other
 node_modules/
-
-.asv/
 
 .mypy_cache
 .ruff_cache
 uv.lock
+pixi.lock
 
 # Claude Code local files
 .claude/

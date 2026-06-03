@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from functools import singledispatch
 
-import dask.array as da
+import numpy as np
 import pandas as pd
 import xarray as xr
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -56,40 +55,29 @@ def get_centroids(
     raise ValueError(f"The object type {type(e)} is not supported.")
 
 
-def _get_centroids_for_axis(xdata: xr.DataArray, axis: str) -> pd.DataFrame:
+def _get_centroids_for_labels(xdata: xr.DataArray) -> pd.DataFrame:
     """
-    Compute the component "axis" of the centroid of each label as a weighted average of the xarray coordinates.
+    Compute centroids for all labels in a DataArray in a single O(n_voxels) pass.
 
-    Parameters
-    ----------
-    xdata
-        The xarray DataArray containing the labels.
-    axis
-        The axis for which the centroids are computed.
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing one column, named after "axis", with the centroids of the labels along that axis.
-        The index of the DataFrame is the collection of label values, sorted in ascending order.
+    Works for any number of spatial dimensions (2D and 3D labels).
     """
-    centroids: dict[int, float] = defaultdict(float)
-    for i in xdata[axis]:
-        portion = xdata.sel(**{axis: i}).data
-        u = da.unique(portion, return_counts=True)
-        labels_values = u[0].compute()
-        counts = u[1].compute()
-        for j in range(len(labels_values)):
-            label_value = labels_values[j]
-            count = counts[j]
-            centroids[label_value] += count * i.values.item()
+    arr = xdata.data.compute()
+    axes = list(xdata.dims)
 
-    all_labels_values, all_labels_counts = da.unique(xdata.data, return_counts=True)
-    all_labels = dict(zip(all_labels_values.compute(), all_labels_counts.compute(), strict=True))
-    for label_value in centroids:
-        centroids[label_value] /= all_labels[label_value]
-    centroids = dict(sorted(centroids.items(), key=lambda x: x[0]))
-    return pd.DataFrame({axis: centroids.values()}, index=list(centroids.keys()))
+    # Map label values to a contiguous range for bincount efficiency.
+    label_ids, inverse = np.unique(arr, return_inverse=True)
+    flat_inverse = inverse.ravel()
+    counts = np.bincount(flat_inverse)  # per-label pixel counts
+
+    # indexing="ij" (matrix convention) ensures the i-th grid varies along the i-th
+    # dimension of the output, correctly aligning with xdata.dims for any number of axes.
+    coord_grids = np.meshgrid(*[xdata[ax].values for ax in axes], indexing="ij")
+    data: dict[str, np.ndarray] = {}
+    for ax, grid in zip(axes, coord_grids, strict=True):
+        coord_sums = np.bincount(flat_inverse, weights=grid.ravel().astype(float))
+        data[ax] = coord_sums / counts  # counts > 0 by construction (unique guarantees this)
+
+    return pd.DataFrame(data, index=label_ids)
 
 
 @get_centroids.register(DataArray)
@@ -109,10 +97,7 @@ def _(
         assert len(e["scale0"]) == 1
         e = next(iter(e["scale0"].values()))
 
-    dfs = []
-    for axis in get_axes_names(e):
-        dfs.append(_get_centroids_for_axis(e, axis))
-    df = pd.concat(dfs, axis=1)
+    df = _get_centroids_for_labels(e)
     if not return_background and 0 in df.index:
         df = df.drop(index=0)  # drop the background label
     t = get_transformation(e, coordinate_system)

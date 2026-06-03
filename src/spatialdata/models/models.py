@@ -285,7 +285,7 @@ class RasterSchema:
             # Chunk single scale images
             if chunks is not None:
                 if isinstance(chunks, tuple):
-                    chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
+                    chunks = dict(zip(data.dims, chunks, strict=True))
                 data = data.chunk(chunks=chunks)
         # recompute coordinates for (multiscale) spatial image
         data = compute_coordinates(data)
@@ -364,6 +364,11 @@ class RasterSchema:
         if parsed_transform is None:
             raise ValueError(
                 f"No transformation found for `{data}`. At least one transformation is required for "
+                f"raster elements, e.g. images, labels."
+            )
+        if len(parsed_transform) == 0:
+            raise ValueError(
+                f"The transformations dict for `{data}` is empty. At least one transformation is required for "
                 f"raster elements, e.g. images, labels."
             )
 
@@ -498,6 +503,11 @@ class ShapesModel:
                 )
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(f":class:`geopandas.GeoDataFrame` does not contain `{TRANSFORM_KEY}`." + SUGGESTION)
+        if not data.attrs[cls.TRANSFORM_KEY]:
+            raise ValueError(
+                f":class:`geopandas.GeoDataFrame` has an empty `{TRANSFORM_KEY}` dict. "
+                f"At least one transformation is required." + SUGGESTION
+            )
         if len(data) > 0:
             n = data.geometry.iloc[0]._ndim
             if n != 2:
@@ -690,6 +700,11 @@ class PointsModel:
         if cls.TRANSFORM_KEY not in data.attrs:
             raise ValueError(
                 f":attr:`dask.dataframe.core.DataFrame.attrs` does not contain `{cls.TRANSFORM_KEY}`." + SUGGESTION
+            )
+        if not data.attrs[cls.TRANSFORM_KEY]:
+            raise ValueError(
+                f":attr:`dask.dataframe.core.DataFrame.attrs` has an empty `{cls.TRANSFORM_KEY}` dict. "
+                f"At least one transformation is required." + SUGGESTION
             )
         if ATTRS_KEY in data.attrs and "feature_key" in data.attrs[ATTRS_KEY]:
             feature_key = data.attrs[ATTRS_KEY][cls.FEATURE_KEY]
@@ -1282,14 +1297,17 @@ Schema_t: TypeAlias = (
 
 def get_model(
     e: SpatialElement,
+    validate: bool = True,
 ) -> Schema_t:
     """
-    Get the model for the given element.
+    Get the model for the given element. Validate using the model if `validate` is `True`.
 
     Parameters
     ----------
     e
         The element.
+    validate
+        Whether to validate the element using the model.
 
     Returns
     -------
@@ -1300,7 +1318,8 @@ def get_model(
         schema: Schema_t,
         e: SpatialElement,
     ) -> Schema_t:
-        schema.validate(e)
+        if validate:
+            schema.validate(e)
         return schema
 
     if isinstance(e, DataArray | DataTree):
@@ -1319,6 +1338,23 @@ def get_model(
     if isinstance(e, AnnData):
         return _validate_and_return(TableModel, e)
     raise TypeError(f"Unsupported type {type(e)}")
+
+
+def validate_element(e: SpatialElement) -> None:
+    """
+    Validate a spatial element against its model schema.
+
+    Parameters
+    ----------
+    e
+        The spatial element to validate.
+
+    Raises
+    ------
+    ValueError
+        If the element is invalid (e.g. missing or empty transformations, wrong dtypes).
+    """
+    get_model(e, validate=True)
 
 
 def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:

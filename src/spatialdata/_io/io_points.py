@@ -24,7 +24,7 @@ def _read_points(
     store: str | Path,
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
-    f = zarr.open(store, mode="r")
+    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
@@ -67,6 +67,7 @@ def write_points(
     """
     axes = get_axes_names(points)
     transformations = _get_transformations(points)
+    assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
     store_root = group.store_path.store.root
     path = store_root / group.path / "points.parquet"
@@ -95,6 +96,4 @@ def write_points(
         axes=list(axes),
         attrs=attrs,
     )
-    if transformations is None:
-        raise ValueError(f"No transformations specified for element '{group.basename}'. Cannot write.")
     overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)

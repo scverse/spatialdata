@@ -26,8 +26,8 @@ dependencies = [
     "annsel>=0.1.2",
     "click",
     "dask-image",
-    "dask>=2025.12.0,<2026.1.2",
-    "distributed<2026.1.2",
+    "dask>=2026.3.0",
+    "distributed>=2026.3.0",
     "datashader",
     "fsspec[s3,http]",
     "geopandas>=0.14",
@@ -35,7 +35,7 @@ dependencies = [
     "networkx",
     "numba>=0.55.0",
     "numpy",
-    "ome_zarr>=0.12.2",
+    "ome_zarr>=0.16.0",
     "pandas",
     "pooch",
     "pyarrow",
@@ -69,6 +69,7 @@ test = [
     "pytest",
     "pytest-cov",
     "pytest-mock",
+    "pytest-xdist",
     "torch",
 ]
 docs = [
@@ -102,6 +103,7 @@ strict = true
 addopts = [
     "--import-mode=importlib",  # allow using test files with same name
     "-s",  # print output from tests
+    "-p no:napari",  # napari registers a pytest plugin via its entry point; disable it here since spatialdata tests don't need it
 ]
 # These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
 markers = [
@@ -208,3 +210,37 @@ convention = "numpy"
 
 # pyupgrade typing rewrite TODO: remove at some point from per-file ignore
 # "UP006", "UP007"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+proj = "*"
+
+[tool.pixi.tasks]
+test = "pytest"
+test-parallel = "pytest -n auto --dist worksteal"
+pre-commit = "pre-commit run"
+pre-commit-all = "pre-commit run --all-files"
+
+[tool.pixi.feature.profiling.dependencies]
+py-spy = "*"
+
+[tool.pixi.feature.profiling.pypi-dependencies]
+spatialdata = { path = ".", editable = true }
+profimp = "*"
+memray = "*"
+
+[tool.pixi.feature.profiling.tasks]
+# Usage: pixi run -e profiling pyspy script.py  (prefix with sudo on macOS)
+pyspy = "py-spy record --gil -o profile.speedscope.json --format speedscope -- python"
+# Usage: pixi run -e profiling speedscope
+speedscope = "npx --yes speedscope profile.speedscope.json"
+# Usage: pixi run -e profiling memray-run script.py
+memray-run = "memray run"
+# Usage: pixi run -e profiling memray-flame memray-script.py.<pid>.bin
+memray-flame = "memray flamegraph --temporal"
+
+[tool.pixi.environments]
+profiling = { features = ["profiling"], solve-group = "default" }

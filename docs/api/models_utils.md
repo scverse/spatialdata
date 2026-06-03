@@ -4,6 +4,7 @@
 .. currentmodule:: spatialdata.models
 
 .. autofunction:: get_model
+.. autofunction:: validate_element
 .. autodata:: SpatialElement
 .. autofunction:: get_axes_names
 .. autofunction:: get_spatial_axes

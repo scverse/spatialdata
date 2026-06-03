@@ -172,6 +172,7 @@ def _(e: GeoDataFrame) -> tuple[str, ...]:
 
 
 @get_axes_names.register(DaskDataFrame)
+@get_axes_names.register(pd.DataFrame)
 def _(e: DaskDataFrame) -> tuple[str, ...]:
     valid_dims = (X, Y, Z)
     dims = tuple([c for c in valid_dims if c in e.columns])
