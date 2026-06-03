@@ -1069,11 +1069,11 @@ def get_values(
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
-            # Handle lazy tables (Dataset2D) vs eager tables (DataFrame)
+            # When the table came from anndata.experimental.read_lazy, obs is a Dataset2D, not a
+            # DataFrame, and pd.DataFrame(obs) returns a malformed frame. Materialize via to_memory().
             if isinstance(obs, pd.DataFrame):
                 matched_table.obs = pd.DataFrame(obs)
             else:
-                # Lazy AnnData uses Dataset2D which needs to_memory() to convert properly
                 matched_table.obs = obs.to_memory()
             if table_layer is None:
                 x = matched_table[:, value_key_values].X
