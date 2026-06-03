@@ -36,10 +36,9 @@ def _read_shapes(
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
     # fix for zipstore
-    if isinstance(store, ZarrGroup):
-        f = store
-    else:
-        f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    f = (
+        store if isinstance(store, ZarrGroup) else zarr.open(Path(store), mode="r")
+    )  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]
@@ -64,7 +63,7 @@ def _read_shapes(
             import io
 
             target_key = f"{f.path}/shapes.parquet" if f.path else "shapes.parquet"
-            target_key = target_key.strip('/')
+            target_key = target_key.strip("/")
             if hasattr(f.store, "_zf") and f.store._zf is not None:
                 parquet_bytes = f.store._zf.read(target_key)
             else:

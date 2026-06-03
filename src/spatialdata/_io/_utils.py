@@ -496,7 +496,7 @@ def _resolve_zarr_store(
 
     if isinstance(path, PosixUPath | WindowsUPath):
         # if it is a zipped store, use ZipStore
-        if path.suffix == '.zip':
+        if path.suffix == ".zip":
             store = ZipStore(path.path)
             store.root = path.path
             return store
@@ -504,7 +504,7 @@ def _resolve_zarr_store(
         return LocalStore(path.path)
 
     if isinstance(path, ZipStore):
-        path.root =path.path
+        path.root = path.path
         return path
 
     if isinstance(path, zarr.Group):

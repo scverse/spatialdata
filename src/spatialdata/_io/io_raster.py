@@ -8,7 +8,7 @@ import dask.array as da
 import numpy as np
 import zarr
 from ome_zarr.format import Format
-from ome_zarr.io import ZarrLocation, parse_url
+from ome_zarr.io import parse_url
 from ome_zarr.reader import Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes

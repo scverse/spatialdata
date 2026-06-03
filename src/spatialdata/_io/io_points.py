@@ -26,10 +26,9 @@ def _read_points(
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
     # fix for zipstore
-    if isinstance(store, ZarrGroup):
-        f = store
-    else:
-        f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    f = (
+        store if isinstance(store, ZarrGroup) else zarr.open(Path(store), mode="r")
+    )  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None

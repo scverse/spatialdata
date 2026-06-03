@@ -7,7 +7,6 @@ import warnings
 from collections.abc import Generator, Mapping
 from itertools import chain
 from pathlib import Path
-import shutil
 from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
@@ -1203,7 +1202,6 @@ class SpatialData:
 
         if consolidate_metadata:
             self.write_consolidated_metadata()
-
 
     def _write_element(
         self,
