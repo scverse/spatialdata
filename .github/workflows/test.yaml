@@ -61,9 +61,10 @@ jobs:
               run: |
                   uv run pytest --cov --color=yes --cov-report=xml -n auto --dist worksteal
             - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v5
+              uses: codecov/codecov-action@v6
               with:
                   name: coverage
                   verbose: true
+                  fail_ci_if_error: true
               env:
                   CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
