@@ -27,7 +27,6 @@ dependencies = [
     "click",
     "dask-image",
     "dask>=2026.3.0",
-    "distributed>=2026.3.0",
     "datashader",
     "fsspec[s3,http]",
     "geopandas>=0.14",
@@ -37,6 +36,7 @@ dependencies = [
     "numpy",
     "ome_zarr>=0.16.0",
     "pandas",
+    "platformdirs",
     "pooch",
     "pyarrow",
     "rich",
@@ -60,6 +60,9 @@ extra  = [
     "spatialdata-plot",
     "spatialdata-io",
 ]
+zarrs = [
+    "zarrs"
+]
 
 [dependency-groups]
 dev = [
@@ -71,6 +74,7 @@ test = [
     "pytest-mock",
     "pytest-xdist",
     "torch",
+    "zarrs",
 ]
 docs = [
     "sphinx>=4.5",

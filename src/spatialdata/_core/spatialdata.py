@@ -16,6 +16,7 @@ from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import Scalar
 from geopandas import GeoDataFrame
+from ome_zarr.types import JSONDict
 from shapely import MultiPolygon, Polygon
 from upath import UPath
 from xarray import DataArray, DataTree
@@ -31,7 +32,7 @@ from spatialdata._core.validation import (
 )
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
-from spatialdata._utils import _deprecation_alias
+from spatialdata._utils import _deprecation_alias, zarrs_context
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -1113,6 +1114,7 @@ class SpatialData:
         update_sdata_path: bool = True,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
+        raster_write_kwargs: dict[str, JSONDict | list[JSONDict]] | list[JSONDict] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
@@ -1161,12 +1163,32 @@ class SpatialData:
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+        raster_write_kwargs
+            Storage options for raster elements. These options are passed to the zarr storage backend for writing and
+            can be provided in several formats:
+
+            1. Single dictionary
+                A dictionary containing all storage options applied globally.
+            2. Dictionary per raster element
+                A dictionary where:
+                - Keys = names of raster elements
+                - Values = storage options for each element
+                    - For single-scale data: a dictionary
+                    - For multiscale data: a list of dictionaries (one per scale)
+            3. List of dictionaries (multiscale only)
+                A list where each dictionary defines the storage options for one scale of a multiscale raster element.
+
+            Important Notes
+            - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
+            - For a full list of supported storage options, refer to:
+                https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
         raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
             supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
             ordered for more efficient compression.
         """
+        from spatialdata._core._utils import create_raster_element_kwargs
         from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
         from spatialdata._io.format import _parse_formats
 
@@ -1185,6 +1207,13 @@ class SpatialData:
         store.close()
 
         for element_type, element_name, element in self.gen_elements():
+            element_raster_write_kwargs = None
+            if element_type in ("images", "labels") and raster_write_kwargs:
+                element_names = set(self.images.keys()).union(self.labels.keys())
+                element_raster_write_kwargs = create_raster_element_kwargs(
+                    raster_write_kwargs, element_name, element_names
+                )
+
             self._write_element(
                 element=element,
                 zarr_container_path=file_path,
@@ -1193,6 +1222,7 @@ class SpatialData:
                 overwrite=False,
                 parsed_formats=parsed,
                 shapes_geometry_encoding=shapes_geometry_encoding,
+                element_raster_write_kwargs=element_raster_write_kwargs,
                 raster_compressor=raster_compressor,
             )
 
@@ -1211,6 +1241,7 @@ class SpatialData:
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
+        element_raster_write_kwargs: JSONDict | list[JSONDict] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
@@ -1244,44 +1275,47 @@ class SpatialData:
 
             validate_element(element)
 
-        if element_type == "images":
-            write_image(
-                image=element,
-                group=element_group,
-                name=element_name,
-                element_format=parsed_formats["raster"],
-                raster_compressor=raster_compressor,
-            )
-        elif element_type == "labels":
-            write_labels(
-                labels=element,
-                group=root_group,
-                name=element_name,
-                element_format=parsed_formats["raster"],
-                raster_compressor=raster_compressor,
-            )
-        elif element_type == "points":
-            write_points(
-                points=element,
-                group=element_group,
-                element_format=parsed_formats["points"],
-            )
-        elif element_type == "shapes":
-            write_shapes(
-                shapes=element,
-                group=element_group,
-                element_format=parsed_formats["shapes"],
-                geometry_encoding=shapes_geometry_encoding,
-            )
-        elif element_type == "tables":
-            write_table(
-                table=element,
-                group=element_type_group,
-                name=element_name,
-                element_format=parsed_formats["tables"],
-            )
-        else:
-            raise ValueError(f"Unknown element type: {element_type}")
+        with zarrs_context():
+            if element_type == "images":
+                write_image(
+                    image=element,
+                    group=element_group,
+                    name=element_name,
+                    element_format=parsed_formats["raster"],
+                    storage_options=element_raster_write_kwargs,
+                    raster_compressor=raster_compressor,
+                )
+            elif element_type == "labels":
+                write_labels(
+                    labels=element,
+                    group=root_group,
+                    name=element_name,
+                    element_format=parsed_formats["raster"],
+                    storage_options=element_raster_write_kwargs,
+                    raster_compressor=raster_compressor,
+                )
+            elif element_type == "points":
+                write_points(
+                    points=element,
+                    group=element_group,
+                    element_format=parsed_formats["points"],
+                )
+            elif element_type == "shapes":
+                write_shapes(
+                    shapes=element,
+                    group=element_group,
+                    element_format=parsed_formats["shapes"],
+                    geometry_encoding=shapes_geometry_encoding,
+                )
+            elif element_type == "tables":
+                write_table(
+                    table=element,
+                    group=element_type_group,
+                    name=element_name,
+                    element_format=parsed_formats["tables"],
+                )
+            else:
+                raise ValueError(f"Unknown element type: {element_type}")
 
     def write_element(
         self,
@@ -1289,6 +1323,7 @@ class SpatialData:
         overwrite: bool = False,
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
+        raster_write_kwargs: dict[str, JSONDict | list[JSONDict] | Any] | list[JSONDict] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         """
@@ -1308,6 +1343,25 @@ class SpatialData:
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+        raster_write_kwargs
+            Storage options for raster elements. These options are passed to the zarr storage backend for writing and
+            can be provided in several formats:
+
+            1. Single dictionary
+                A dictionary containing all storage options applied globally.
+            2. Dictionary per raster element
+                A dictionary where:
+                - Keys = names of raster elements
+                - Values = storage options for each element
+                    - For single-scale data: a dictionary
+                    - For multiscale data: a list of dictionaries (one per scale)
+            3. List of dictionaries (multiscale only)
+                A list where each dictionary defines the storage options for one scale of a multiscale raster element.
+
+            Important Notes
+            - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
+            - For a full list of supported storage options, refer to:
+                https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
          raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
@@ -1319,6 +1373,7 @@ class SpatialData:
         If you pass a list of names, the elements will be written one by one. If an error occurs during the writing of
         an element, the writing of the remaining elements will not be attempted.
         """
+        from spatialdata._core._utils import create_raster_element_kwargs
         from spatialdata._io.format import _parse_formats
 
         parsed_formats = _parse_formats(formats=sdata_formats)
@@ -1331,6 +1386,7 @@ class SpatialData:
                     overwrite=overwrite,
                     sdata_formats=sdata_formats,
                     shapes_geometry_encoding=shapes_geometry_encoding,
+                    raster_write_kwargs=raster_write_kwargs,
                     raster_compressor=raster_compressor,
                 )
             return
@@ -1359,6 +1415,11 @@ class SpatialData:
 
         self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
 
+        element_raster_write_kwargs = None
+        if element_type in ("images", "labels") and raster_write_kwargs:
+            element_names = set(self.images.keys()).union(self.labels.keys())
+            element_raster_write_kwargs = create_raster_element_kwargs(raster_write_kwargs, element_name, element_names)
+
         self._write_element(
             element=element,
             zarr_container_path=self.path,
@@ -1367,6 +1428,7 @@ class SpatialData:
             overwrite=overwrite,
             parsed_formats=parsed_formats,
             shapes_geometry_encoding=shapes_geometry_encoding,
+            element_raster_write_kwargs=element_raster_write_kwargs,
             raster_compressor=raster_compressor,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.

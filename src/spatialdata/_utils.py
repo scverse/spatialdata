@@ -4,12 +4,14 @@ import functools
 import re
 import warnings
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+from importlib.util import find_spec
 from itertools import islice
 from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
+import zarr
 from anndata import AnnData
 from dask import array as da
 from dask import config
@@ -354,3 +356,19 @@ def _check_match_length_channels_c_dim(
             f" with length {c_length}."
         )
     return c_coords
+
+
+# TODO: get this in scverse-misc and import from there
+@contextmanager
+def zarrs_context() -> Generator[None, None, None]:
+    with (
+        zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}) if find_spec("zarrs") else nullcontext(),
+        warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
+    ):
+        if find_spec("zarrs"):
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*unsupported by ZarrsCodecPipeline.*",
+                category=UserWarning,
+            )
+        yield
