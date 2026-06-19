@@ -314,11 +314,7 @@ def _write_centroids_into_table(
 
     if area is not None:
         area_for_keys = pd.Series(np.asarray(area, dtype=float), index=centroids.index).reindex(keys).to_numpy()
-        col = (
-            table.obs["area"].to_numpy(dtype=float).copy()
-            if "area" in table.obs
-            else np.full(table.n_obs, np.nan)
-        )
+        col = table.obs["area"].to_numpy(dtype=float).copy() if "area" in table.obs else np.full(table.n_obs, np.nan)
         col[mask] = area_for_keys
         table.obs["area"] = col
 
