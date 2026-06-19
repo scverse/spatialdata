@@ -1,0 +1,15 @@
+# Registry of downloadable example datasets for ``spatialdata.datasets``.
+#
+# Parsed by ``scverse_misc.datasets.parse_registry`` and fetched (downloaded,
+# hash-verified, cached and loaded) via ``scverse_misc.datasets.fetch``.
+#
+#   type: spatialdata  ->  a .zip that extracts to a single .zarr store
+base_url: https://exampledata.scverse.org/spatialdata/
+datasets:
+  cells:
+    type: spatialdata
+    doc_header: Cells dataset as a SpatialData object.
+    files:
+      - name: cells.zip
+        s3_key: cells.zip
+        sha256: dc9613cb9e16fd2cd8d83f3a9586eeda4af5ba8ba366f1066efb51305820c5fb

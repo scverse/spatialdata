@@ -7,5 +7,6 @@ Convenience small datasets
 
 .. autofunction:: blobs
 .. autofunction:: blobs_annotating_element
+.. autofunction:: cells
 .. autofunction:: raccoon
 ```
