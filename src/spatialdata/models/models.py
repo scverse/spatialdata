@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal
 
 import dask.dataframe as dd
 import numpy as np
@@ -1252,7 +1252,7 @@ class TableModel:
         return adata
 
 
-Schema_t: TypeAlias = (
+type Schema_t = (
     type[Image2DModel]
     | type[Image3DModel]
     | type[Labels2DModel]
