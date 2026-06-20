@@ -29,7 +29,6 @@ from spatialdata._io.format import (
     get_ome_zarr_format,
 )
 from spatialdata._utils import get_pyramid_levels
-from spatialdata.models._utils import get_channel_names
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
 from spatialdata.transformations._utils import (
@@ -302,13 +301,6 @@ def _write_raster(
         metadata["name"] = name
         metadata["label_metadata"] = label_metadata
 
-    # convert channel names to channel metadata in omero
-    if raster_type == "image":
-        metadata["metadata"] = {"omero": {"channels": []}}
-        channels = get_channel_names(raster_data)
-        for c in channels:
-            metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
-
     if isinstance(raster_data, DataArray):
         _write_raster_dataarray(
             raster_type,
@@ -336,8 +328,7 @@ def _write_raster(
 
     group = group["labels"][name] if raster_type == "labels" else group
     if raster_type == "image":
-        # ome-zarr-py >= 0.18 no longer writes the omero channel metadata from the nested `metadata` dict we
-        # pass above, so we always (re)write it ourselves to keep channel names round-tripping across versions.
+        # ome-zarr-py >= 0.18 no longer writes the omero channel metadata, so we write it ourselves.
         overwrite_channel_names(group, raster_data)
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}

@@ -154,9 +154,8 @@ def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) ->
         channel_names = element["scale0"]["image"].coords["c"].data.tolist()
 
     channel_metadata = [{"label": name} for name in channel_names]
-    # This is required here as we do not use the load node API of ome-zarr.
-    # ome-zarr-py >= 0.18 no longer emits an `omero` block, so default to an empty one.
-    omero_meta = group.attrs.get("omero", None) or group.attrs.get("ome", {}).get("omero") or {}
+    # We don't use the ome-zarr load node API, and ome-zarr-py >= 0.18 emits no `omero` block, so default to empty.
+    omero_meta = group.attrs.get("omero") or group.attrs.get("ome", {}).get("omero") or {}
     omero_meta["channels"] = channel_metadata
     if ome_meta := group.attrs.get("ome", None):
         ome_meta["omero"] = omero_meta

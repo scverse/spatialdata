@@ -35,8 +35,7 @@ dependencies = [
     "networkx",
     "numba>=0.55.0",
     "numpy",
-    # >=0.18: 0.18 stopped emitting the omero channel block via the functional writer (we write it
-    # ourselves in _io now); pin so CI tests the same version a fresh install resolves to.
+    # >=0.18 dropped omero from the functional writer (we write it ourselves); pin so CI matches a fresh install.
     "ome_zarr>=0.18.0",
     "pandas",
     "pooch",
