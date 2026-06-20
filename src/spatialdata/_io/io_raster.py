@@ -20,6 +20,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
+    overwrite_channel_names,
     overwrite_coordinate_transformations_raster,
 )
 from spatialdata._io.format import (
@@ -334,6 +335,10 @@ def _write_raster(
         raise ValueError("Not a valid labels object")
 
     group = group["labels"][name] if raster_type == "labels" else group
+    if raster_type == "image":
+        # ome-zarr-py >= 0.18 no longer writes the omero channel metadata from the nested `metadata` dict we
+        # pass above, so we always (re)write it ourselves to keep channel names round-tripping across versions.
+        overwrite_channel_names(group, raster_data)
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
     attrs = group.attrs[ATTRS_KEY]

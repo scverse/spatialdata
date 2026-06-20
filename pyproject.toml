@@ -35,9 +35,9 @@ dependencies = [
     "networkx",
     "numba>=0.55.0",
     "numpy",
-    # ome_zarr 0.18 switched to the NGFF 0.5 layout (channel metadata moved out of the `omero` block),
-    # which spatialdata's IO does not yet support. TODO: support NGFF 0.5 and drop this upper bound.
-    "ome_zarr>=0.16.0,<0.18.0",
+    # >=0.18: 0.18 stopped emitting the omero channel block via the functional writer (we write it
+    # ourselves in _io now); pin so CI tests the same version a fresh install resolves to.
+    "ome_zarr>=0.18.0",
     "pandas",
     "pooch",
     "pyarrow",
