@@ -35,8 +35,7 @@ dependencies = [
     "networkx",
     "numba>=0.55.0",
     "numpy",
-    # >=0.18 dropped omero from the functional writer (we write it ourselves); pin so CI matches a fresh install.
-    "ome_zarr>=0.18.0",
+    "ome_zarr>=0.16.0",
     "pandas",
     "pooch",
     "pyarrow",
