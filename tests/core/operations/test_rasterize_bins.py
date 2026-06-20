@@ -276,8 +276,8 @@ def test_rasterize_bins_invalid():
             value_key="instance_id",
         )
 
-    # if bins is a DataArray, it should hold integers
-    image = Labels2DModel.parse(RNG.normal(size=(3, 3)), dims=("y", "x"))
+    # if bins is a DataArray, it should hold integers (cast after parsing, which itself rejects floats)
+    image = Labels2DModel.parse(RNG.integers(0, 10, size=(3, 3)), dims=("y", "x")).astype(float)
     del sdata["points"]
     sdata["points"] = image
     with pytest.raises(
