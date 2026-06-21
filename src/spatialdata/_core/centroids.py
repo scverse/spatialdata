@@ -53,13 +53,9 @@ def _validate_persist_args(persist_as: str, coordinate_system: str | None, *, al
 def _transform_centroid_coords(
     xy: np.ndarray, axes: list[str], e: SpatialElement, coordinate_system: str | None
 ) -> np.ndarray:
-    """Apply the element's transformation to centroid coordinates in-memory.
+    """Apply the element's affine to centroid coords in-memory; ``None``/``Identity`` pass through.
 
-    Centroids are tiny (one row per instance), so the affine matrix is applied directly here instead
-    of routing through the dask :func:`~spatialdata.transform` machinery (which builds a dask graph,
-    computes twice and re-validates regardless of the transformation). ``coordinate_system=None`` and
-    an :class:`~spatialdata.transformations.Identity` transformation short-circuit to the intrinsic
-    coordinates unchanged. ``axes`` is the order of the columns of ``xy`` (e.g. ``["x", "y"]``).
+    ``axes`` is the column order of ``xy`` (e.g. ``["x", "y"]``).
     """
     if coordinate_system is None:
         return xy
@@ -113,8 +109,7 @@ def get_centroids(
     -----
     For :class:`~shapely.Multipolygon`s, the centroids are the average of the centroids of the polygons that constitute
     each :class:`~shapely.Multipolygon`. For multiscale labels the centroids are computed on the full-resolution
-    ``scale0`` level. Because centroids are tiny (one row per instance), the table-writing path applies the coordinate
-    transformation in-memory and short-circuits when it is an identity, avoiding the cost of the dask transform.
+    ``scale0`` level.
     """
     raise ValueError(f"The object type {type(e)} is not supported.")
 
@@ -192,7 +187,7 @@ def _intrinsic_centroid_frame(
         axes = get_axes_names(element)
         assert axes in [("x", "y"), ("x", "y", "z")]
         return element[list(axes)].compute(), None, element
-    raise ValueError(f"Centroids are not supported for the {model.__name__} element {element!r}.")
+    raise ValueError(f"Centroids are not supported for {model.__name__}; expected a Labels, Shapes or Points element.")
 
 
 def _points_from_centroids(
@@ -210,58 +205,21 @@ def _points_from_centroids(
 
 @get_centroids.register(DataArray)
 @get_centroids.register(DataTree)
+@get_centroids.register(GeoDataFrame)
+@get_centroids.register(DaskDataFrame)
 def _(
-    e: DataArray | DataTree,
+    e: SpatialElement,
     coordinate_system: str | None = "global",
     return_background: bool = False,
     return_area: bool = False,
     persist_as: PersistAs = "Points",
 ) -> DaskDataFrame:
-    """Get the centroids of a Labels element (2D or 3D)."""
-    model = get_model(e)
-    if model not in [Labels2DModel, Labels3DModel]:
-        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
+    """Get the centroids of a Labels, Shapes or Points element."""
     _validate_persist_args(persist_as, coordinate_system, allow_adata=False)
     assert coordinate_system is not None  # guaranteed by _validate_persist_args (allow_adata=False)
     _validate_coordinate_system(e, coordinate_system)
     df, area, raster = _intrinsic_centroid_frame(e, return_background, return_area)
     return _points_from_centroids(df, area, raster, coordinate_system)
-
-
-@get_centroids.register(GeoDataFrame)
-def _(
-    e: GeoDataFrame,
-    coordinate_system: str | None = "global",
-    return_background: bool = False,
-    return_area: bool = False,
-    persist_as: PersistAs = "Points",
-) -> DaskDataFrame:
-    """Get the centroids of a Shapes element (circles or polygons/multipolygons)."""
-    _validate_persist_args(persist_as, coordinate_system, allow_adata=False)
-    assert coordinate_system is not None  # guaranteed by _validate_persist_args (allow_adata=False)
-    _validate_coordinate_system(e, coordinate_system)
-    xy_df, area = _get_centroids_for_shapes(e, return_area)
-    return _points_from_centroids(xy_df, area, e, coordinate_system)
-
-
-@get_centroids.register(DaskDataFrame)
-def _(
-    e: DaskDataFrame,
-    coordinate_system: str | None = "global",
-    return_background: bool = False,
-    return_area: bool = False,
-    persist_as: PersistAs = "Points",
-) -> DaskDataFrame:
-    """Get the centroids of a Points element."""
-    if return_area:
-        raise ValueError("`return_area` is not supported for points elements (points have no area).")
-    _validate_persist_args(persist_as, coordinate_system, allow_adata=False)
-    assert coordinate_system is not None  # guaranteed by _validate_persist_args (allow_adata=False)
-    _validate_coordinate_system(e, coordinate_system)
-    axes = get_axes_names(e)
-    assert axes in [("x", "y"), ("x", "y", "z")]
-    coords = e[list(axes)].compute()
-    return _points_from_centroids(coords, None, e, coordinate_system)
 
 
 def _resolve_annotating_table(sdata: SpatialData, element_name: str, table_name: str | None) -> str:
@@ -303,23 +261,40 @@ def _write_centroids_into_table(
     if not mask.any():
         raise ValueError(f"The resolved table does not annotate element {element_name!r} (no matching rows).")
 
+    # Map each annotated instance id to its centroid row (-1 where absent, e.g. background or filtered
+    # instances -> NaN). A *total* miss means the instance_key and the element index never align (e.g.
+    # string vs integer ids); fail loudly rather than silently writing an all-NaN obsm["spatial"].
     keys = table.obs[instance_key].to_numpy()[mask]
+    idx = centroids.index.get_indexer(keys)
+    if (idx == -1).all():
+        raise ValueError(
+            f"No instance id annotating {element_name!r} matches a centroid; check that the table's "
+            f"`{instance_key}` dtype matches the element's instance ids."
+        )
+    hit = idx != -1
     coord_cols = list(centroids.columns)
     ndim = len(coord_cols)
-    coords = centroids.reindex(keys)[coord_cols].to_numpy(dtype=float)
 
     existing = np.asarray(table.obsm["spatial"]) if "spatial" in table.obsm else None
+    if existing is not None and existing.shape[0] == table.n_obs and existing.shape[1] != ndim:
+        raise ValueError(
+            f"Existing obsm['spatial'] has {existing.shape[1]} columns but {element_name!r} centroids have {ndim}; "
+            f"refusing to overwrite the coordinates of other regions. Persist these centroids with persist_as='Points'."
+        )
     if existing is not None and existing.shape == (table.n_obs, ndim):
         spatial = existing.astype(float, copy=True)
     else:
         spatial = np.full((table.n_obs, ndim), np.nan)
-    spatial[mask] = coords
+    written = np.full((len(idx), ndim), np.nan)
+    written[hit] = centroids[coord_cols].to_numpy(dtype=float)[idx[hit]]
+    spatial[mask] = written
     table.obsm["spatial"] = spatial
 
     if area is not None:
-        area_for_keys = pd.Series(np.asarray(area, dtype=float), index=centroids.index).reindex(keys).to_numpy()
         col = table.obs["area"].to_numpy(dtype=float).copy() if "area" in table.obs else np.full(table.n_obs, np.nan)
-        col[mask] = area_for_keys
+        written_area = np.full(len(idx), np.nan)
+        written_area[hit] = np.asarray(area, dtype=float)[idx[hit]]
+        col[mask] = written_area
         table.obs["area"] = col
 
 
@@ -333,15 +308,11 @@ def _(
     persist_as: PersistAs = "Points",
     table_name: str | None = None,
 ) -> DaskDataFrame | SpatialData:
-    """Get (or persist) the centroids of a named element of a :class:`~spatialdata.SpatialData`.
+    """Get the centroids of ``element_name``, or (``persist_as="adata"``) write them into its annotating table.
 
-    With ``persist_as="Points"`` (default) this returns the centroids of ``element_name`` as a Points
-    element, identical to calling :func:`get_centroids` on the element directly. With
-    ``persist_as="adata"`` the centroids are written, squidpy-style, into the element's annotating
-    table — ``obsm["spatial"]`` (columns ordered ``x, y[, z]``) and, if ``return_area``,
-    ``obs["area"]`` — and the mutated ``SpatialData`` is returned. The annotating table is resolved
-    automatically (pass ``table_name=`` to disambiguate); if the element has no annotating table this
-    raises, and you should use ``persist_as="Points"`` instead.
+    With ``persist_as="adata"`` the centroids go into ``obsm["spatial"]`` (and area into ``obs["area"]``)
+    of the resolved annotating table (``table_name=`` disambiguates), and the mutated ``SpatialData`` is
+    returned. ``persist_as="Points"`` behaves like calling :func:`get_centroids` on the element directly.
     """
     _validate_persist_args(persist_as, coordinate_system, allow_adata=True)
     element = e[element_name]
@@ -355,6 +326,8 @@ def _(
         )
 
     # persist_as == "adata": resolve the annotating table and write centroids into it (in place).
+    if coordinate_system is not None:
+        _validate_coordinate_system(element, coordinate_system)
     table_name = _resolve_annotating_table(e, element_name, table_name)
     df, area, raster = _intrinsic_centroid_frame(element, return_background, return_area)
     coord_cols = sorted(df.columns)  # canonical x, y[, z] (squidpy obsm["spatial"] order)

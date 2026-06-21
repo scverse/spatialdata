@@ -266,6 +266,24 @@ def test_get_centroids_sdata_persist_intrinsic_matches_identity(full_sdata):
     assert np.allclose(global_spatial[finite], intrinsic_spatial[finite])
 
 
+def test_get_centroids_sdata_persist_instance_key_mismatch_raises(full_sdata):
+    # instance ids stored with a dtype that doesn't match the element's integer labels must fail
+    # loudly instead of silently writing NaN coordinates into obsm["spatial"].
+    table = full_sdata["table"]
+    table.obs["instance_id"] = table.obs["instance_id"].astype(str)
+    with pytest.raises(ValueError, match="No instance id annotating"):
+        get_centroids(full_sdata, "labels2d", persist_as="adata")
+
+
+def test_get_centroids_sdata_persist_refuses_dim_mismatch(full_sdata):
+    # an existing obsm["spatial"] of a different width must not be silently overwritten (that would
+    # wipe the coordinates of other regions sharing the table).
+    table = full_sdata["table"]
+    table.obsm["spatial"] = np.zeros((table.n_obs, 3))
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        get_centroids(full_sdata, "labels2d", persist_as="adata")
+
+
 def test_get_centroids_sdata_no_table_raises(full_sdata):
     # points_0 is not annotated by any table -> the error points the user to persist_as='Points'.
     with pytest.raises(ValueError, match="persist_as='Points'"):
@@ -274,7 +292,7 @@ def test_get_centroids_sdata_no_table_raises(full_sdata):
 
 def test_get_centroids_invalid_element(images):
     # cannot compute centroids for images
-    with pytest.raises(ValueError, match="Expected a `Labels` element. Found an `Image` instead."):
+    with pytest.raises(ValueError, match="Centroids are not supported for Image2DModel"):
         get_centroids(images["image2d"])
 
     # cannot compute centroids for tables
