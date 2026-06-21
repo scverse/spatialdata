@@ -75,7 +75,7 @@ def get_centroids(
     return_background: bool = False,
     return_area: bool = False,
     persist_as: PersistAs = "Points",
-) -> DaskDataFrame | SpatialData:
+) -> DaskDataFrame | AnnData | None:
     """
     Get the centroids of the geometries contained in a SpatialElement.
 
@@ -102,8 +102,8 @@ def get_centroids(
 
     Returns
     -------
-    A Points element (``persist_as="Points"``), or the mutated ``SpatialData`` when writing centroids
-    into an annotating table (``SpatialData`` overload with ``persist_as="adata"``).
+    A Points element (``persist_as="Points"``). With ``persist_as="adata"`` (``SpatialData`` overload),
+    ``None`` when written in place, or the new ``AnnData`` table when ``inplace=False``.
 
     Notes
     -----
@@ -299,7 +299,7 @@ def _write_centroids_into_table(
 
 
 @get_centroids.register(SpatialData)
-def _(
+def _get_centroids_sdata(
     e: SpatialData,
     element_name: str,
     coordinate_system: str | None = "global",
@@ -307,12 +307,14 @@ def _(
     return_area: bool = False,
     persist_as: PersistAs = "Points",
     table_name: str | None = None,
-) -> DaskDataFrame | SpatialData:
+    inplace: bool = True,
+) -> DaskDataFrame | AnnData | None:
     """Get the centroids of ``element_name``, or (``persist_as="adata"``) write them into its annotating table.
 
-    With ``persist_as="adata"`` the centroids go into ``obsm["spatial"]`` (and area into ``obs["area"]``)
-    of the resolved annotating table (``table_name=`` disambiguates), and the mutated ``SpatialData`` is
-    returned. ``persist_as="Points"`` behaves like calling :func:`get_centroids` on the element directly.
+    With ``persist_as="adata"`` the centroids go into ``obsm["spatial"]`` (and area into ``obs["area"]``) of the
+    resolved annotating table (``table_name=`` disambiguates). ``inplace=True`` (default) mutates that table and
+    returns ``None``; ``inplace=False`` writes into a copy of *only that table* and returns the new ``AnnData``,
+    leaving ``e`` untouched. ``persist_as="Points"`` behaves like calling :func:`get_centroids` on the element.
     """
     _validate_persist_args(persist_as, coordinate_system, allow_adata=True)
     element = e[element_name]
@@ -325,7 +327,7 @@ def _(
             return_area=return_area,
         )
 
-    # persist_as == "adata": resolve the annotating table and write centroids into it (in place).
+    # persist_as == "adata": resolve the annotating table and write the centroids into it.
     if coordinate_system is not None:
         _validate_coordinate_system(element, coordinate_system)
     table_name = _resolve_annotating_table(e, element_name, table_name)
@@ -333,8 +335,10 @@ def _(
     coord_cols = sorted(df.columns)  # canonical x, y[, z] (squidpy obsm["spatial"] order)
     coords = _transform_centroid_coords(df[coord_cols].to_numpy(), coord_cols, raster, coordinate_system)
     centroids = pd.DataFrame(coords, columns=coord_cols, index=df.index)
-    _write_centroids_into_table(e.tables[table_name], element_name, centroids, area)
-    return e
+
+    table = e.tables[table_name] if inplace else e.tables[table_name].copy()
+    _write_centroids_into_table(table, element_name, centroids, area)
+    return None if inplace else table
 
 
 ##

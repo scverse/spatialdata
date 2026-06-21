@@ -215,7 +215,7 @@ def test_get_centroids_sdata_persist_into_table(full_sdata):
     table = full_sdata["table"]
     assert "spatial" not in table.obsm
     out = get_centroids(full_sdata, "labels2d", coordinate_system="global", return_area=True, persist_as="adata")
-    assert out is full_sdata  # written in place
+    assert out is None  # inplace=True (default) mutates the table and returns nothing
 
     table = full_sdata["table"]
     assert table.obsm["spatial"].shape == (table.n_obs, 2)
@@ -264,6 +264,25 @@ def test_get_centroids_sdata_persist_intrinsic_matches_identity(full_sdata):
     intrinsic_spatial = full_sdata["table"].obsm["spatial"]
     finite = np.isfinite(global_spatial).all(axis=1)
     assert np.allclose(global_spatial[finite], intrinsic_spatial[finite])
+
+
+def test_get_centroids_sdata_persist_inplace_false_returns_copy(full_sdata):
+    # inplace=False copies only the target table, writes into the copy, and leaves the sdata untouched.
+    out = get_centroids(full_sdata, "labels2d", return_area=True, persist_as="adata", inplace=False)
+    assert isinstance(out, AnnData)
+    assert out is not full_sdata["table"]
+    assert "spatial" in out.obsm and "area" in out.obs
+    assert "spatial" not in full_sdata["table"].obsm  # original table not modified
+
+
+def test_spatialdata_get_centroids_method(full_sdata):
+    # the method mirrors the module-level function for both persistence modes.
+    pts = full_sdata.get_centroids("labels2d", coordinate_system="global")
+    expected = get_centroids(full_sdata["labels2d"], coordinate_system="global")
+    assert np.allclose(pts.compute().to_numpy(), expected.compute().to_numpy())
+
+    assert full_sdata.get_centroids("labels2d", persist_as="adata") is None
+    assert "spatial" in full_sdata["table"].obsm
 
 
 def test_get_centroids_sdata_persist_instance_key_mismatch_raises(full_sdata):
