@@ -64,6 +64,7 @@ def _transform_centroid_coords(
     if coordinate_system is None:
         return xy
     t = get_transformation(e, coordinate_system)
+    assert isinstance(t, BaseTransformation)
     if isinstance(t, Identity):
         return xy
     matrix = t.to_affine_matrix(input_axes=tuple(axes), output_axes=tuple(axes))
@@ -221,6 +222,7 @@ def _(
     if model not in [Labels2DModel, Labels3DModel]:
         raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
     _validate_persist_args(persist_as, coordinate_system, allow_adata=False)
+    assert coordinate_system is not None  # guaranteed by _validate_persist_args (allow_adata=False)
     _validate_coordinate_system(e, coordinate_system)
     df, area, raster = _intrinsic_centroid_frame(e, return_background, return_area)
     return _points_from_centroids(df, area, raster, coordinate_system)
@@ -236,6 +238,7 @@ def _(
 ) -> DaskDataFrame:
     """Get the centroids of a Shapes element (circles or polygons/multipolygons)."""
     _validate_persist_args(persist_as, coordinate_system, allow_adata=False)
+    assert coordinate_system is not None  # guaranteed by _validate_persist_args (allow_adata=False)
     _validate_coordinate_system(e, coordinate_system)
     xy_df, area = _get_centroids_for_shapes(e, return_area)
     return _points_from_centroids(xy_df, area, e, coordinate_system)
@@ -253,6 +256,7 @@ def _(
     if return_area:
         raise ValueError("`return_area` is not supported for points elements (points have no area).")
     _validate_persist_args(persist_as, coordinate_system, allow_adata=False)
+    assert coordinate_system is not None  # guaranteed by _validate_persist_args (allow_adata=False)
     _validate_coordinate_system(e, coordinate_system)
     axes = get_axes_names(e)
     assert axes in [("x", "y"), ("x", "y", "z")]
