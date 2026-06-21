@@ -14,6 +14,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._utils import _affine_matrix_multiplication
 from spatialdata.models import get_axes_names, get_table_keys
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import Labels2DModel, Labels3DModel, PointsModel, ShapesModel, get_model
@@ -23,6 +24,9 @@ from spatialdata.transformations.transformations import BaseTransformation, Iden
 BoundingBoxDescription = dict[str, tuple[float, float]]
 
 PersistAs = Literal["Points", "adata"]
+# squidpy-style storage keys for persist_as="adata".
+_SPATIAL_KEY = "spatial"
+_AREA_KEY = "area"
 
 
 def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> None:
@@ -64,8 +68,7 @@ def _transform_centroid_coords(
     if isinstance(t, Identity):
         return xy
     matrix = t.to_affine_matrix(input_axes=tuple(axes), output_axes=tuple(axes))
-    n = len(axes)
-    return xy @ matrix[:n, :n].T + matrix[:n, n]
+    return _affine_matrix_multiplication(matrix, xy)
 
 
 @singledispatch
@@ -194,9 +197,7 @@ def _points_from_centroids(
     df: pd.DataFrame, area: np.ndarray | None, e: SpatialElement, coordinate_system: str
 ) -> DaskDataFrame:
     """Build a Points element from intrinsic centroids, transformed into ``coordinate_system``."""
-    out = df.copy()
-    if area is not None:
-        out["area"] = np.asarray(area, dtype=float)
+    out = df.assign(area=np.asarray(area, dtype=float)) if area is not None else df
     t = get_transformation(e, coordinate_system)
     assert isinstance(t, BaseTransformation)
     points = PointsModel.parse(out, transformations={coordinate_system: t})
@@ -256,46 +257,51 @@ def _write_centroids_into_table(
     Only the table rows annotating ``element_name`` are touched (a table may annotate several
     elements); instances annotated but absent from the element are written as NaN.
     """
+    if not centroids.index.is_unique:
+        raise ValueError(f"Cannot persist centroids for {element_name!r}: its instance index has duplicate values.")
     _, region_key, instance_key = get_table_keys(table)
     mask = (table.obs[region_key].astype(str) == str(element_name)).to_numpy()
     if not mask.any():
         raise ValueError(f"The resolved table does not annotate element {element_name!r} (no matching rows).")
 
-    # Map each annotated instance id to its centroid row (-1 where absent, e.g. background or filtered
-    # instances -> NaN). A *total* miss means the instance_key and the element index never align (e.g.
-    # string vs integer ids); fail loudly rather than silently writing an all-NaN obsm["spatial"].
+    # Map each annotated instance to its centroid row (-1 where absent -> NaN). A *total* miss means the
+    # instance ids never align with the element index (mismatched dtype, or no shared instances).
     keys = table.obs[instance_key].to_numpy()[mask]
     idx = centroids.index.get_indexer(keys)
     if (idx == -1).all():
         raise ValueError(
-            f"No instance id annotating {element_name!r} matches a centroid; check that the table's "
-            f"`{instance_key}` dtype matches the element's instance ids."
+            f"No instance id annotating {element_name!r} is present in the element; check the table's "
+            f"`{instance_key}` values and dtype."
         )
     hit = idx != -1
-    coord_cols = list(centroids.columns)
-    ndim = len(coord_cols)
 
-    existing = np.asarray(table.obsm["spatial"]) if "spatial" in table.obsm else None
-    if existing is not None and existing.shape[0] == table.n_obs and existing.shape[1] != ndim:
-        raise ValueError(
-            f"Existing obsm['spatial'] has {existing.shape[1]} columns but {element_name!r} centroids have {ndim}; "
-            f"refusing to overwrite the coordinates of other regions. Persist these centroids with persist_as='Points'."
-        )
-    if existing is not None and existing.shape == (table.n_obs, ndim):
-        spatial = existing.astype(float, copy=True)
-    else:
-        spatial = np.full((table.n_obs, ndim), np.nan)
-    written = np.full((len(idx), ndim), np.nan)
-    written[hit] = centroids[coord_cols].to_numpy(dtype=float)[idx[hit]]
-    spatial[mask] = written
-    table.obsm["spatial"] = spatial
+    def _scatter(values: np.ndarray) -> np.ndarray:
+        """Gather ``values`` (ordered like ``centroids``) onto the masked rows, NaN where absent."""
+        out = np.full((len(idx), *values.shape[1:]), np.nan)
+        out[hit] = values[idx[hit]]
+        return out
+
+    ndim = centroids.shape[1]
+    spatial = np.full((table.n_obs, ndim), np.nan)
+    existing = table.obsm.get(_SPATIAL_KEY)
+    if existing is not None:
+        existing = np.asarray(existing)
+        if existing.shape == (table.n_obs, ndim):
+            spatial = existing.astype(float, copy=True)  # preserve other regions' coordinates
+        elif existing.shape[0] == table.n_obs:
+            raise ValueError(
+                f"Existing obsm['{_SPATIAL_KEY}'] {existing.shape} is incompatible with {ndim}-D centroids for "
+                f"{element_name!r}; refusing to overwrite other regions. Persist with persist_as='Points' instead."
+            )
+    spatial[mask] = _scatter(centroids.to_numpy(dtype=float))
+    table.obsm[_SPATIAL_KEY] = spatial
 
     if area is not None:
-        col = table.obs["area"].to_numpy(dtype=float).copy() if "area" in table.obs else np.full(table.n_obs, np.nan)
-        written_area = np.full(len(idx), np.nan)
-        written_area[hit] = np.asarray(area, dtype=float)[idx[hit]]
-        col[mask] = written_area
-        table.obs["area"] = col
+        col = np.full(table.n_obs, np.nan)
+        if _AREA_KEY in table.obs:
+            col = table.obs[_AREA_KEY].to_numpy(dtype=float).copy()
+        col[mask] = _scatter(np.asarray(area, dtype=float))
+        table.obs[_AREA_KEY] = col
 
 
 @get_centroids.register(SpatialData)
