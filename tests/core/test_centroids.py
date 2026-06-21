@@ -16,6 +16,15 @@ from spatialdata.transformations import Affine, Identity, get_transformation, se
 RNG = default_rng(42)
 
 
+def _assert_obsm_matches_points(table: AnnData, pts: pd.DataFrame) -> None:
+    # written obsm["spatial"] must match the element-level Points centroids on shared (non-background) ids.
+    inst = table.obs["instance_id"].to_numpy()
+    written = pd.DataFrame(table.obsm["spatial"], index=inst, columns=["x", "y"])
+    common = pts.index.intersection(written.index[inst != 0])
+    assert len(common) > 0
+    assert np.allclose(written.loc[common].to_numpy(), pts.loc[common][["x", "y"]].to_numpy())
+
+
 def _get_affine() -> Affine:
     theta: float = math.pi / 18
     k = 10.0
@@ -228,10 +237,7 @@ def test_get_centroids_sdata_persist_into_table(full_sdata):
 
     # coordinates must match the element-level Points (global transform is the identity here)
     pts = get_centroids(full_sdata["labels2d"], coordinate_system="global").compute()
-    written = pd.DataFrame(table.obsm["spatial"], index=inst, columns=["x", "y"])
-    common = pts.index.intersection(written.index[inst != 0])
-    assert len(common) > 0
-    assert np.allclose(written.loc[common].to_numpy(), pts.loc[common][["x", "y"]].to_numpy())
+    _assert_obsm_matches_points(table, pts)
 
     # area must equal the pixel counts of the corresponding labels
     ids, counts = np.unique(np.asarray(full_sdata["labels2d"].data), return_counts=True)
@@ -247,13 +253,8 @@ def test_get_centroids_sdata_persist_fastpath_matches_transform(full_sdata):
     set_transformation(full_sdata["labels2d"], affine, "aligned")
     get_centroids(full_sdata, "labels2d", coordinate_system="aligned", persist_as="adata")
 
-    table = full_sdata["table"]
-    inst = table.obs["instance_id"].to_numpy()
-    written = pd.DataFrame(table.obsm["spatial"], index=inst, columns=["x", "y"])
     pts = get_centroids(full_sdata["labels2d"], coordinate_system="aligned").compute()
-    common = pts.index.intersection(written.index[inst != 0])
-    assert len(common) > 0
-    assert np.allclose(written.loc[common].to_numpy(), pts.loc[common][["x", "y"]].to_numpy())
+    _assert_obsm_matches_points(full_sdata["table"], pts)
 
 
 def test_get_centroids_sdata_persist_intrinsic_matches_identity(full_sdata):

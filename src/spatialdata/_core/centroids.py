@@ -243,7 +243,7 @@ def _resolve_annotating_table(sdata: SpatialData, element_name: str, table_name:
             f"Element {element_name!r} is annotated by multiple tables ({', '.join(annotators)}); "
             f"pass `table_name=` to choose one."
         )
-    return str(annotators[0])
+    return annotators[0]
 
 
 def _write_centroids_into_table(
