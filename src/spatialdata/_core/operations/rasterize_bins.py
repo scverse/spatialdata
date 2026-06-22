@@ -87,14 +87,10 @@ def rasterize_bins(
     table = sdata.tables[table_name]
     if not isinstance(element, GeoDataFrame | DaskDataFrame | DataArray):
         raise ValueError("The bins should be a GeoDataFrame, a DaskDataFrame or a DataArray.")
-    if isinstance(element, DataArray):
-        if "c" in element.dims:
-            raise ValueError(
-                "If bins is a DataArray, it should hold labels; found a image element instead, with"
-                f" 'c': {element.dims}."
-            )
-        if not np.issubdtype(element.dtype, np.integer):
-            raise ValueError(f"If bins is a DataArray, it should hold integers. Found dtype {element.dtype}.")
+    if isinstance(element, DataArray) and "c" in element.dims:
+        raise ValueError(
+            f"If bins is a DataArray, it should hold labels; found a image element instead, with 'c': {element.dims}."
+        )
 
     _, region_key, instance_key = get_table_keys(table)
     if not table.obs[region_key].dtype == "category":

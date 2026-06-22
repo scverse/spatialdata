@@ -398,11 +398,12 @@ class RasterSchema:
             for d in data:
                 cls._check_chunk_size_not_too_large(data[d][name])
 
-
-def _validate_labels_dtype(data: DataArray | DataTree) -> None:
-    dtype = data.dtype if isinstance(data, DataArray) else data["scale0"]["image"].dtype
-    if not (np.issubdtype(dtype, np.integer) or np.issubdtype(dtype, np.bool_)):
-        raise ValueError(f"Labels must have an integer dtype, found {dtype}. Cast the data, e.g. `.astype(np.uint16)`.")
+    def _validate_labels_dtype(data: DataArray | DataTree) -> None:
+        dtype = data.dtype if isinstance(data, DataArray) else data["scale0"]["image"].dtype
+        if not (np.issubdtype(dtype, np.integer) or np.issubdtype(dtype, np.bool_)):
+            raise ValueError(
+                f"Labels must have an integer dtype, found {dtype}. Cast the data, e.g. `.astype(np.uint16)`."
+            )
 
 
 class Labels2DModel(RasterSchema):
@@ -416,9 +417,12 @@ class Labels2DModel(RasterSchema):
     ) -> DataArray | DataTree:
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
-        parsed = super().parse(*args, **kwargs)
-        _validate_labels_dtype(parsed)
-        return parsed
+        return super().parse(*args, **kwargs)
+
+    @classmethod
+    def validate(cls, data: Any) -> None:
+        super().validate(data)
+        cls._validate_labels_dtype(data)
 
 
 class Labels3DModel(RasterSchema):
@@ -428,9 +432,12 @@ class Labels3DModel(RasterSchema):
     def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
-        parsed = super().parse(*args, **kwargs)
-        _validate_labels_dtype(parsed)
-        return parsed
+        return super().parse(*args, **kwargs)
+
+    @classmethod
+    def validate(cls, data: Any) -> None:
+        super().validate(data)
+        cls._validate_labels_dtype(data)
 
 
 class Image2DModel(RasterSchema):
