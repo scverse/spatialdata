@@ -107,7 +107,8 @@ def cells(path: str | None = None) -> SpatialData:
     registry = importlib.resources.files("spatialdata").joinpath("datasets.yaml")
     with importlib.resources.as_file(registry) as registry_path:
         base_url, datasets = parse_registry(registry_path)
-    return fetch(datasets["cells"], cache_dir, base_url=base_url)
+    sdata: SpatialData = fetch(datasets["cells"], cache_dir, base_url=base_url)
+    return sdata
 
 
 class RaccoonDataset:
