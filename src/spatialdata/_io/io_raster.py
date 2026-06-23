@@ -8,7 +8,7 @@ import dask.array as da
 import numpy as np
 import zarr
 from ome_zarr.format import Format
-from ome_zarr.io import ZarrLocation
+from ome_zarr.io import parse_url
 from ome_zarr.reader import Multiscales, Node, Reader
 from ome_zarr.types import JSONDict
 from ome_zarr.writer import _get_valid_axes
@@ -160,13 +160,18 @@ def _prepare_storage_options(
 
 
 def _read_multiscale(
-    store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+    store: str | Path | zarr.storage.ZipStore, raster_type: Literal["image", "labels"], reader_format: Format
 ) -> DataArray | DataTree:
-    assert isinstance(store, str | Path)
+    assert isinstance(store, str | Path | zarr.storage.ZipStore | zarr.Group)
     assert raster_type in ["image", "labels"]
-
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store, fmt=reader_format)
+    # instantiate an internal subpath for zipstores
+    internal_subpath = ""
+
+    image_loc = parse_url(store, fmt=reader_format)
+
+    if internal_subpath:
+        image_loc.internal_subpath = internal_subpath
     if exists := image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
