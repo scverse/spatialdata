@@ -543,6 +543,36 @@ class SpatialData:
             **kwargs,
         )
 
+    def get_centroids(
+        self,
+        element_name: str,
+        coordinate_system: str | None = "global",
+        return_background: bool = False,
+        return_area: bool = False,
+        persist_as: Literal["Points", "adata"] = "Points",
+        table_name: str | None = None,
+        inplace: bool = True,
+    ) -> DaskDataFrame | AnnData | None:
+        """Get the centroids of ``element_name``, or persist them into its annotating table.
+
+        Convenience method for :func:`spatialdata.get_centroids` called on ``self``; see that function for the
+        complete docstring. With ``persist_as="adata"`` the centroids are written into ``obsm["spatial"]`` (and area
+        into ``obs["area"]``) of the resolved annotating table; ``inplace=True`` mutates it and returns ``None``,
+        ``inplace=False`` returns a modified copy of that table.
+        """
+        from spatialdata._core.centroids import _get_centroids_sdata
+
+        return _get_centroids_sdata(
+            self,
+            element_name,
+            coordinate_system=coordinate_system,
+            return_background=return_background,
+            return_area=return_area,
+            persist_as=persist_as,
+            table_name=table_name,
+            inplace=inplace,
+        )
+
     def is_backed(self) -> bool:
         """Check if the data is backed by a Zarr storage or if it is in-memory."""
         return self.path is not None
