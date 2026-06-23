@@ -1069,7 +1069,12 @@ def get_values(
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
-            matched_table.obs = pd.DataFrame(obs)
+            # When the table came from anndata.experimental.read_lazy, obs is a Dataset2D, not a
+            # DataFrame, and pd.DataFrame(obs) returns a malformed frame. Materialize via to_memory().
+            if isinstance(obs, pd.DataFrame):
+                matched_table.obs = pd.DataFrame(obs)
+            else:
+                matched_table.obs = obs.to_memory()
             if table_layer is None:
                 x = matched_table[:, value_key_values].X
             else:
