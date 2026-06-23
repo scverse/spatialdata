@@ -190,7 +190,7 @@ def _intrinsic_centroid_frame(
         axes = get_axes_names(element)
         assert axes in [("x", "y"), ("x", "y", "z")]
         return element[list(axes)].compute(), None, element
-    raise ValueError(f"Centroids are not supported for {model.__name__}; expected a Labels, Shapes or Points element.")
+    raise ValueError(f"Centroids are not supported for elements modeled by {model.__name__}; expected a Labels, Shapes or Points element.")
 
 
 def _points_from_centroids(

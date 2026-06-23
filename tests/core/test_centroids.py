@@ -312,7 +312,7 @@ def test_get_centroids_sdata_no_table_raises(full_sdata):
 
 def test_get_centroids_invalid_element(images):
     # cannot compute centroids for images
-    with pytest.raises(ValueError, match="Centroids are not supported for Image2DModel"):
+    with pytest.raises(ValueError, match="Centroids are not supported for elements modeled by Image2DModel"):
         get_centroids(images["image2d"])
 
     # cannot compute centroids for tables
