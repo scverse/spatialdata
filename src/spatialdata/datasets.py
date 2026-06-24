@@ -31,7 +31,7 @@ from spatialdata.models import (
 )
 from spatialdata.transformations import Identity
 
-__all__ = ["blobs", "raccoon"]
+__all__ = ["blobs", "cells", "raccoon"]
 
 
 def blobs(
@@ -77,6 +77,38 @@ def blobs(
 def raccoon() -> SpatialData:
     """Raccoon dataset."""
     return RaccoonDataset().raccoon()
+
+
+def cells(path: str | None = None) -> SpatialData:
+    """
+    Cells dataset.
+
+    Download the ``cells`` example dataset and load it as a :class:`~spatialdata.SpatialData`
+    object. The download is hash-verified and cached, so repeated calls reuse the local copy
+    instead of downloading again.
+
+    Parameters
+    ----------
+    path
+        Directory in which to cache the downloaded data. If `None`, the default OS cache
+        location is used (:func:`pooch.os_cache` for ``"spatialdata"``).
+
+    Returns
+    -------
+    SpatialData object with the cells dataset.
+    """
+    import importlib.resources
+    from pathlib import Path
+
+    import pooch
+    from scverse_misc.datasets import fetch, parse_registry
+
+    cache_dir = Path(path) if path is not None else Path(pooch.os_cache("spatialdata"))
+    registry = importlib.resources.files("spatialdata").joinpath("datasets.yaml")
+    with importlib.resources.as_file(registry) as registry_path:
+        base_url, datasets = parse_registry(registry_path)
+    sdata: SpatialData = fetch(datasets["cells"], cache_dir, base_url=base_url)
+    return sdata
 
 
 class RaccoonDataset:
