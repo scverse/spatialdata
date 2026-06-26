@@ -365,6 +365,7 @@ def zarrs_context() -> Generator[None, None, None]:
         zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"}) if find_spec("zarrs") else nullcontext(),
         warnings.catch_warnings() if find_spec("zarrs") else nullcontext(),
     ):
+        # The warning is there in case zarrs doesn't support the store type you passed in to read_zarr.
         if find_spec("zarrs"):
             warnings.filterwarnings(
                 "ignore",
