@@ -173,6 +173,7 @@ def create_raster_element_kwargs(
     element_name: str,
     element_names: set[str],
 ) -> dict[str, Any] | list[dict[str, Any]]:
+    """Normalize raster keyword arguments to the kwargs required by `zarr.create_array` for a single raster."""
     element_raster_write_kwargs = None
     if isinstance(raster_write_kwargs, dict) and (kwargs := raster_write_kwargs.get(element_name)):
         element_raster_write_kwargs = kwargs
