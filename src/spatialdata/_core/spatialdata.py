@@ -1188,7 +1188,6 @@ class SpatialData:
             supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
             ordered for more efficient compression.
         """
-        from spatialdata._core._utils import create_raster_element_kwargs
         from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
         from spatialdata._io.format import _parse_formats
 
@@ -1207,13 +1206,6 @@ class SpatialData:
         store.close()
 
         for element_type, element_name, element in self.gen_elements():
-            element_raster_write_kwargs = None
-            if element_type in ("images", "labels") and raster_write_kwargs:
-                element_names = set(self.images.keys()).union(self.labels.keys())
-                element_raster_write_kwargs = create_raster_element_kwargs(
-                    raster_write_kwargs, element_name, element_names
-                )
-
             self._write_element(
                 element=element,
                 zarr_container_path=file_path,
@@ -1222,7 +1214,7 @@ class SpatialData:
                 overwrite=False,
                 parsed_formats=parsed,
                 shapes_geometry_encoding=shapes_geometry_encoding,
-                element_raster_write_kwargs=element_raster_write_kwargs,
+                raster_write_kwargs=raster_write_kwargs,
                 raster_compressor=raster_compressor,
             )
 
@@ -1241,7 +1233,7 @@ class SpatialData:
         overwrite: bool,
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
-        element_raster_write_kwargs: JSONDict | list[JSONDict] | None = None,
+        raster_write_kwargs: dict[str, JSONDict | list[JSONDict] | Any] | list[JSONDict] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
@@ -1274,6 +1266,13 @@ class SpatialData:
             from spatialdata.models import validate_element
 
             validate_element(element)
+
+        element_raster_write_kwargs = None
+        if element_type in ("images", "labels") and raster_write_kwargs:
+            from spatialdata._core._utils import create_raster_element_kwargs
+
+            element_names = set(self.images.keys()).union(self.labels.keys())
+            element_raster_write_kwargs = create_raster_element_kwargs(raster_write_kwargs, element_name, element_names)
 
         with zarrs_context():
             if element_type == "images":
@@ -1373,7 +1372,6 @@ class SpatialData:
         If you pass a list of names, the elements will be written one by one. If an error occurs during the writing of
         an element, the writing of the remaining elements will not be attempted.
         """
-        from spatialdata._core._utils import create_raster_element_kwargs
         from spatialdata._io.format import _parse_formats
 
         parsed_formats = _parse_formats(formats=sdata_formats)
@@ -1415,11 +1413,6 @@ class SpatialData:
 
         self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
 
-        element_raster_write_kwargs = None
-        if element_type in ("images", "labels") and raster_write_kwargs:
-            element_names = set(self.images.keys()).union(self.labels.keys())
-            element_raster_write_kwargs = create_raster_element_kwargs(raster_write_kwargs, element_name, element_names)
-
         self._write_element(
             element=element,
             zarr_container_path=self.path,
@@ -1428,7 +1421,7 @@ class SpatialData:
             overwrite=overwrite,
             parsed_formats=parsed_formats,
             shapes_geometry_encoding=shapes_geometry_encoding,
-            element_raster_write_kwargs=element_raster_write_kwargs,
+            raster_write_kwargs=raster_write_kwargs,
             raster_compressor=raster_compressor,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
