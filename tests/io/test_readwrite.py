@@ -974,6 +974,7 @@ def test_write_raster_sharding_keyword(tmp_path: Path, raster_case: dict) -> Non
 
     other_arr = zarr.open_group(path / zarr_subpath / other_name, mode="r")["s0"]
     assert other_arr.chunks == base_chunks
+    assert not other_arr.shards
 
 
 def test_write_raster_elements_sharding_chunking(tmp_path: Path) -> None:
