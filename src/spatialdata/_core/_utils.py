@@ -169,34 +169,36 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
 
 
 def create_raster_element_kwargs(
-    raster_write_kwargs: dict[str, JSONDict | list[JSONDict]] | list[JSONDict],
+    raster_write_kwargs: dict[str, JSONDict | list[JSONDict]] | list[JSONDict] | None,
     element_name: str,
     element_names: set[str],
-) -> dict[str, Any] | list[dict[str, Any]]:
+) -> dict[str, Any] | list[dict[str, Any]] | None:
     """Normalize raster keyword arguments to the kwargs required by `zarr.create_array` for a single raster."""
-    element_raster_write_kwargs = None
-    if isinstance(raster_write_kwargs, dict) and (kwargs := raster_write_kwargs.get(element_name)):
-        element_raster_write_kwargs = kwargs
+    if isinstance(raster_write_kwargs, dict):
+        element_write_kwargs: JSONDict | list[JSONDict] | None = raster_write_kwargs.get(element_name)
+        if element_write_kwargs:
+            return element_write_kwargs
 
-    if not element_raster_write_kwargs:
-        if isinstance(raster_write_kwargs, dict):
-            for name in element_names:
-                raster_write_kwargs.pop(name, None)
-        if not raster_write_kwargs:
-            element_raster_write_kwargs = {}
-        elif isinstance(raster_write_kwargs, dict) and not all(
-            isinstance(x, (dict, list)) for x in raster_write_kwargs.values()
-        ):
-            element_raster_write_kwargs = raster_write_kwargs
-        elif isinstance(raster_write_kwargs, list):
-            if not all(isinstance(x, dict) for x in raster_write_kwargs):
-                raise ValueError(
-                    "If passing raster_write_kwargs as list, it is assumed to be the storage "
-                    "options for each scale of a multiscale raster as a dictionary."
-                )
-            element_raster_write_kwargs = raster_write_kwargs
-        else:
+        # If we get here it means that we do not have kwargs with the specific element. We need to clear out kwargs
+        # that could be there of other elements.
+        for name in element_names:
+            raster_write_kwargs.pop(name, None)
+
+    # We return here if there are no kwargs after stripping all kwargs directly corresponding to a given element.
+    if not raster_write_kwargs:
+        return {}
+
+    if isinstance(raster_write_kwargs, dict):
+        if not all(isinstance(x, (dict, list)) for x in raster_write_kwargs.values()):
+            return raster_write_kwargs
+        raise ValueError(f"Type of raster_write_kwargs should be either dict or list, got {type(raster_write_kwargs)}.")
+
+    if isinstance(raster_write_kwargs, list):
+        if not all(isinstance(x, dict) for x in raster_write_kwargs):
             raise ValueError(
-                f"Type of raster_write_kwargs should be either dict or list, got {type(raster_write_kwargs)}."
+                "If passing raster_write_kwargs as list, it is assumed to be the storage "
+                "options for each scale of a multiscale raster as a dictionary."
             )
-    return element_raster_write_kwargs
+        return raster_write_kwargs
+
+    raise ValueError(f"Type of raster_write_kwargs should be either dict or list, got {type(raster_write_kwargs)}.")
