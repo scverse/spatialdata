@@ -174,31 +174,33 @@ def create_raster_element_kwargs(
     element_names: set[str],
 ) -> dict[str, Any] | list[dict[str, Any]] | None:
     """Normalize raster keyword arguments to the kwargs required by `zarr.create_array` for a single raster."""
-    if isinstance(raster_write_kwargs, dict):
-        element_write_kwargs: JSONDict | list[JSONDict] | None = raster_write_kwargs.get(element_name)
+    if raster_write_kwargs is None:
+        return {}
+
+    kwargs_copy = raster_write_kwargs.copy()
+    if isinstance(kwargs_copy, dict):
+        element_write_kwargs: JSONDict | list[JSONDict] | None = kwargs_copy.get(element_name)
         if element_write_kwargs:
             return element_write_kwargs
 
         # If we get here it means that we do not have kwargs with the specific element. We need to clear out kwargs
         # that could be there of other elements.
         for name in element_names:
-            raster_write_kwargs.pop(name, None)
+            kwargs_copy.pop(name, None)
 
     # We return here if there are no kwargs after stripping all kwargs directly corresponding to a given element.
-    if not raster_write_kwargs:
+    if not kwargs_copy:
         return {}
 
-    if isinstance(raster_write_kwargs, dict):
-        if not all(isinstance(x, (dict, list)) for x in raster_write_kwargs.values()):
-            return raster_write_kwargs
-        raise ValueError(f"Type of raster_write_kwargs should be either dict or list, got {type(raster_write_kwargs)}.")
+    if isinstance(kwargs_copy, dict) and not all(isinstance(x, (dict, list)) for x in kwargs_copy.values()):
+        return kwargs_copy
 
-    if isinstance(raster_write_kwargs, list):
-        if not all(isinstance(x, dict) for x in raster_write_kwargs):
+    if isinstance(kwargs_copy, list):
+        if not all(isinstance(x, dict) for x in kwargs_copy):
             raise ValueError(
                 "If passing raster_write_kwargs as list, it is assumed to be the storage "
                 "options for each scale of a multiscale raster as a dictionary."
             )
-        return raster_write_kwargs
+        return kwargs_copy
 
-    raise ValueError(f"Type of raster_write_kwargs should be either dict or list, got {type(raster_write_kwargs)}.")
+    raise ValueError(f"Type of raster_write_kwargs should be either dict or list, got {type(kwargs_copy)}.")
