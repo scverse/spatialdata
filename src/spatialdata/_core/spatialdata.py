@@ -30,6 +30,7 @@ from spatialdata._core.validation import (
     raise_validation_errors,
     validate_table_attr_keys,
 )
+from spatialdata._docs import docstring_parameter
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Raster_T
 from spatialdata._utils import _deprecation_alias, zarrs_context
@@ -57,6 +58,27 @@ if TYPE_CHECKING:
         SpatialDataContainerFormatType,
         SpatialDataFormatType,
     )
+
+RASTER_WRITE_KWARGS_DOCS = """\
+    Storage options for raster elements. These options are passed to the zarr storage backend for writing and
+    can be provided in several formats:
+
+        1. Single dictionary
+            A dictionary containing all storage options applied globally.
+        2. Dictionary per raster element
+            A dictionary where:
+            - Keys = names of raster elements
+            - Values = storage options for each element
+                - For single-scale data: a dictionary
+                - For multiscale data: a list of dictionaries (one per scale)
+        3. List of dictionaries (multiscale only)
+            A list where each dictionary defines the storage options for one scale of a multiscale raster element.
+
+        Important Notes
+        - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
+        - For a full list of supported storage options, refer to:
+            https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
+    """
 
 
 class SpatialData:
@@ -1106,6 +1128,7 @@ class SpatialData:
                         validate_table_attr_keys(element, location=element_path)
 
     @_deprecation_alias(format="sdata_formats", version="0.7.0")
+    @docstring_parameter(raster_write_kwargs=RASTER_WRITE_KWARGS_DOCS)
     def write(
         self,
         file_path: str | Path,
@@ -1164,24 +1187,7 @@ class SpatialData:
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
         raster_write_kwargs
-            Storage options for raster elements. These options are passed to the zarr storage backend for writing and
-            can be provided in several formats:
-
-            1. Single dictionary
-                A dictionary containing all storage options applied globally.
-            2. Dictionary per raster element
-                A dictionary where:
-                - Keys = names of raster elements
-                - Values = storage options for each element
-                    - For single-scale data: a dictionary
-                    - For multiscale data: a list of dictionaries (one per scale)
-            3. List of dictionaries (multiscale only)
-                A list where each dictionary defines the storage options for one scale of a multiscale raster element.
-
-            Important Notes
-            - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
-            - For a full list of supported storage options, refer to:
-                https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
+        {RASTER_WRITE_KWARGS_DOCS}
         raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
@@ -1316,6 +1322,7 @@ class SpatialData:
             else:
                 raise ValueError(f"Unknown element type: {element_type}")
 
+    @docstring_parameter(raster_write_kwargs=RASTER_WRITE_KWARGS_DOCS)
     def write_element(
         self,
         element_name: str | list[str],
@@ -1343,24 +1350,7 @@ class SpatialData:
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
         raster_write_kwargs
-            Storage options for raster elements. These options are passed to the zarr storage backend for writing and
-            can be provided in several formats:
-
-            1. Single dictionary
-                A dictionary containing all storage options applied globally.
-            2. Dictionary per raster element
-                A dictionary where:
-                - Keys = names of raster elements
-                - Values = storage options for each element
-                    - For single-scale data: a dictionary
-                    - For multiscale data: a list of dictionaries (one per scale)
-            3. List of dictionaries (multiscale only)
-                A list where each dictionary defines the storage options for one scale of a multiscale raster element.
-
-            Important Notes
-            - The available key–value pairs in these dictionaries depend on the Zarr format used for writing.
-            - For a full list of supported storage options, refer to:
-                https://zarr.readthedocs.io/en/stable/api/zarr/create/#zarr.create_array
+        {RASTER_WRITE_KWARGS_DOCS}
          raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
