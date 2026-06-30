@@ -325,6 +325,7 @@ def _write_raster(
         for c in channels:
             metadata["metadata"]["omero"]["channels"].append({"label": c})  # type: ignore[union-attr, index, call-overload]
 
+    # Prefixing with raster_ to account for anndata chunks / shards that will be supported in the future.
     base_options = {k.split("_")[1]: v for k, v in asdict(settings).items() if k in ("raster_chunks", "raster_shards")}
 
     if isinstance(storage_options, list):
