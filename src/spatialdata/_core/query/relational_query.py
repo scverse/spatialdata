@@ -242,6 +242,10 @@ def _get_masked_element(
     return element.loc[mask_values, :]
 
 
+def _region_as_str_if_list_of_len_one(region: list[str]) -> str | list[str]:
+    return region if len(region) > 1 else region[0]
+
+
 def _right_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]],
     table: AnnData,
@@ -279,9 +283,10 @@ def _right_exclusive_join_spatialelement_table(
     exclusive_table = table[keep, :] if has_match and keep.any() else None
     _inplace_fix_subset_categorical_obs(subset_adata=exclusive_table, original_adata=table)
     if exclusive_table is not None:
-        exclusive_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+        exclusive_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = _region_as_str_if_list_of_len_one(
             exclusive_table.obs[region_column_name].unique().tolist()
         )
+        TableModel.validate(exclusive_table)
     return element_dict, exclusive_table
 
 
@@ -383,9 +388,10 @@ def _inner_join_spatialelement_table(
 
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     if joined_table is not None:
-        joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+        joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = _region_as_str_if_list_of_len_one(
             joined_table.obs[region_column_name].unique().tolist()
         )
+        TableModel.validate(joined_table)
     return element_dict, joined_table
 
 
@@ -466,9 +472,10 @@ def _left_join_spatialelement_table(
     joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     if joined_table is not None:
-        joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = (
+        joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = _region_as_str_if_list_of_len_one(
             joined_table.obs[region_column_name].unique().tolist()
         )
+        TableModel.validate(joined_table)
     return element_dict, joined_table
 
 
