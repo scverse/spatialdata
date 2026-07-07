@@ -37,17 +37,17 @@ Please see [this section](https://spatialdata.scverse.org/en/stable/tutorials/no
 
 <details open>
 <summary><h3>If you have an existing Squidpy object.</summary>
-    
+
 Please have a look at [this tutorial](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks%2Fexamples%2Fsdata_from_scratch.ipynb).
-  
+
 </details>
-    
+
 <details open>
 <summary><h3>If you want to start from raw files</summary>
-    
+
 If you don’t have a SpatialData object or corresponding zarr file, you will have to create a SpatialData object to make use of the SpatialData framework.
-You can create a SpatialData object directly from your raw files (e.g. CSVs, cell-gene matrix/cell-proteins matrix, images etc.) by using the [spatialdata-io](https://github.com/scverse/spatialdata-io) library that has reader functions for most spatial omics techniques. See [here](https://spatialdata.scverse.org/projects/io/en/latest/) for a list of currently supported technologies. 
-    
+You can create a SpatialData object directly from your raw files (e.g. CSVs, cell-gene matrix/cell-proteins matrix, images etc.) by using the [spatialdata-io](https://github.com/scverse/spatialdata-io) library that has reader functions for most spatial omics techniques. See [here](https://spatialdata.scverse.org/projects/io/en/latest/) for a list of currently supported technologies.
+
 For example, if you have data coming from a MERSCOPE®, just use:
 
 ```
@@ -61,12 +61,12 @@ Please also see [this section](https://spatialdata.scverse.org/en/stable/tutoria
 If there is no reader implemented for your data type, please refer to [this section](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#construct-a-spatialdata-object-from-scratch) to learn about building SpatialData objects from scratch.
 
 </details>
-    
+
 <details open>
 <summary><h3>If you want to play around with existing data.</summary>
-    
+
 Please see [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) for a repository of demo datasets (already available as .zarr) generated with different spatial omics technologies.
-  
+
 </details>
 </details>
 
@@ -92,41 +92,40 @@ Yes → Check out our [Transformation/coordinate system tutorial](https://spatia
 </details>
 
 <details open>
-<summary><h2>How do I annotate my data?</summary> 
-    
- Annotation can have a lot of meanings. You might want to annotate specific regions in your tissue as tumor, add more details about your cell shapes, group together specific transcripts, include celltype annotations or cell sizes for your cells etc.   
+<summary><h2>How do I annotate my data?</summary>
+
+Annotation can have a lot of meanings. You might want to annotate specific regions in your tissue as tumor, add more details about your cell shapes, group together specific transcripts, include celltype annotations or cell sizes for your cells etc.
 <details open>
 <summary> <h3> How can I spatially annotate regions in my data? </summary>
-    
+
 This is possible within the SpatialData framework, making use of napari, like explained [in this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html).
 
 </details>
 <details open>
 <summary> <h3> I have annotated regions in an external tool, how do I add them to SpatialData?</summary>
-    
-If the annotated regions are saved in a geojson, you can add them as follows:      
-```    
+
+If the annotated regions are saved in a geojson, you can add them as follows:
+
+```
 from spatialdata.models import ShapesModel
 sdata['very_interesting_regions']=ShapesModel.parse('path_to_geojson')
 ```
+
 For more details, including information on how to add annotations for these regions, please have a look at [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html).
 
 </details>
-    
+
 <details open>
-    
-    
+
 <summary> <h3> I have cells in my dataset, how do I annotate them? (usage of AnnData)</summary>
 
 One of the most obvious things to do for spatial omics data is to annotate cells using the [AnnData](https://anndata.readthedocs.io/en/stable/) format (called tables in SpatialData). These tables can contain count/intensity data, all types of annotations, and make it possible to make use of [scanpy](https://scanpy.readthedocs.io/en/stable/) functionality (normalization/clustering/DE calculation).  
 If you want more technical details on how to create a table from scratch to annotate your shapes/labels/points, you can have a look [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables).
 
 </details>
-    
-    
-    
+
 </details>
-    
+
 <details open>
 <summary><h2>How do I analyze a spatial subset of my data?
     </summary>
@@ -136,20 +135,19 @@ Therefore, subsampling your data based on spatial coordinates can be helpful. Ot
 
 <details open>
 <summary><h3>I want to annotate a specific region myself.</summary>
-    
+
 Please see the previous section ('How do I annotate my data?') and then specifically the section about spatially annotating regions. This will guide you through the process of extracting coordinates, which will be used for spatially subsetting the data. Next, see below.
 </details>
 
 <details open>
 <summary><h3>I know the coordinates of the region I want to subsample.</summary>
-    
+
 You will need to perform a spatial query, which filters the data based on spatial coordinates. Please see [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/spatial_query.html).
-    
+
 </details>
 
 </details>
-    
-    
+
 <details open>
 <summary><h2>How do I visualize my data?</summary>
 
@@ -191,9 +189,9 @@ The method of aggregation depends on the type of elements in your SpatialData ob
 
 </details>
 <details open>
-    
+
 <summary> <h2> SpatialData looks amazing, I want to learn more. Give me all the technical details!</summary>
-    
+
 Sure, no problem! There is much more to learn about SpatialData.
 
 You want to learn how to combine SpatialData and deep learning? We got you covered [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/densenet.html).
@@ -203,9 +201,9 @@ If you want to create a labels layer from your shapes (rasterize), a shapes laye
 Finally here is a more [advanced technical tutorial on transformations](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/transformations_advanced.html#other-technical-topics).
 
 </details>
-    
+
 <details open>
-    
+
 <summary> <h2> I am sold, how can I get in touch and contribute to SpatialData?
 
 </summary>

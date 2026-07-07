@@ -265,7 +265,7 @@ def test_query_raster(
         shape = (10,) + shape
     shape = (n_channels,) + shape if not is_labels else (1,) + shape
 
-    image = np.zeros(shape)
+    image = np.zeros(shape, dtype=int if is_labels else float)
     axes = ["y", "x"]
     if is_3d:
         image[:, 2:7, 5::, 0:5] = 1
