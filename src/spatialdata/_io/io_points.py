@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
@@ -13,6 +11,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
+from spatialdata._store import parquet_fs_and_path
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -20,27 +19,27 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_points(
-    store: str | Path,
-) -> DaskDataFrame:
-    """Read points from a zarr store."""
-    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
-
-    version = _parse_version(f, expect_attrs_key=True)
+def _read_points(group: zarr.Group) -> DaskDataFrame:
+    """Read a points element from an open zarr group."""
+    version = _parse_version(group, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    store_root = f.store_path.store.root
-    path = store_root / f.path / "points.parquet"
-    # cache on remote file needed for parquet reader to work
-    # TODO: allow reading in the metadata without caching all the data
-    points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
+    fs, parquet_path = parquet_fs_and_path(group, "points.parquet")
+    # Use the fsspec filesystem (see parquet_fs_and_path): dask's pyarrow-FS reader would
+    # otherwise return known-empty categoricals and wrong per-partition lengths. The fsspec
+    # path returns categories as unknown (so write_points' as_known() recomputes them) and
+    # preserves partition boundaries (so transform() on multi-partition points works).
+    # TODO: allow reading in the metadata without materializing the data.
+    points = read_parquet(parquet_path, filesystem=fs)
     assert isinstance(points, DaskDataFrame)
+    if points.index.name == "__null_dask_index__":
+        points = points.rename_axis(None)
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    transformations = _get_transformations_from_ngff_dict(group.attrs.asdict()["coordinateTransformations"])
     _set_transformations(points, transformations)
 
-    attrs = points_format.attrs_from_dict(f.attrs.asdict())
+    attrs = points_format.attrs_from_dict(group.attrs.asdict())
     if len(attrs):
         points.attrs["spatialdata_attrs"] = attrs
     return points
@@ -69,8 +68,7 @@ def write_points(
     transformations = _get_transformations(points)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
-    store_root = group.store_path.store.root
-    path = store_root / group.path / "points.parquet"
+    fs, parquet_path = parquet_fs_and_path(group, "points.parquet")
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
     # 'category', it checks whether the categories of this column are known. If not, it explicitly converts the
@@ -85,7 +83,7 @@ def write_points(
 
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
-    points_without_transform.to_parquet(path)
+    points_without_transform.to_parquet(parquet_path, filesystem=fs)
 
     attrs = element_format.attrs_to_dict(points.attrs)
     attrs["version"] = element_format.spatialdata_format_version

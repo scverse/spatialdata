@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 import warnings
 from collections.abc import Callable
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import zarr.storage
+import zarr
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
@@ -27,12 +26,16 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
+from spatialdata._store import (
+    open_zarr_for_read,
+    path_from_store,
+    store_from_group,
+)
 from spatialdata._types import Raster_T
 
 
 def _read_zarr_group_spatialdata_element(
     root_group: zarr.Group,
-    root_store_path: str,
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: Callable[..., Any],
@@ -54,7 +57,6 @@ def _read_zarr_group_spatialdata_element(
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
-                elem_group_path = os.path.join(root_store_path, elem_group.path)
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -68,14 +70,24 @@ def _read_zarr_group_spatialdata_element(
                     ),
                 ):
                     if element_type in ["image", "labels"]:
+                        # Raster readers go through ome_zarr's ZarrLocation which independently
+                        # re-resolves the element's metadata, so corruption of the element's own
+                        # zarr.json surfaces there as a clean OSError. Pass the cached group here.
                         reader_format = get_raster_format_for_read(elem_group, sdata_version)
                         element = read_func(
-                            elem_group_path,
+                            elem_group,
                             cast(Literal["image", "labels"], element_type),
                             reader_format,
                         )
                     elif element_type in ["shapes", "points", "tables"]:
-                        element = read_func(elem_group_path)
+                        # Non-raster readers consume ``group.attrs`` directly; the parent's
+                        # consolidated-metadata cache would otherwise mask a corrupted or
+                        # missing element-level ``zarr.json`` / ``.zattrs``. Re-open from the
+                        # store so the corruption surfaces as OSError / JSONDecodeError.
+                        elem_group_fresh = open_zarr_for_read(
+                            store_from_group(elem_group, read_only=True), as_group=True
+                        )
+                        element = read_func(elem_group_fresh)
                     else:
                         raise ValueError(f"Unknown element type {element_type}")
                     element_container[subgroup_name] = element
@@ -123,17 +135,24 @@ def get_raster_format_for_read(
 
 
 def read_zarr(
-    store: str | Path | UPath | zarr.Group,
+    store: str | Path | zarr.Group | zarr.storage.StoreLike,
     selection: None | tuple[str] = None,
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> SpatialData:
     """
-    Read a SpatialData dataset from a zarr store (on-disk or remote).
+    Read a SpatialData dataset from a zarr store (local or remote).
 
     Parameters
     ----------
     store
-        Path, URL, or zarr.Group to the zarr store (on-disk or remote).
+        One of:
+
+        - A local filesystem path (``str`` or :class:`pathlib.Path`)
+        - A zarr store (e.g. :class:`zarr.storage.LocalStore`,
+          :class:`zarr.storage.FsspecStore`, :class:`zarr.storage.MemoryStore`)
+          carrying its own filesystem (and credentials) — the supported form for
+          remote backends like S3 / Azure / GCS
+        - An already-open :class:`zarr.Group`
 
     selection
         List of elements to read from the zarr store (images, labels, points, shapes, table). If None, all elements are
@@ -153,24 +172,21 @@ def read_zarr(
     -------
     A SpatialData object.
     """
-    from spatialdata._io._utils import _resolve_zarr_store
+    # Coerce all input forms to (resolved_store, backing_path) where backing_path is the
+    # user-facing path (Path | UPath | None) for `sdata.path` and resolved_store is the
+    # actual zarr backend store we open the root group from.
+    if isinstance(store, zarr.Group):
+        # Already open: re-root the underlying store at this group's path.
+        from spatialdata._store import store_from_group
 
-    resolved_store = _resolve_zarr_store(store)
-    root_group = zarr.open_group(resolved_store, mode="r")
-    # the following is the SpatialDataContainerFormat version
-    if "spatialdata_attrs" not in root_group.metadata.attributes:
-        # backward compatibility for pre-versioned SpatialData zarr stores
-        sdata_version: Literal["0.1", "0.2"] = "0.1"
+        resolved_store: Any = store_from_group(store, read_only=True)
+    elif isinstance(store, zarr.abc.store.Store):
+        resolved_store = store
     else:
-        sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
-    if sdata_version == "0.1":
-        warnings.warn(
-            "SpatialData is not stored in the most current format. If you want to use Zarr v3"
-            ", please write the store to a new location using `sdata.write()`.",
-            UserWarning,
-            stacklevel=2,
-        )
-    root_store_path = root_group.store.root
+        from spatialdata._io._utils import _resolve_zarr_store
+
+        resolved_store = _resolve_zarr_store(store, read_only=True)
+    backing_path = path_from_store(resolved_store)
 
     images: dict[str, Raster_T] = {}
     labels: dict[str, Raster_T] = {}
@@ -178,50 +194,73 @@ def read_zarr(
     shapes: dict[str, GeoDataFrame] = {}
     tables: dict[str, AnnData] = {}
 
-    selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
-    logger.debug(f"Reading selection {selector}")
+    try:
+        # Use the consolidated + zarr-v3-pinned fast path. See ``open_zarr_for_read`` for why
+        # pinning ``zarr_format=3`` matters over remote backends (avoids five small v2-metadata
+        # probes per open) and how the fallback keeps legacy / non-consolidated stores working.
+        root_group = open_zarr_for_read(resolved_store, as_group=True)
+        # the following is the SpatialDataContainerFormat version
+        if "spatialdata_attrs" not in root_group.metadata.attributes:
+            # backward compatibility for pre-versioned SpatialData zarr stores
+            sdata_version: Literal["0.1", "0.2"] = "0.1"
+        else:
+            sdata_version = root_group.metadata.attributes["spatialdata_attrs"]["version"]
+        if sdata_version == "0.1":
+            warnings.warn(
+                "SpatialData is not stored in the most current format. If you want to use Zarr v3"
+                ", please write the store to a new location using `sdata.write()`.",
+                UserWarning,
+                stacklevel=2,
+            )
 
-    # we could make this more readable. One can get lost when looking at this dict and iteration over the items
-    group_readers: dict[
-        Literal["images", "labels", "shapes", "points", "tables"],
-        tuple[
-            Callable[..., Any],
-            Literal["image", "labels", "shapes", "points", "tables"],
-            dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
-        ],
-    ] = {
-        # ome-zarr-py needs a kwargs that has "image" has key. So here we have "image" and not "images"
-        "images": (_read_multiscale, "image", images),
-        "labels": (_read_multiscale, "labels", labels),
-        "points": (_read_points, "points", points),
-        "shapes": (_read_shapes, "shapes", shapes),
-        "tables": (_read_table, "tables", tables),
-    }
-    for group_name, (
-        read_func,
-        element_type,
-        element_container,
-    ) in group_readers.items():
-        _read_zarr_group_spatialdata_element(
-            root_group=root_group,
-            root_store_path=root_store_path,
-            sdata_version=sdata_version,
-            selector=selector,
-            read_func=read_func,
-            group_name=group_name,
-            element_type=element_type,
-            element_container=element_container,
-            on_bad_files=on_bad_files,
-        )
+        selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
+        logger.debug(f"Reading selection {selector}")
 
-    # read attrs metadata
-    attrs = root_group.attrs.asdict()
-    if "spatialdata_attrs" in attrs:
-        # when refactoring the read_zarr function into reading componenets separately (and according to the version),
-        # we can move the code below (.pop()) into attrs_from_dict()
-        attrs.pop("spatialdata_attrs")
-    else:
-        attrs = None
+        # we could make this more readable. One can get lost when looking at this dict and iteration over the items
+        group_readers: dict[
+            Literal["images", "labels", "shapes", "points", "tables"],
+            tuple[
+                Callable[..., Any],
+                Literal["image", "labels", "shapes", "points", "tables"],
+                dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
+            ],
+        ] = {
+            # ome-zarr-py needs a kwargs that has "image" has key. So here we have "image" and not "images"
+            "images": (_read_multiscale, "image", images),
+            "labels": (_read_multiscale, "labels", labels),
+            "points": (_read_points, "points", points),
+            "shapes": (_read_shapes, "shapes", shapes),
+            "tables": (_read_table, "tables", tables),
+        }
+        for group_name, (
+            read_func,
+            element_type,
+            element_container,
+        ) in group_readers.items():
+            _read_zarr_group_spatialdata_element(
+                root_group=root_group,
+                sdata_version=sdata_version,
+                selector=selector,
+                read_func=read_func,
+                group_name=group_name,
+                element_type=element_type,
+                element_container=element_container,
+                on_bad_files=on_bad_files,
+            )
+
+        # read attrs metadata
+        attrs = root_group.attrs.asdict()
+        if "spatialdata_attrs" in attrs:
+            # when refactoring the read_zarr function into reading componenets separately (and according to the version)
+            # we can move the code below (.pop()) into attrs_from_dict()
+            attrs.pop("spatialdata_attrs")
+        else:
+            attrs = None
+    finally:
+        # Only close stores we constructed ourselves; if the caller handed us a store or Group,
+        # they retain ownership.
+        if not isinstance(store, (zarr.Group, zarr.abc.store.Store)):
+            resolved_store.close()
 
     sdata = SpatialData(
         images=images,
@@ -231,12 +270,12 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata.path = resolved_store.root
+    sdata._path = backing_path
     return sdata
 
 
 def _get_groups_for_element(
-    zarr_path: Path, element_type: str, element_name: str, use_consolidated: bool = True
+    zarr_path: Path | UPath, element_type: str, element_name: str, use_consolidated: bool = True
 ) -> tuple[zarr.Group, zarr.Group, zarr.Group]:
     """
     Get the Zarr groups for the root, element_type and element for a specific element.
@@ -265,8 +304,8 @@ def _get_groups_for_element(
     -------
     The Zarr groups for the root, element_type and element for a specific element.
     """
-    if not isinstance(zarr_path, Path):
-        raise ValueError("zarr_path should be a Path object")
+    if not isinstance(zarr_path, (Path, UPath)):
+        raise ValueError("zarr_path should be a Path or UPath object")
 
     if element_type not in [
         "images",
@@ -289,7 +328,7 @@ def _get_groups_for_element(
     return root_group, element_type_group, element_name_group
 
 
-def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: str) -> bool:
+def _group_for_element_exists(zarr_path: Path | UPath, element_type: str, element_name: str) -> bool:
     """
     Check if the group for an element exists.
 
@@ -319,14 +358,35 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
     return exists
 
 
-def _write_consolidated_metadata(path: Path | str | None) -> None:
+def _write_consolidated_metadata(path: Path | UPath | str | None) -> None:
     if path is not None:
-        f = zarr.open_group(path, mode="r+", use_consolidated=False)
+        if isinstance(path, UPath):
+            store = _resolve_zarr_store(path)
+            f = zarr.open_group(store, mode="r+", use_consolidated=False)
+        else:
+            f = zarr.open_group(path, mode="r+", use_consolidated=False)
         # .parquet files are not recognized as proper zarr and thus throw a warning. This does not affect SpatialData.
         # and therefore we silence it for our users as they can't do anything about this.
         # TODO check with remote PR whether we can prevent this warning at least for points data and whether with zarrv3
         # that pr would still work.
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=zarr.errors.ZarrUserWarning)
+            # Consolidate at the root, then at every element group
+            # (``<group>/<name>``). The per-element consolidation is what lets our readers
+            # -- which re-open each element via a child-rooted ``FsspecStore`` -- actually
+            # consume consolidated metadata at element open time. A root-only consolidation
+            # only benefits the first ``zarr.open_group`` call in ``read_zarr``; every
+            # subsequent ``zarr.open(elem_store, ...)`` rooted at the element path would
+            # still walk its own subtree one ``zarr.json`` at a time because the
+            # consolidated-metadata field lives on the *root* ``zarr.json``, not the
+            # child's. Consolidating per-element writes the field on every element's own
+            # ``zarr.json`` so a child-rooted open is a single GET regardless of depth.
             zarr.consolidate_metadata(f.store)
+            for group_name in ("images", "labels", "points", "shapes", "tables"):
+                if group_name not in f:
+                    continue
+                for element_name in f[group_name]:
+                    if element_name.startswith("."):
+                        continue
+                    zarr.consolidate_metadata(f.store, path=f"{group_name}/{element_name}")
         f.store.close()
