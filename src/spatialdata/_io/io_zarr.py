@@ -32,7 +32,7 @@ from spatialdata._types import Raster_T
 
 def _read_zarr_group_spatialdata_element(
     root_group: zarr.Group,
-    root_store_path: str,
+    root_store_path: str | zarr.storage.Store,
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: Callable[..., Any],
@@ -54,7 +54,12 @@ def _read_zarr_group_spatialdata_element(
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
-                elem_group_path = os.path.join(root_store_path, elem_group.path)
+                # fix for zipstores
+                if isinstance(root_store_path, zarr.storage.ZipStore):
+                    elem_group_path = elem_group
+                # original functionality
+                else:
+                    elem_group_path = os.path.join(root_store_path, elem_group.path)
                 with handle_read_errors(
                     on_bad_files,
                     location=f"{group.path}/{subgroup_name}",
@@ -202,9 +207,10 @@ def read_zarr(
         element_type,
         element_container,
     ) in group_readers.items():
+        path_or_store = root_group.store if isinstance(root_group.store, zarr.storage.ZipStore) else root_store_path
         _read_zarr_group_spatialdata_element(
             root_group=root_group,
-            root_store_path=root_store_path,
+            root_store_path=path_or_store,
             sdata_version=sdata_version,
             selector=selector,
             read_func=read_func,
@@ -231,7 +237,11 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
-    sdata.path = resolved_store.root
+    # fix for zipstores
+    if isinstance(resolved_store.root, str):
+        sdata.path = Path(resolved_store.root)
+    else:
+        sdata.path = resolved_store.root
     return sdata
 
 

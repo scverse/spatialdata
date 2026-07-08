@@ -8,6 +8,7 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
+from zarr.core.group import Group as ZarrGroup
 
 from spatialdata._io.format import (
     CurrentTablesFormat,
@@ -19,15 +20,22 @@ from spatialdata._io.format import (
 from spatialdata.models import TableModel, get_table_keys
 
 
-def _read_table(store: str | Path) -> AnnData:
-    table = read_anndata_zarr(str(store))
+def _read_table(store: str | Path | ZarrGroup) -> AnnData:
+    # fix for zipstore
+    if isinstance(store, ZarrGroup):
+        f = store
+        table = read_anndata_zarr(f)
+    else:
+        table = read_anndata_zarr(str(store))
+        f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
 
-    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]
 
-    f.store.close()
+    # safely close non zipstores
+    if not isinstance(store, ZarrGroup):
+        f.store.close()
 
     if isinstance(table_format, TablesFormatV01 | TablesFormatV02):
         if TableModel.ATTRS_KEY in table.uns:
