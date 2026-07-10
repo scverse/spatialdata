@@ -552,13 +552,15 @@ class SpatialData:
         persist_as: Literal["Points", "adata"] = "Points",
         table_name: str | None = None,
         inplace: bool = True,
+        overwrite: bool = False,
     ) -> DaskDataFrame | AnnData | None:
         """Get the centroids of ``element_name``, or persist them into its annotating table.
 
         Convenience method for :func:`spatialdata.get_centroids` called on ``self``; see that function for the
         complete docstring. With ``persist_as="adata"`` the centroids are written into ``obsm["spatial"]`` (and area
         into ``obs["area"]``) of the resolved annotating table; ``inplace=True`` mutates it and returns ``None``,
-        ``inplace=False`` returns a modified copy of that table.
+        ``inplace=False`` returns a modified copy of that table. ``overwrite=True`` allows replacing pre-existing
+        values in those keys for the element's rows (refused by default).
         """
         from spatialdata._core.centroids import _get_centroids_sdata
 
@@ -571,6 +573,7 @@ class SpatialData:
             persist_as=persist_as,
             table_name=table_name,
             inplace=inplace,
+            overwrite=overwrite,
         )
 
     def is_backed(self) -> bool:
