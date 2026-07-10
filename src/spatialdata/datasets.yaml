@@ -1,0 +1,23 @@
+# Registry of downloadable example datasets for ``spatialdata.datasets``.
+#
+# Parsed by ``scverse_misc.datasets.parse_registry`` and fetched (downloaded,
+# hash-verified, cached and loaded) via ``scverse_misc.datasets.fetch``.
+#
+#   type: spatialdata  ->  a .zip that extracts to a single .zarr store
+#
+# Every dataset must list its ``license``; datasets under a license that requires
+# attribution must also carry an ``attribution`` string crediting the original source.
+base_url: https://exampledata.scverse.org/spatialdata/
+datasets:
+    cells:
+        type: spatialdata
+        doc_header: Cells dataset as a SpatialData object.
+        license: CC BY 4.0
+        attribution: >-
+            Derived from the 10x Genomics Xenium Prime Cervical Cancer FFPE dataset
+            (https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-cervical-cancer),
+            subset to a small tissue region. Licensed under CC BY 4.0.
+        files:
+            - name: cells.zip
+              s3_key: cells.zip
+              sha256: dc9613cb9e16fd2cd8d83f3a9586eeda4af5ba8ba366f1066efb51305820c5fb
