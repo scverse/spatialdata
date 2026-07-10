@@ -54,7 +54,7 @@ def _validate_persist_args(persist_as: str, coordinate_system: str | None, *, al
 
 
 def _is_identity(transformation: BaseTransformation, e: SpatialElement) -> bool:
-    """True if ``transformation`` is a mathematical no-op (its affine matrix equals the identity).
+    """Return True if ``transformation`` is a mathematical no-op (its affine matrix equals the identity).
 
     Compares the affine matrix rather than checking ``isinstance(..., Identity)``, so a numerically
     identity ``Scale([1, 1])`` / ``Translation([0, 0])`` / ``Affine(np.eye(...))`` / ``Sequence([Identity()])``
@@ -213,7 +213,8 @@ def _intrinsic_centroid_frame(
             raise ValueError(f"Expected points axes to be ('x', 'y') or ('x', 'y', 'z'), got {axes}.")
         return element[list(axes)].compute(), None, element
     raise ValueError(
-        f"Centroids are not supported for elements modeled by {model.__name__}; expected a Labels, Shapes or Points element."
+        f"Centroids are not supported for elements modeled by {model.__name__}; "
+        f"expected a Labels, Shapes or Points element."
     )
 
 
@@ -324,7 +325,8 @@ def _write_centroids_into_table(
                 )
         elif existing.shape[0] == table.n_obs:
             raise ValueError(
-                f"Existing obsm['{TableModel.SPATIAL_KEY}'] {existing.shape} is incompatible with {ndim}-D centroids for "
+                f"Existing obsm['{TableModel.SPATIAL_KEY}'] {existing.shape} is incompatible with {ndim}-D "
+                f"centroids for "
                 f"{element_name!r}; refusing to overwrite other regions. Persist with persist_as='Points' instead."
             )
     spatial[mask] = _scatter(centroids.to_numpy(dtype=float))
@@ -341,7 +343,7 @@ def _write_centroids_into_table(
                 )
             # Preserve values outside the element's rows; non-numeric entries coerce to NaN (only reachable
             # with overwrite=True, where replacing that column is the intent).
-            col = pd.to_numeric(existing_area, errors="coerce").to_numpy(dtype=float)
+            col = pd.to_numeric(existing_area, errors="coerce").to_numpy(dtype=float, copy=True)
         col[mask] = _scatter(np.asarray(area, dtype=float))
         table.obs[TableModel.AREA_KEY] = col
 
