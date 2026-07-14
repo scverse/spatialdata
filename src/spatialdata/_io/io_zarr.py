@@ -76,10 +76,10 @@ def _read_zarr_group_spatialdata_element(
                         reader_format = get_raster_format_for_read(elem_group, sdata_version)
                         element = read_func(
                             elem_group_path,
-                            cast(Literal["image", "labels"], element_type),
+                            cast(ELEMENT_TYPE_RASTER, element_type),
                             reader_format,
                         )
-                    elif element_type in ["shapes", "points", "tables"]:
+                    elif element_type in get_args(ELEMENT_TYPE_RASTER) + (ELEMENT_TYPE.TABLES,):
                         element = read_func(elem_group_path)
                     else:
                         raise ValueError(f"Unknown element type {element_type}")
