@@ -68,3 +68,7 @@ hatch.toml
 .kilo/
 plans/
 
+# test coverage
+.coverage
+htmlcov/
+
