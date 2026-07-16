@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from spatialdata._types import ELEMENT_TYPE
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata.transformations.transformations import BaseTransformation
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 
 class TransformationManager:
@@ -60,9 +63,9 @@ class TransformationManager:
                 associated_transformations.append(transformation_key)
         return associated_transformations
 
-    def _get_elements_associated_with_cs(self, cs_name: str) -> list[tuple[ELEMENT_TYPE, str]]:
+    def _get_elements_belonging_to_cs(self, cs_name: str) -> list[tuple[ELEMENT_TYPE, str]]:
         """
-        Get all elements associated with a coordinate system.
+        Get all elements belonging to a coordinate system.
 
         Parameters
         ----------
@@ -72,13 +75,13 @@ class TransformationManager:
         Returns
         -------
         list[tuple[ELEMENT_TYPE, str]]
-            A list of tuples representing the elements associated with the coordinate system.
+            A list of tuples representing the elements belonging to the coordinate system.
         """
-        associated_elements = []
+        belonging_elements = []
         for (element_type, element_name), element_cs in self._element_to_cs_mapping.items():
             if element_cs == cs_name:
-                associated_elements.append((element_type, element_name))
-        return associated_elements
+                belonging_elements.append((element_type, element_name))
+        return belonging_elements
 
     def remove_coordinate_system(self, cs_name: str) -> None:
         """
@@ -94,21 +97,21 @@ class TransformationManager:
         KeyError
             If the coordinate system does not exist.
         ValueError
-            If there are transformations or elements associated with the coordinate system.
+            If there are transformations associated with the coordinate system or elements belonging to it.
         """
         if cs_name not in self._coordinate_systems:
             raise KeyError(f"Coordinate system with name '{cs_name}' not found.")
 
         associated_transformations = self._get_transformations_associated_with_cs(cs_name)
-        associated_elements = self._get_elements_associated_with_cs(cs_name)
+        belonging_elements = self._get_elements_belonging_to_cs(cs_name)
 
-        # Raise error if there are associated transformations or elements
-        if len(associated_transformations) or len(associated_elements):
+        # Raise error if there are associated transformations or belonging elements
+        if len(associated_transformations) or len(belonging_elements):
             raise ValueError(
                 f"Cannot remove coordinate system with name '{cs_name}'. "
-                f"{len(associated_elements)} elements and {len(associated_transformations)} transformations"
+                f"{len(belonging_elements)} elements belong to it and {len(associated_transformations)} transformations"
                 f" are associated with it. "
-                f"Please remove transformations or disassociate elements from the coordinate system first."
+                f"Please remove associated transformations and unset elements from the coordinate system first."
             )
 
         del self._coordinate_systems[cs_name]
@@ -246,8 +249,7 @@ class TransformationManager:
             raise KeyError(f"Transformation from '{input_cs}' to '{output_cs}' not found.")
         del self._coordinate_transforms[key]
 
-    def build_nx_graph(self) -> Any:  # type: ignore[unresolved-reference]  # noqa: F821
-        # nx lazily imported
+    def build_nx_graph(self) -> nx.DiGraph:
         """
         Build a directed graph where nodes are coordinate systems and edges are transformations.
 
@@ -293,9 +295,9 @@ class TransformationManager:
         import networkx as nx
 
         try:
-            path = nx.shortest_path(g, source=source_cs, target=target_cs)  # type: ignore[name-defined, unresolved-reference]  # noqa: F821
-            # nx lazily imported
-        except nx.NetworkXNoPath as nxe:  # type: ignore[name-defined, unresolved-reference]  # noqa: F821
+            path = nx.shortest_path(g, source=source_cs, target=target_cs)
+
+        except nx.NetworkXNoPath as nxe:
             raise ValueError(f"No path found from {source_cs} to {target_cs}") from nxe
 
         transformations = []
