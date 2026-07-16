@@ -30,6 +30,7 @@ from spatialdata._logging import logger
 from spatialdata._types import (
     ELEMENT_TYPE,
     ELEMENT_TYPE_RASTER,
+    ELEMENT_TYPE_VECTOR,
     GROUP_NAME,
     Raster_T,
 )
@@ -79,7 +80,7 @@ def _read_zarr_group_spatialdata_element(
                             cast(ELEMENT_TYPE_RASTER, element_type),
                             reader_format,
                         )
-                    elif element_type in get_args(ELEMENT_TYPE_RASTER) + (ELEMENT_TYPE.TABLES,):
+                    elif element_type in get_args(ELEMENT_TYPE_VECTOR) + (ELEMENT_TYPE.TABLES,):
                         element = read_func(elem_group_path)
                     else:
                         raise ValueError(f"Unknown element type {element_type}")
