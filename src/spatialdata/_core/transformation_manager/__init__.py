@@ -35,8 +35,6 @@ class TransformationManager:
         if cs not in self._graph:
             raise ValueError(f"Coordinate system '{cs.name}' does not exist in the transformation manager.")
 
-        self._graph.remove_node(cs)
-
     def list_coordinate_systems(self) -> list[NgffCoordinateSystem]:
         """
         List all registered coordinate systems.
