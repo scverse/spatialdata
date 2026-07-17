@@ -11,8 +11,7 @@ from __future__ import annotations
 import networkx as nx
 import pytest
 
-from spatialdata import TransformationManager
-from spatialdata._core.transformation_manager import TRANSFORM_KEY
+from spatialdata._core.transformation_manager import TRANSFORM_KEY, TransformationManager
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 
@@ -51,7 +50,7 @@ def test_remove_coordinate_system(one_point_graph):
     coordinate_systems, _ = one_point_graph
     cs = coordinate_systems[0]
     tm._graph.add_node(cs)
-    tm._graph.remove_node(cs)
+    tm.remove_coordinate_system(cs)
     assert cs not in tm._graph.nodes()
 
 
@@ -64,7 +63,7 @@ def test_remove_coordinate_system_nonexistent():
 
 
 def test_remove_coordinate_system_with_associations(fully_connected_two_point_graph):
-    """Test removing a coordinate system with associations."""
+    """Test that removing a coordinate system with associations raises ValueError."""
     tm = TransformationManager()
     coordinate_systems, _transformations = fully_connected_two_point_graph
     cs1, cs2 = coordinate_systems
@@ -74,10 +73,9 @@ def test_remove_coordinate_system_with_associations(fully_connected_two_point_gr
     transform = _transformations[0]
     tm.add_transformation(cs1, cs2, transform)
 
-    # NetworkX removes the node and all its edges
-    tm._graph.remove_node(cs1)
-    assert cs1 not in tm._graph.nodes()
-    assert not tm._graph.has_edge(cs1, cs2)
+    # Should raise ValueError when trying to remove a coordinate system with transformations
+    with pytest.raises(ValueError, match="Cannot remove coordinate system"):
+        tm.remove_coordinate_system(cs1)
 
 
 def test_remove_coordinate_system_with_element_associations(one_point_graph):
@@ -198,7 +196,7 @@ def test_get_existing_transformation(fully_connected_two_point_graph, cs_names):
     transform = transformations[0]
     tm.add_transformation(cs1, cs2, transform)
 
-    retrieved = tm.get_transformation(cs1, cs2)
+    retrieved = tm.get_existing_transformation(cs1, cs2)
     assert retrieved == transform
 
 
@@ -210,7 +208,7 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
     tm._graph.add_node(cs1)
     tm._graph.add_node(cs2)
 
-    retrieved = tm.get_transformation(cs1, cs2)
+    retrieved = tm.get_existing_transformation(cs1, cs2)
     assert retrieved is None
 
 

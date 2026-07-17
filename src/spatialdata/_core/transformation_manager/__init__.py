@@ -131,7 +131,7 @@ class TransformationManager:
 
         self._graph.add_edge(input_cs, output_cs, **{TRANSFORM_KEY: transformation})
 
-    def get_transformation(
+    def get_existing_transformation(
         self, input_cs: NgffCoordinateSystem, output_cs: NgffCoordinateSystem
     ) -> BaseTransformation | None:
         """
@@ -210,7 +210,7 @@ class TransformationManager:
         if element_cs is None:
             raise KeyError(f"Element '{element_name}' does not belong to any coordinate system.")
 
-        return self.get_transformation(element_cs, target_cs)
+        return self.get_existing_transformation(element_cs, target_cs)
 
     def build_nx_graph(self) -> nx.MultiDiGraph:
         """
@@ -289,6 +289,86 @@ class TransformationManager:
                 sequence.append(edge_data[0][TRANSFORM_KEY])
             all_sequences.append(sequence)
         return all_sequences
+
+    def _get_transformations_associated_with_cs(
+        self, cs: NgffCoordinateSystem
+    ) -> list[tuple[NgffCoordinateSystem, NgffCoordinateSystem]]:
+        """
+        Get all transformations associated with a coordinate system.
+
+        Parameters
+        ----------
+        cs
+            The coordinate system to check.
+
+        Returns
+        -------
+        List of tuples representing transformations (input_cs, output_cs).
+        """
+        self.check_if_coordinate_system_exists(cs)
+
+        transformations = []
+        # Check outgoing edges (cs -> other)
+        for successor in self._graph.successors(cs):
+            transformations.append((cs, successor))
+        # Check incoming edges (other -> cs)
+        for predecessor in self._graph.predecessors(cs):
+            transformations.append((predecessor, cs))
+
+        return transformations
+
+    def _get_elements_belonging_to_cs(self, cs: NgffCoordinateSystem) -> list[str]:
+        """
+        Get all elements belonging to a coordinate system.
+
+        Parameters
+        ----------
+        cs
+            The coordinate system to check.
+
+        Returns
+        -------
+        List of element names belonging to the coordinate system.
+        """
+        self.check_if_coordinate_system_exists(cs)
+
+        elements = []
+        for element_name, element_cs in self._element_to_cs_mapping.items():
+            if element_cs == cs:
+                elements.append(element_name)
+
+        return elements
+
+    def remove_coordinate_system(self, cs: NgffCoordinateSystem) -> None:
+        """
+        Remove a coordinate system from the transformation manager.
+
+        Parameters
+        ----------
+        cs
+            The coordinate system to remove.
+
+        Raises
+        ------
+        ValueError
+            If the coordinate system has associated transformations or elements.
+        KeyError
+            If the coordinate system does not exist.
+        """
+        self.check_if_coordinate_system_exists(cs)
+
+        # Check if coordinate system has any transformations
+        if len(list(self._graph.edges(cs))) > 0:
+            raise ValueError(f"Cannot remove coordinate system '{cs.name}' as it has associated transformations")
+
+        # Check if coordinate system has any associated elements
+        associated_elements = self._get_elements_belonging_to_cs(cs)
+        if associated_elements:
+            raise ValueError(
+                f"Cannot remove coordinate system '{cs.name}' as it has associated elements: {associated_elements}"
+            )
+
+        self._graph.remove_node(cs)
 
     def __repr__(self) -> str:
         return (
