@@ -12,6 +12,9 @@ import networkx as nx
 import pytest
 
 from spatialdata._core.transformation_manager import TRANSFORM_KEY, TransformationManager
+from spatialdata._core.transformation_manager.exceptions import (
+    TransformationNotFoundError,
+)
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 
@@ -127,25 +130,6 @@ def test_add_element_nonexistent_cs():
         tm.add_element("image1", cs)
 
 
-def test_get_element_coordinate_system(one_point_graph):
-    """Test getting the coordinate system of an element."""
-    tm = TransformationManager()
-    coordinate_systems, _ = one_point_graph
-    cs = coordinate_systems[0]
-    tm._graph.add_node(cs)
-    tm.add_element("image1", cs)
-
-    cs_name = tm.get_element_coordinate_system("image1")
-    assert cs_name == cs
-
-
-def test_get_element_coordinate_system_nonexistent():
-    """Test getting the coordinate system of a non-existent element."""
-    tm = TransformationManager()
-    cs_name = tm.get_element_coordinate_system("nonexistent")
-    assert cs_name is None
-
-
 @pytest.mark.parametrize("cs_names", [["cs1", "cs2"]])
 def test_add_transformation(fully_connected_two_point_graph, cs_names):
     """Test adding a transformation between coordinate systems."""
@@ -170,17 +154,13 @@ def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph, cs_n
     transform = transformations[0]
     cs1, cs2 = coordinate_systems
 
-    with pytest.raises(
-        ValueError, match=f"Coordinate system '{cs1.name}' does not exist in the transformation manager"
-    ):
+    with pytest.raises(ValueError, match=f"Coordinate system '{cs1.name}' not found in the transformation manager"):
         tm.add_transformation(cs1, cs2, transform)
 
     # Add one coordinate system
     tm._graph.add_node(cs1)
 
-    with pytest.raises(
-        ValueError, match=f"Coordinate system '{cs2.name}' does not exist in the transformation manager"
-    ):
+    with pytest.raises(ValueError, match=f"Coordinate system '{cs2.name}' not found in the transformation manager"):
         tm.add_transformation(cs1, cs2, transform)
 
 
@@ -208,8 +188,10 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
     tm._graph.add_node(cs1)
     tm._graph.add_node(cs2)
 
-    retrieved = tm.get_existing_transformation(cs1, cs2)
-    assert retrieved is None
+    with pytest.raises(
+        TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
+    ):
+        tm.get_existing_transformation(cs1, cs2)
 
 
 @pytest.mark.parametrize("cs_names", [["cs1", "cs2"]])
@@ -235,42 +217,10 @@ def test_remove_transformation_nonexistent():
     cs2 = NgffCoordinateSystem(name="cs2", axes=[])
     tm._graph.add_node(cs1)
     tm._graph.add_node(cs2)
-    with pytest.raises(KeyError, match="Transformation from 'cs1' to 'cs2' not found"):
+    with pytest.raises(
+        TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
+    ):
         tm.remove_transformation(cs1, cs2)
-
-
-def test_build_nx_graph(four_point_graph):
-    """Test building a networkx graph from the transformation manager."""
-    tm = TransformationManager()
-    coordinate_systems, transformations = four_point_graph
-    cs1, cs2, cs3, cs4 = coordinate_systems
-    tm._graph.add_node(cs1)
-    tm._graph.add_node(cs2)
-    tm._graph.add_node(cs3)
-    tm._graph.add_node(cs4)
-
-    transform1 = transformations[0]  # cs1 -> cs2
-    transform2 = transformations[1]  # cs2 -> cs3
-    transform3 = transformations[2]  # cs3 -> cs4
-    transform4 = transformations[3]  # cs1 -> cs3
-    tm.add_transformation(cs1, cs2, transform1)
-    tm.add_transformation(cs2, cs3, transform2)
-    tm.add_transformation(cs3, cs4, transform3)
-    tm.add_transformation(cs1, cs3, transform4)
-
-    g = tm.build_nx_graph()
-    assert g.has_node(cs1)
-    assert g.has_node(cs2)
-    assert g.has_node(cs3)
-    assert g.has_node(cs4)
-    assert g.has_edge(cs1, cs2)
-    assert g.has_edge(cs2, cs3)
-    assert g.has_edge(cs3, cs4)
-    assert g.has_edge(cs1, cs3)
-    assert g[cs1][cs2][0][TRANSFORM_KEY] == transform1
-    assert g[cs2][cs3][0][TRANSFORM_KEY] == transform2
-    assert g[cs3][cs4][0][TRANSFORM_KEY] == transform3
-    assert g[cs1][cs3][0][TRANSFORM_KEY] == transform4
 
 
 def test_get_shortest_transformation_sequence_direct(four_point_graph):

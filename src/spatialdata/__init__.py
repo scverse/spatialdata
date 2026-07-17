@@ -57,9 +57,8 @@ _LAZY_IMPORTS: dict[str, str] = {
     # _core.query.spatial_query
     "bounding_box_query": "spatialdata._core.query.spatial_query",
     "polygon_query": "spatialdata._core.query.spatial_query",
-    # _core.transformation_manager
-    # "TransformationManager": "spatialdata._core.transformation_manager",
-    # _io._utils
+    # _core.spatialdata
+    "SpatialData": "spatialdata._core.spatialdata",
     "get_dask_backing_files": "spatialdata._io._utils",
     # _io.format
     "SpatialDataFormatType": "spatialdata._io.format",
@@ -210,7 +209,8 @@ if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
 
     # _core.transformation_manager
-    # from spatialdata._core.transformation_manager import TransformationManager
+    from spatialdata._core.transformation_manager import TransformationManager
+
     # _io._utils
     from spatialdata._io._utils import get_dask_backing_files
 

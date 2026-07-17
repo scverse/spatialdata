@@ -4,6 +4,11 @@ import warnings
 
 import networkx as nx
 
+from spatialdata._core.transformation_manager.exceptions import (
+    CoordinateSystemNotFoundError,
+    ElementNotFoundError,
+    TransformationNotFoundError,
+)
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata.transformations.transformations import BaseTransformation
 
@@ -18,6 +23,23 @@ class TransformationManager:
         self._element_to_cs_mapping: dict[str, NgffCoordinateSystem] = {}
         # mapping element_name to the coordinate system to which the element belongs
 
+    def check_if_element_exists(self, element_name: str) -> None:
+        """
+        Check if an element exists in the transformation manager.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to check.
+
+        Raises
+        ------
+        ElementNotFoundError
+            If the element does not exist.
+        """
+        if element_name not in self._element_to_cs_mapping:
+            raise ElementNotFoundError(element_name)
+
     def check_if_coordinate_system_exists(self, cs: NgffCoordinateSystem) -> None:
         """
         Check if a coordinate system exists in the graph.
@@ -29,11 +51,30 @@ class TransformationManager:
 
         Raises
         ------
-        ValueError
+        CoordinateSystemNotFoundError
             If the coordinate system does not exist.
         """
         if cs not in self._graph:
-            raise ValueError(f"Coordinate system '{cs.name}' does not exist in the transformation manager.")
+            raise CoordinateSystemNotFoundError(cs.name)
+
+    def check_if_edge_exists(self, input_cs: NgffCoordinateSystem, output_cs: NgffCoordinateSystem) -> None:
+        """
+        Check if an edge exists between coordinate systems.
+
+        Parameters
+        ----------
+        input_cs
+            The input coordinate system.
+        output_cs
+            The output coordinate system.
+
+        Raises
+        ------
+        TransformationNotFoundError
+            If the edge does not exist.
+        """
+        if not self._graph.has_edge(input_cs, output_cs):
+            raise TransformationNotFoundError(input_cs.name, output_cs.name)
 
     def list_coordinate_systems(self) -> list[NgffCoordinateSystem]:
         """
@@ -61,7 +102,19 @@ class TransformationManager:
         UserWarning
             If the coordinate system does not exist.
         """
-        if coordinate_system not in self._graph:
+        try:
+            self.check_if_element_exists(element_name)
+        except ElementNotFoundError as _enfe:
+            warnings.warn(
+                f"Cannot add element with name '{element_name}') as it already "
+                f"exists in the transformation manager. Skipping",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        try:
+            self.check_if_coordinate_system_exists(coordinate_system)
+        except CoordinateSystemNotFoundError as _csnfe:
             warnings.warn(
                 f"Cannot set coordinate system ('{coordinate_system.name}') to element as the "
                 f"coordinate system does not exist.",
@@ -72,7 +125,7 @@ class TransformationManager:
 
         self._element_to_cs_mapping[element_name] = coordinate_system
 
-    def get_element_coordinate_system(self, element_name: str) -> NgffCoordinateSystem | None:
+    def get_element_coordinate_system(self, element_name: str) -> NgffCoordinateSystem:
         """
         Get the coordinate system to which an element belongs.
 
@@ -84,8 +137,14 @@ class TransformationManager:
         Returns
         -------
         The coordinate system or None if not found
+
+        Raises
+        ------
+        ElementNotFoundError
+            If the element does not exist.
         """
-        return self._element_to_cs_mapping.get(element_name)
+        self.check_if_element_exists(element_name)
+        return self._element_to_cs_mapping[element_name]
 
     def unset_element(self, element_name: str) -> None:
         """
@@ -96,14 +155,12 @@ class TransformationManager:
         element_name
             The name of the element.
 
-        Warnings
-        --------
-        UserWarning
+        Raises
+        ------
+        ElementNotFoundError
             If the element has not been registered to any coordinate system.
         """
-        if element_name not in self._element_to_cs_mapping:
-            warnings.warn(f"Element '{element_name}' not found in any coordinate system.", UserWarning, stacklevel=2)
-            return
+        self.check_if_element_exists(element_name)
         del self._element_to_cs_mapping[element_name]
 
     def add_transformation(
@@ -123,7 +180,7 @@ class TransformationManager:
 
         Raises
         ------
-        ValueError
+        CoordinateSystemNotFoundError
             If either coordinate system does not exist.
         """
         self.check_if_coordinate_system_exists(input_cs)
@@ -133,7 +190,7 @@ class TransformationManager:
 
     def get_existing_transformation(
         self, input_cs: NgffCoordinateSystem, output_cs: NgffCoordinateSystem
-    ) -> BaseTransformation | None:
+    ) -> BaseTransformation:
         """
         Retrieve a transformation defined between coordinate systems.
 
@@ -147,14 +204,21 @@ class TransformationManager:
         Returns
         -------
         The transformation or None if not found
+
+        Raises
+        ------
+        CoordinateSystemNotFoundError
+            If either coordinate system does not exist.
+        TransformationNotFoundError
+            If the transformation does not exist.
         """
         self.check_if_coordinate_system_exists(input_cs)
         self.check_if_coordinate_system_exists(output_cs)
 
-        if self._graph.has_edge(input_cs, output_cs):
-            transform: BaseTransformation = self._graph[input_cs][output_cs][0][TRANSFORM_KEY]
-            return transform
-        return None
+        self.check_if_edge_exists(input_cs, output_cs)
+
+        transform: BaseTransformation = self._graph[input_cs][output_cs][0][TRANSFORM_KEY]
+        return transform
 
     def remove_transformation(self, input_cs: NgffCoordinateSystem, output_cs: NgffCoordinateSystem) -> None:
         """
@@ -169,59 +233,16 @@ class TransformationManager:
 
         Raises
         ------
-        ValueError
+        CoordinateSystemNotFoundError
             If either coordinate system does not exist.
-        KeyError
+        TransformationNotFoundError
             If the transformation does not exist.
         """
         self.check_if_coordinate_system_exists(input_cs)
         self.check_if_coordinate_system_exists(output_cs)
 
-        if not self._graph.has_edge(input_cs, output_cs):
-            raise KeyError(f"Transformation from '{input_cs.name}' to '{output_cs.name}' not found.")
+        self.check_if_edge_exists(input_cs, output_cs)
         self._graph.remove_edge(input_cs, output_cs)
-
-    def get_element_transformation(
-        self, element_name: str, target_cs: NgffCoordinateSystem
-    ) -> BaseTransformation | None:
-        """
-        Get the transformation from the coordinate system to which the element belongs to a target coordinate system.
-
-        Parameters
-        ----------
-        element_name
-            The name of the element.
-        target_cs
-            The target coordinate system.
-
-        Returns
-        -------
-        The transformation or None if not found
-
-        Raises
-        ------
-        KeyError
-            If target_cs has not been added or if element_name does not belong to a coordinate system.
-        """
-        if target_cs not in self._graph:
-            raise KeyError(f"Target coordinate system '{target_cs.name}' not found.")
-
-        element_cs = self.get_element_coordinate_system(element_name)
-        if element_cs is None:
-            raise KeyError(f"Element '{element_name}' does not belong to any coordinate system.")
-
-        return self.get_existing_transformation(element_cs, target_cs)
-
-    def build_nx_graph(self) -> nx.MultiDiGraph:
-        """
-        Build a directed graph where nodes are coordinate systems and edges are transformations.
-
-        Returns
-        -------
-        nx.MultiDiGraph
-            A directed graph representing the coordinate systems and transformations.
-        """
-        return self._graph.copy()
 
     def get_shortest_transformation_sequence(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem
