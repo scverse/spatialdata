@@ -32,9 +32,6 @@ def fully_connected_two_point_graph() -> tuple[list[NgffCoordinateSystem], list[
     """Fixture providing a fully connected two-point graph with two coordinate systems and transformations."""
     coordinate_systems = [get_ngff_coodinate_system("cs1"), get_ngff_coodinate_system("cs2")]
     transformations = [
-        Identity(),
-        Identity(),
-        Translation(translation=[1.0, 2.0], axes=("x", "y")),
         Translation(translation=[-1.0, -2.0], axes=("x", "y")),
     ]
     return coordinate_systems, transformations

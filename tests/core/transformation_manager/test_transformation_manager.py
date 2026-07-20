@@ -8,171 +8,180 @@ This module tests all the functionality of the TransformationManager class to ac
 
 from __future__ import annotations
 
-import networkx as nx
 import pytest
 
 from spatialdata._core.transformation_manager import TRANSFORM_KEY, TransformationManager
 from spatialdata._core.transformation_manager.exceptions import (
+    CannotRemoveCoordinateSystemError,
+    CoordinateSystemAlreadyExistsError,
+    CoordinateSystemNotFoundError,
     TransformationNotFoundError,
+    TransformationPathNotFoundError,
+    suppress_direct_internal_attribute_access_warning,
 )
-from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 
 def test_initialization():
     """Test that TransformationManager initializes correctly."""
-    tm = TransformationManager()
-    assert len(tm.graph.nodes()) == 0
-    assert len(tm.graph.edges()) == 0
-    assert tm.element_to_cs_mapping == {}
+    with suppress_direct_internal_attribute_access_warning():
+        tm = TransformationManager()
+        assert len(tm.graph.nodes()) == 0
+        assert len(tm.graph.edges()) == 0
+        assert tm.element_to_cs_mapping == {}
 
 
 def test_add_coordinate_system(one_point_graph):
     """Test adding a coordinate system."""
-    tm = TransformationManager()
-    coordinate_systems, _ = one_point_graph
-    cs = coordinate_systems[0]
-    tm.add_coordinate_system(cs)
-    assert cs in tm.graph.nodes()
+    with suppress_direct_internal_attribute_access_warning():
+        tm = TransformationManager()
+        [cs1], _ = one_point_graph
+
+        tm.add_coordinate_system(cs1)
+        assert cs1 in tm.graph.nodes()
 
 
 def test_add_coordinate_system_duplicate(one_point_graph):
-    """Test that adding a duplicate coordinate system raises ValueError."""
+    """Test adding an already existing coordinate system"""
     tm = TransformationManager()
-    coordinate_systems, _ = one_point_graph
-    cs = coordinate_systems[0]
-    tm.add_coordinate_system(cs)
-    with pytest.raises(ValueError, match=f"Coordinate system '{cs.name}' already exists"):
-        tm.add_coordinate_system(cs)
+    [cs1], _ = one_point_graph
+
+    tm.add_coordinate_system(cs1)
+    with pytest.raises(CoordinateSystemAlreadyExistsError, match=f"Coordinate system '{cs1.name}' already exists"):
+        tm.add_coordinate_system(cs1)
 
 
 def test_remove_coordinate_system(one_point_graph):
     """Test removing a coordinate system."""
     tm = TransformationManager()
+    [cs1], _ = one_point_graph
 
-    coordinate_systems, _ = one_point_graph
-    cs = coordinate_systems[0]
-    tm.add_coordinate_system(cs)
-    tm.remove_coordinate_system(cs)
-    assert cs not in tm.graph.nodes()
-
-
-def test_remove_coordinate_system_nonexistent():
-    """Test that removing a non-existent coordinate system raises KeyError."""
-    tm = TransformationManager()
-    cs = NgffCoordinateSystem(name="cs1", axes=[])
-    with pytest.raises(nx.NetworkXError):
-        tm.graph.remove_node(cs)
-
-
-def test_remove_coordinate_system_with_associations(fully_connected_two_point_graph):
-    """Test that removing a coordinate system with associations raises ValueError."""
-    tm = TransformationManager()
-    coordinate_systems, _transformations = fully_connected_two_point_graph
-    cs1, cs2 = coordinate_systems
     tm.add_coordinate_system(cs1)
-    tm.add_coordinate_system(cs2)
+    tm.remove_coordinate_system(cs1)
 
-    transform = _transformations[0]
-    tm.add_transformation(cs1, cs2, transform)
+    with suppress_direct_internal_attribute_access_warning():
+        assert cs1 not in tm.graph.nodes()
 
-    # Should raise ValueError when trying to remove a coordinate system with transformations
-    with pytest.raises(ValueError, match="Cannot remove coordinate system"):
+
+def test_remove_coordinate_system_nonexistent(one_point_graph):
+    """Test that removing a non-existent coordinate system raises CoordinateSystemNotFoundError."""
+    tm = TransformationManager()
+    [cs1], _ = one_point_graph
+
+    # Add the coordinate system first
+    tm.add_coordinate_system(cs1)
+
+    # Remove it
+    tm.remove_coordinate_system(cs1)
+
+    # Try to remove it again - should raise CoordinateSystemNotFoundError
+    with pytest.raises(CoordinateSystemNotFoundError):
         tm.remove_coordinate_system(cs1)
 
 
-def test_remove_coordinate_system_with_element_associations(one_point_graph):
-    """Test that removing a coordinate system with element associations raises ValueError."""
+def test_remove_coordinate_system_with_associated_transformations(fully_connected_two_point_graph):
+    """
+    Test that removing a coordinate system with associated transformations raises CannotRemoveCoordinateSystemError.
+    """
     tm = TransformationManager()
-    coordinate_systems, _ = one_point_graph
-    cs = coordinate_systems[0]
-    tm.add_coordinate_system(cs)
-    tm.add_element("image1", cs)
+    [cs1, cs2], [transformation] = fully_connected_two_point_graph
 
-    # The current implementation doesn't prevent removing nodes with element associations
-    # This test may need to be updated based on the actual behavior
-    tm.graph.remove_node(cs)
-    assert cs not in tm.graph.nodes()
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+
+    tm.add_transformation(cs1, cs2, transformation)
+
+    # Should raise CannotRemoveCoordinateSystem when trying to remove a coordinate system with transformations
+    with pytest.raises(CannotRemoveCoordinateSystemError, match="Cannot remove coordinate system"):
+        tm.remove_coordinate_system(cs1)
 
 
-@pytest.mark.parametrize("cs_names", [["cs1", "cs2"]])
-def test_list_coordinate_systems(fully_connected_two_point_graph, cs_names):
+def test_remove_coordinate_system_with_belonging_elements(one_point_graph):
+    """Test that removing a coordinate system with element associations raises CannotRemoveCoordinateSystemError."""
+    tm = TransformationManager()
+    [cs1], _ = one_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_element("image1", cs1)
+
+    with pytest.raises(CannotRemoveCoordinateSystemError, match="Cannot remove coordinate system"):
+        tm.remove_coordinate_system(cs1)
+
+
+def test_list_coordinate_systems(fully_connected_two_point_graph):
     """Test listing all coordinate systems."""
     tm = TransformationManager()
-    coordinate_systems, _ = fully_connected_two_point_graph
-    cs1, cs2 = coordinate_systems
+    [cs1, cs2], _ = fully_connected_two_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
 
     systems = tm.list_coordinate_systems()
-    assert set(systems) == {cs1, cs2}
+    assert len(systems) == 2
+    assert cs1 in systems
+    assert cs2 in systems
 
 
 def test_add_element(one_point_graph):
     """Test adding an element with an existing coordinate system."""
     tm = TransformationManager()
-    coordinate_systems, _ = one_point_graph
-    cs = coordinate_systems[0]
-    tm.add_coordinate_system(cs)
-    tm.add_element("image1", cs)
-
-    mapping = tm.element_to_cs_mapping
-    assert "image1" in mapping
-    assert mapping["image1"] == cs
-
-
-def test_add_element_nonexistent_cs():
-    """Test that adding an element with a non-existent coordinate system raises KeyError."""
-    tm = TransformationManager()
-    cs = NgffCoordinateSystem(name="nonexistent_cs", axes=[])
-    # The current implementation issues a warning and returns, doesn't raise an error
-    with pytest.warns(UserWarning, match="Cannot set coordinate system"):
-        tm.add_element("image1", cs)
-
-
-@pytest.mark.parametrize("cs_names", [["cs1", "cs2"]])
-def test_add_transformation(fully_connected_two_point_graph, cs_names):
-    """Test adding a transformation between coordinate systems."""
-    tm = TransformationManager()
-    coordinate_systems, transformations = fully_connected_two_point_graph
-    cs1, cs2 = coordinate_systems
+    [cs1], _ = one_point_graph
     tm.add_coordinate_system(cs1)
-    tm.add_coordinate_system(cs2)
+    tm.add_element("image1", cs1)
 
-    transform = transformations[0]
-    tm.add_transformation(cs1, cs2, transform)
+    with suppress_direct_internal_attribute_access_warning():
+        mapping = tm.element_to_cs_mapping
+        assert "image1" in mapping
+        assert mapping["image1"] == cs1
 
-    assert tm.graph.has_edge(cs1, cs2)
-    assert tm.graph[cs1][cs2][0][TRANSFORM_KEY] == transform
 
-
-@pytest.mark.parametrize("cs_names", [["cs1", "cs2"]])
-def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph, cs_names):
-    """Test that adding a transformation with non-existent coordinate systems raises ValueError."""
+def test_add_element_nonexistent_cs(one_point_graph):
+    """Test that adding an element with a non-existent coordinate system raises CoordinateSystemNotFoundError."""
     tm = TransformationManager()
-    coordinate_systems, transformations = fully_connected_two_point_graph
-    transform = transformations[0]
-    cs1, cs2 = coordinate_systems
+    [cs1], _ = one_point_graph
+    element_name = "image1"
+    with pytest.raises(CoordinateSystemNotFoundError, match=f"Coordinate system '{cs1.name}' not found in"):
+        tm.add_element(element_name, cs1)
 
-    with pytest.raises(ValueError, match=f"Coordinate system '{cs1.name}' not found in the transformation manager"):
+
+def test_add_transformation(fully_connected_two_point_graph):
+    """Test adding a transformation between coordinate systems."""
+    with suppress_direct_internal_attribute_access_warning():
+        tm = TransformationManager()
+        [cs1, cs2], [transform] = fully_connected_two_point_graph
+
+        tm.add_coordinate_system(cs1)
+        tm.add_coordinate_system(cs2)
+
+        tm.add_transformation(cs1, cs2, transform)
+
+        assert tm.graph.has_edge(cs1, cs2)
+        assert tm.graph[cs1][cs2][0][TRANSFORM_KEY] == transform
+
+
+def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
+    """Test that adding a transformation with non-existent coordinate systems raises CoordinateSystemNotFoundError."""
+    tm = TransformationManager()
+    [cs1, cs2], [transform] = fully_connected_two_point_graph
+
+    with pytest.raises(
+        CoordinateSystemNotFoundError, match=f"Coordinate system '{cs1.name}' not found in the transformation manager"
+    ):
         tm.add_transformation(cs1, cs2, transform)
 
     # Add one coordinate system
     tm.add_coordinate_system(cs1)
 
-    with pytest.raises(ValueError, match=f"Coordinate system '{cs2.name}' not found in the transformation manager"):
+    with pytest.raises(
+        CoordinateSystemNotFoundError, match=f"Coordinate system '{cs2.name}' not found in the transformation manager"
+    ):
         tm.add_transformation(cs1, cs2, transform)
 
 
-@pytest.mark.parametrize("cs_names", [["cs1", "cs2"]])
-def test_get_existing_transformation(fully_connected_two_point_graph, cs_names):
+def test_get_existing_transformation(fully_connected_two_point_graph):
     """Test getting an existing transformation."""
     tm = TransformationManager()
-    coordinate_systems, transformations = fully_connected_two_point_graph
-    cs1, cs2 = coordinate_systems
+    [cs1, cs2], [transform] = fully_connected_two_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
 
-    transform = transformations[0]
     tm.add_transformation(cs1, cs2, transform)
 
     retrieved = tm.get_existing_transformation(cs1, cs2)
@@ -193,48 +202,43 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
         tm.get_existing_transformation(cs1, cs2)
 
 
-@pytest.mark.parametrize("cs_names", [["cs1", "cs2"]])
-def test_remove_transformation(fully_connected_two_point_graph, cs_names):
+def test_remove_transformation(fully_connected_two_point_graph):
     """Test removing a transformation."""
-    tm = TransformationManager()
-    coordinate_systems, transformations = fully_connected_two_point_graph
-    cs1, cs2 = coordinate_systems
-    tm.add_coordinate_system(cs1)
-    tm.add_coordinate_system(cs2)
+    with suppress_direct_internal_attribute_access_warning():
+        tm = TransformationManager()
+        [cs1, cs2], [transform] = fully_connected_two_point_graph
+        tm.add_coordinate_system(cs1)
+        tm.add_coordinate_system(cs2)
 
-    transform = transformations[0]
-    tm.add_transformation(cs1, cs2, transform)
+        tm.add_transformation(cs1, cs2, transform)
 
-    tm.remove_transformation(cs1, cs2)
-    assert not tm.graph.has_edge(cs1, cs2)
-
-
-def test_remove_transformation_nonexistent():
-    """Test that removing a non-existent transformation raises KeyError."""
-    tm = TransformationManager()
-    cs1 = NgffCoordinateSystem(name="cs1", axes=[])
-    cs2 = NgffCoordinateSystem(name="cs2", axes=[])
-    tm.graph.add_node(cs1)
-    tm.graph.add_node(cs2)
-    with pytest.raises(
-        TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
-    ):
         tm.remove_transformation(cs1, cs2)
+        assert not tm.graph.has_edge(cs1, cs2)
+
+
+def test_remove_transformation_nonexistent(fully_connected_two_point_graph):
+    """Test that removing a non-existent transformation raises TransformationNotFoundError."""
+    with suppress_direct_internal_attribute_access_warning():
+        tm = TransformationManager()
+        [cs1, cs2], _ = fully_connected_two_point_graph
+        tm.graph.add_node(cs1)
+        tm.graph.add_node(cs2)
+        with pytest.raises(
+            TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
+        ):
+            tm.remove_transformation(cs1, cs2)
 
 
 def test_get_shortest_transformation_sequence_direct(four_point_graph):
     """Test getting the shortest transformation sequence for a direct transformation."""
     tm = TransformationManager()
-    coordinate_systems, transformations = four_point_graph
-    cs1, cs2, cs3, cs4 = coordinate_systems
+    [cs1, cs2, cs3, cs4], [transform1, transform2, _transform3, transform4] = four_point_graph
+
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
     tm.add_coordinate_system(cs3)
     tm.add_coordinate_system(cs4)
 
-    transform1 = transformations[0]  # cs1 -> cs2
-    transform2 = transformations[1]  # cs2 -> cs3
-    transform4 = transformations[3]  # cs1 -> cs3
     tm.add_transformation(cs1, cs2, transform1)
     tm.add_transformation(cs2, cs3, transform2)
     tm.add_transformation(cs1, cs3, transform4)
@@ -246,58 +250,44 @@ def test_get_shortest_transformation_sequence_direct(four_point_graph):
 def test_get_shortest_transformation_sequence_indirect(four_point_graph):
     """Test getting the shortest transformation sequence for an indirect transformation."""
     tm = TransformationManager()
-    coordinate_systems, transformations = four_point_graph
-    cs1, cs2, cs3, cs4 = coordinate_systems
+    [cs1, cs2, cs3, _cs4], [transform1, transform2, _transform3, _transform4] = four_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
     tm.add_coordinate_system(cs3)
-    tm.add_coordinate_system(cs4)
 
-    transform1 = transformations[0]  # cs1 -> cs2
-    transform2 = transformations[1]  # cs2 -> cs3
-    transform3 = transformations[2]  # cs3 -> cs4
     tm.add_transformation(cs1, cs2, transform1)
     tm.add_transformation(cs2, cs3, transform2)
-    tm.add_transformation(cs3, cs4, transform3)
 
     sequence = tm.get_shortest_transformation_sequence(cs1, cs3)
     assert sequence == [transform1, transform2]
 
 
 def test_get_shortest_transformation_sequence_no_path(four_point_graph):
-    """Test that getting a transformation sequence with no path raises ValueError."""
+    """Test that getting a transformation sequence with no path raises TransformationPathNotFoundError."""
     tm = TransformationManager()
-    coordinate_systems, transformations = four_point_graph
-    cs1, cs2, cs3, cs4 = coordinate_systems
+    [cs1, cs2, cs3, cs4], [transform1, transform2, _transform3, _transform4] = four_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
     tm.add_coordinate_system(cs3)
     tm.add_coordinate_system(cs4)
 
-    transform1 = transformations[0]  # cs1 -> cs2
-    transform2 = transformations[1]  # cs2 -> cs3
-
     tm.add_transformation(cs1, cs2, transform1)
     tm.add_transformation(cs2, cs3, transform2)
 
-    with pytest.raises(ValueError, match=f"No path found from {cs1.name} to {cs4.name}"):
+    expected_error_msg = "No transformation path found from"
+    with pytest.raises(TransformationPathNotFoundError, match=expected_error_msg):
         tm.get_shortest_transformation_sequence(cs1, cs4)
 
 
 def test_get_all_transformation_sequences(four_point_graph):
     """Test getting all transformation sequences."""
     tm = TransformationManager()
-    coordinate_systems, transformations = four_point_graph
-    cs1, cs2, cs3, cs4 = coordinate_systems
+    [cs1, cs2, cs3, cs4], [transform1, transform2, transform3, transform4] = four_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
     tm.add_coordinate_system(cs3)
     tm.add_coordinate_system(cs4)
 
-    transform1 = transformations[0]  # cs1 -> cs2
-    transform2 = transformations[1]  # cs2 -> cs3
-    transform3 = transformations[2]  # cs3 -> cs4
-    transform4 = transformations[3]  # cs1 -> cs3
     tm.add_transformation(cs1, cs2, transform1)
     tm.add_transformation(cs2, cs3, transform2)
     tm.add_transformation(cs3, cs4, transform3)
@@ -312,15 +302,12 @@ def test_get_all_transformation_sequences(four_point_graph):
 def test_get_all_transformation_sequences_no_path(four_point_graph):
     """Test that getting all transformation sequences with no path returns an empty list."""
     tm = TransformationManager()
-    coordinate_systems, transformations = four_point_graph
-    cs1, cs2, cs3, cs4 = coordinate_systems
+    [cs1, cs2, cs3, cs4], [transform1, transform2, _transform3, _transform4] = four_point_graph
+
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
     tm.add_coordinate_system(cs3)
     tm.add_coordinate_system(cs4)
-
-    transform1 = transformations[0]  # cs1 -> cs2
-    transform2 = transformations[1]  # cs2 -> cs3
 
     tm.add_transformation(cs1, cs2, transform1)
     tm.add_transformation(cs2, cs3, transform2)
