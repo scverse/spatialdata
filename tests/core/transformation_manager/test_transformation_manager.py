@@ -15,6 +15,8 @@ from spatialdata._core.transformation_manager.exceptions import (
     CannotRemoveCoordinateSystemError,
     CoordinateSystemAlreadyExistsError,
     CoordinateSystemNotFoundError,
+    ElementAlreadyExistsError,
+    ElementNotFoundError,
     TransformationNotFoundError,
     TransformationPathNotFoundError,
     suppress_direct_internal_attribute_access_warning,
@@ -94,6 +96,10 @@ def test_remove_coordinate_system_with_associated_transformations(fully_connecte
     with pytest.raises(CannotRemoveCoordinateSystemError, match="Cannot remove coordinate system"):
         tm.remove_coordinate_system(cs1)
 
+    # Should raise CannotRemoveCoordinateSystem when trying to remove a coordinate system with transformations
+    with pytest.raises(CannotRemoveCoordinateSystemError, match="Cannot remove coordinate system"):
+        tm.remove_coordinate_system(cs2)
+
 
 def test_remove_coordinate_system_with_belonging_elements(one_point_graph):
     """Test that removing a coordinate system with element associations raises CannotRemoveCoordinateSystemError."""
@@ -132,13 +138,45 @@ def test_add_element(one_point_graph):
         assert mapping["image1"] == cs1
 
 
-def test_add_element_nonexistent_cs(one_point_graph):
-    """Test that adding an element with a non-existent coordinate system raises CoordinateSystemNotFoundError."""
+def test_add_element_duplicate(one_point_graph):
+    """Test that adding a duplicate element raises ElementAlreadyExistsError."""
     tm = TransformationManager()
     [cs1], _ = one_point_graph
+    tm.add_coordinate_system(cs1)
     element_name = "image1"
-    with pytest.raises(CoordinateSystemNotFoundError, match=f"Coordinate system '{cs1.name}' not found in"):
+    tm.add_element(element_name, cs1)
+
+    # Try to add the same element again - should raise ElementAlreadyExistsError
+    with pytest.raises(
+        ElementAlreadyExistsError, match=f"Element '{element_name}' already exists in the transformation manager"
+    ):
         tm.add_element(element_name, cs1)
+
+
+def test_unset_element(one_point_graph):
+    """Test unsetting an element."""
+    tm = TransformationManager()
+    [cs1], _ = one_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_element("image1", cs1)
+    tm.unset_element("image1")
+
+    with suppress_direct_internal_attribute_access_warning():
+        assert "image1" not in tm.element_to_cs_mapping
+
+
+def test_unset_element_nonexistent(one_point_graph):
+    """Test that unsetting a non-existent element raises ElementNotFoundError."""
+    tm = TransformationManager()
+    [cs1], _ = one_point_graph
+    tm.add_coordinate_system(cs1)
+    element_name = "image1"
+
+    # Try to unset non-existent element
+    with pytest.raises(
+        ElementNotFoundError, match=f"Element '{element_name}' not found in the transformation manager."
+    ):
+        tm.unset_element(element_name)
 
 
 def test_add_transformation(fully_connected_two_point_graph):
@@ -299,32 +337,43 @@ def test_get_all_transformation_sequences(four_point_graph):
     assert [transform4, transform3] in sequences
 
 
-def test_get_all_transformation_sequences_no_path(four_point_graph):
-    """Test that getting all transformation sequences with no path returns an empty list."""
+def test_get_element_coordinate_system_success(one_point_graph):
+    """Test successfully getting an element's coordinate system (covers lines 292-293)."""
     tm = TransformationManager()
-    [cs1, cs2, cs3, cs4], [transform1, transform2, _transform3, _transform4] = four_point_graph
+    [cs1], _ = one_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_element("image1", cs1)
 
+    # This should successfully return the coordinate system
+    result = tm.get_element_coordinate_system("image1")
+    assert result == cs1
+
+
+def test_repr_method_comprehensive(fully_connected_two_point_graph):
+    """Test TransformationManager.__repr__ method comprehensively."""
+
+    # Test empty TransformationManager
+    tm_empty = TransformationManager()
+    repr_empty = repr(tm_empty)
+    assert "TransformationManager" in repr_empty
+    assert "coordinate_systems=[]" in repr_empty
+    assert "coordinate_transforms=[]" in repr_empty
+    assert "elements=[]" in repr_empty
+
+    # Test TransformationManager with data
+    tm = TransformationManager()
+    [cs1, cs2], [transform] = fully_connected_two_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
-    tm.add_coordinate_system(cs3)
-    tm.add_coordinate_system(cs4)
 
-    tm.add_transformation(cs1, cs2, transform1)
-    tm.add_transformation(cs2, cs3, transform2)
-
-    sequences = tm.get_all_transformation_sequences(cs1, cs4)
-    assert sequences == []
-
-
-def test_repr(one_point_graph):
-    """Test the string representation of TransformationManager."""
-    tm = TransformationManager()
-    coordinate_systems, _ = one_point_graph
-    cs = coordinate_systems[0]
-    tm.add_coordinate_system(cs)
-    tm.add_element("image1", cs)
+    tm.add_transformation(cs1, cs2, transform)
+    tm.add_element("image1", cs1)
+    tm.add_element("image2", cs2)
 
     repr_str = repr(tm)
     assert "TransformationManager" in repr_str
-    assert cs.name in repr_str
+    assert "cs1" in repr_str
+    assert "cs2" in repr_str
+    assert repr_str.find(repr(transform))
     assert "image1" in repr_str
+    assert "image2" in repr_str

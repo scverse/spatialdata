@@ -290,7 +290,8 @@ class TransformationManager:
             If the element does not exist.
         """
         self.check_if_element_exists_else_raise_error(element_name)
-        return self.element_to_cs_mapping[element_name]
+        with suppress_direct_internal_attribute_access_warning():
+            return self.element_to_cs_mapping[element_name]
 
     def unset_element(self, element_name: str) -> None:
         """
@@ -525,7 +526,7 @@ class TransformationManager:
             return (
                 f"TransformationManager("
                 f"  coordinate_systems={list(self.graph.nodes())}, "
-                f"  coordinate_transforms={list(self.graph.edges())}, "
+                f"  coordinate_transforms={[x[TRANSFORM_KEY] for *_, x in self.graph.edges(data=True)]}, "
                 f"  elements={list(self.element_to_cs_mapping.keys())}"
                 f")"
             )
