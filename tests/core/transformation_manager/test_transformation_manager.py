@@ -18,6 +18,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     ElementAlreadyExistsError,
     ElementNotFoundError,
     TransformationNotFoundError,
+    TransformationPathAmbiguousError,
     TransformationPathNotFoundError,
     suppress_direct_internal_attribute_access_warning,
 )
@@ -222,7 +223,7 @@ def test_get_existing_transformation(fully_connected_two_point_graph):
 
     tm.add_transformation(cs1, cs2, transform)
 
-    retrieved = tm.get_existing_transformation(cs1, cs2)
+    retrieved = tm.get_existing_direct_transformations(cs1, cs2)
     assert retrieved == transform
 
 
@@ -237,7 +238,7 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
     with pytest.raises(
         TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
     ):
-        tm.get_existing_transformation(cs1, cs2)
+        tm.get_existing_direct_transformations(cs1, cs2)
 
 
 def test_remove_transformation(fully_connected_two_point_graph):
@@ -250,7 +251,7 @@ def test_remove_transformation(fully_connected_two_point_graph):
 
         tm.add_transformation(cs1, cs2, transform)
 
-        tm.remove_transformation(cs1, cs2)
+        tm.remove_all_transformations(cs1, cs2)
         assert not tm.graph.has_edge(cs1, cs2)
 
 
@@ -264,11 +265,11 @@ def test_remove_transformation_nonexistent(fully_connected_two_point_graph):
         with pytest.raises(
             TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
         ):
-            tm.remove_transformation(cs1, cs2)
+            tm.remove_all_transformations(cs1, cs2)
 
 
-def test_get_shortest_transformation_sequence_direct(four_point_graph):
-    """Test getting the shortest transformation sequence for a direct transformation."""
+def test_get_all_shortest_transformation_sequences_direct(four_point_graph):
+    """Test getting all shortest transformation sequences for a direct transformation path."""
     tm = TransformationManager()
     [cs1, cs2, cs3, cs4], [transform1, transform2, _transform3, transform4] = four_point_graph
 
@@ -281,12 +282,13 @@ def test_get_shortest_transformation_sequence_direct(four_point_graph):
     tm.add_transformation(cs2, cs3, transform2)
     tm.add_transformation(cs1, cs3, transform4)
 
-    sequence = tm.get_shortest_transformation_sequence(cs1, cs3)
-    assert sequence == [transform4]
+    sequences = tm.get_all_shortest_transformation_sequences(cs1, cs3)
+    assert len(sequences) == 1
+    assert [transform4] in sequences
 
 
-def test_get_shortest_transformation_sequence_indirect(four_point_graph):
-    """Test getting the shortest transformation sequence for an indirect transformation."""
+def test_get_all_shortest_transformation_sequences_indirect_one_path(four_point_graph):
+    """Test getting all shortest transformation sequences for one indirect transformation path."""
     tm = TransformationManager()
     [cs1, cs2, cs3, _cs4], [transform1, transform2, _transform3, _transform4] = four_point_graph
     tm.add_coordinate_system(cs1)
@@ -296,12 +298,33 @@ def test_get_shortest_transformation_sequence_indirect(four_point_graph):
     tm.add_transformation(cs1, cs2, transform1)
     tm.add_transformation(cs2, cs3, transform2)
 
-    sequence = tm.get_shortest_transformation_sequence(cs1, cs3)
-    assert sequence == [transform1, transform2]
+    sequences = tm.get_all_shortest_transformation_sequences(cs1, cs3)
+    assert len(sequences) == 1
+    assert [transform1, transform2] in sequences
 
 
-def test_get_shortest_transformation_sequence_no_path(four_point_graph):
-    """Test that getting a transformation sequence with no path raises TransformationPathNotFoundError."""
+def test_get_all_shortest_transformation_sequences_indirect_two_paths(five_point_graph):
+    """Test getting all shortest transformation sequences for two indirect transformation paths."""
+    tm = TransformationManager()
+    ([cs1, cs2, cs3, cs4, _cs5], [transform1, transform2, _transform3, _transform4, _transform5]) = five_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+
+    tm.add_transformation(cs1, cs2, transform1)
+    tm.add_transformation(cs2, cs3, transform2)
+    tm.add_transformation(cs1, cs4, transform2)
+    tm.add_transformation(cs4, cs3, transform1)
+
+    sequences = tm.get_all_shortest_transformation_sequences(cs1, cs3)
+    assert len(sequences) == 2
+    assert [transform1, transform2] in sequences
+    assert [transform2, transform1] in sequences
+
+
+def test_get_all_shortest_transformation_sequences_no_path(four_point_graph):
+    """Test that getting all shortest transformation sequences with no path raises TransformationPathNotFoundError."""
     tm = TransformationManager()
     [cs1, cs2, cs3, cs4], [transform1, transform2, _transform3, _transform4] = four_point_graph
     tm.add_coordinate_system(cs1)
@@ -314,7 +337,56 @@ def test_get_shortest_transformation_sequence_no_path(four_point_graph):
 
     expected_error_msg = "No transformation path found from"
     with pytest.raises(TransformationPathNotFoundError, match=expected_error_msg):
-        tm.get_shortest_transformation_sequence(cs1, cs4)
+        tm.get_all_shortest_transformation_sequences(cs1, cs4)
+
+
+def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges_success(five_point_graph):
+    """Test getting all shortest transformation sequences, with multiple path and multiple edges between nodes."""
+    tm = TransformationManager()
+    [cs1, cs2, cs3, cs4, cs5], [transform1, transform2, transform3, transform4, transform5] = five_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+    tm.add_coordinate_system(cs5)
+
+    tm.add_transformation(cs1, cs2, transform1)
+    tm.add_transformation(cs2, cs3, transform2)
+    tm.add_transformation(cs1, cs4, transform2)
+    tm.add_transformation(cs4, cs3, transform1)
+    tm.add_transformation(cs1, cs3, transform3)
+    tm.add_transformation(cs4, cs5, transform4)
+    tm.add_transformation(cs4, cs5, transform5)
+
+    sequences = tm.get_all_shortest_transformation_sequences(
+        cs1, cs5, expected_intermediate_transformations=[transform4]
+    )
+    assert len(sequences) == 3
+    assert [transform1, transform2, transform4] in sequences
+    assert [transform2, transform1, transform4] in sequences
+    assert [transform3, transform4] in sequences
+
+
+def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges_failure(five_point_graph):
+    """Test getting all shortest transformation sequences, with multiple path and multiple edges between nodes."""
+    tm = TransformationManager()
+    [cs1, cs2, cs3, cs4, cs5], [transform1, transform2, transform3, transform4, transform5] = five_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+    tm.add_coordinate_system(cs5)
+
+    tm.add_transformation(cs1, cs2, transform1)
+    tm.add_transformation(cs2, cs3, transform2)
+    tm.add_transformation(cs1, cs4, transform2)
+    tm.add_transformation(cs4, cs3, transform1)
+    tm.add_transformation(cs1, cs3, transform3)
+    tm.add_transformation(cs4, cs5, transform4)
+    tm.add_transformation(cs4, cs5, transform5)
+
+    with pytest.raises(TransformationPathAmbiguousError, match="Transformation Path ambiguous"):
+        tm.get_all_shortest_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4])
 
 
 def test_get_all_transformation_sequences(four_point_graph):
@@ -337,8 +409,91 @@ def test_get_all_transformation_sequences(four_point_graph):
     assert [transform4, transform3] in sequences
 
 
+def test_get_all_transformation_sequences_multiple_paths(five_point_graph):
+    """Test getting all transformation sequences, with multiple path and multiple edges between nodes."""
+    tm = TransformationManager()
+    [cs1, cs2, cs3, cs4, _cs5], [transform1, transform2, transform3, _transform4, _transform5] = five_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+
+    tm.add_transformation(cs1, cs2, transform1)
+    tm.add_transformation(cs2, cs3, transform2)
+    tm.add_transformation(cs1, cs4, transform2)
+    tm.add_transformation(cs4, cs3, transform1)
+    tm.add_transformation(cs1, cs3, transform3)
+
+    sequences = tm.get_all_transformation_sequences(cs1, cs3)
+    assert len(sequences) == 3
+    assert [transform1, transform2] in sequences
+    assert [transform2, transform1] in sequences
+    assert [transform3] in sequences
+
+
+def test_get_all_transformation_sequences_multiple_paths_multiple_edges_success(five_point_graph):
+    """Test getting all transformation sequences, with multiple paths and multiple edges between nodes."""
+    tm = TransformationManager()
+    [cs1, cs2, cs3, cs4, cs5], [transform1, transform2, transform3, transform4, transform5] = five_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+    tm.add_coordinate_system(cs5)
+
+    tm.add_transformation(cs1, cs2, transform1)
+    tm.add_transformation(cs2, cs3, transform2)
+    tm.add_transformation(cs1, cs4, transform2)
+    tm.add_transformation(cs4, cs3, transform1)
+    tm.add_transformation(cs1, cs3, transform3)
+    tm.add_transformation(cs4, cs5, transform4)
+    tm.add_transformation(cs4, cs5, transform5)
+
+    sequences = tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4])
+    assert len(sequences) == 3
+    assert [transform1, transform2, transform4] in sequences
+    assert [transform2, transform1, transform4] in sequences
+    assert [transform3, transform4] in sequences
+
+
+def test_get_all_transformation_sequences_multiple_paths_multiple_edges_failure(five_point_graph):
+    """Test getting all transformation sequences, with multiple paths and multiple edges between nodes."""
+    tm = TransformationManager()
+    [cs1, cs2, cs3, cs4, cs5], [transform1, transform2, transform3, transform4, transform5] = five_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+    tm.add_coordinate_system(cs5)
+
+    tm.add_transformation(cs1, cs2, transform1)
+    tm.add_transformation(cs2, cs3, transform2)
+    tm.add_transformation(cs1, cs4, transform2)
+    tm.add_transformation(cs4, cs3, transform1)
+    tm.add_transformation(cs1, cs3, transform3)
+    tm.add_transformation(cs4, cs5, transform4)
+    tm.add_transformation(cs4, cs5, transform5)
+
+    with pytest.raises(TransformationPathAmbiguousError, match="Transformation Path ambiguous"):
+        tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4])
+
+
+def test_get_all_transformation_sequences_no_path(four_point_graph):
+    """Test getting all transformation sequences."""
+    tm = TransformationManager()
+    [cs1, cs2, cs3, cs4], [transform1, transform2, transform3, transform4] = four_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+
+    expected_error_msg = "No transformation path found from"
+    with pytest.raises(TransformationPathNotFoundError, match=expected_error_msg):
+        tm.get_all_shortest_transformation_sequences(cs1, cs4)
+
+
 def test_get_element_coordinate_system_success(one_point_graph):
-    """Test successfully getting an element's coordinate system (covers lines 292-293)."""
+    """Test successfully getting an element's coordinate system."""
     tm = TransformationManager()
     [cs1], _ = one_point_graph
     tm.add_coordinate_system(cs1)

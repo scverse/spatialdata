@@ -114,7 +114,6 @@ __all__ = [
     # _core.query.spatial_query
     "bounding_box_query",
     "polygon_query",
-    # _core.transformation_manager
     # _core.spatialdata
     "SpatialData",
     # _io._utils
