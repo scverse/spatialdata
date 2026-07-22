@@ -192,7 +192,9 @@ def test_add_transformation(fully_connected_two_point_graph):
         tm.add_transformation(cs1, cs2, transform)
 
         assert tm.graph.has_edge(cs1, cs2)
-        assert tm.graph[cs1][cs2][0][TRANSFORM_KEY] == transform
+        # Get the first edge key and check the transformation
+        edge_key = tm._get_edge_key_from_transform(transform)
+        assert tm.graph[cs1][cs2][edge_key][TRANSFORM_KEY] == transform
 
 
 def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
@@ -224,7 +226,7 @@ def test_get_existing_transformation(fully_connected_two_point_graph):
     tm.add_transformation(cs1, cs2, transform)
 
     retrieved = tm.get_existing_direct_transformations(cs1, cs2)
-    assert retrieved == transform
+    assert retrieved == [transform]
 
 
 def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph):
@@ -241,8 +243,8 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
         tm.get_existing_direct_transformations(cs1, cs2)
 
 
-def test_remove_transformation(fully_connected_two_point_graph):
-    """Test removing a transformation."""
+def test_remove_all_transformations_between_coordinate_systems(fully_connected_two_point_graph):
+    """Test removing all transformations  between coordinate systems."""
     with suppress_direct_internal_attribute_access_warning():
         tm = TransformationManager()
         [cs1, cs2], [transform] = fully_connected_two_point_graph
@@ -251,12 +253,12 @@ def test_remove_transformation(fully_connected_two_point_graph):
 
         tm.add_transformation(cs1, cs2, transform)
 
-        tm.remove_all_transformations(cs1, cs2)
+        tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
         assert not tm.graph.has_edge(cs1, cs2)
 
 
-def test_remove_transformation_nonexistent(fully_connected_two_point_graph):
-    """Test that removing a non-existent transformation raises TransformationNotFoundError."""
+def test_remove_all_transformation_nonexistent(fully_connected_two_point_graph):
+    """Test that removing non-existent transformations between coordinate systems raises TransformationNotFoundError."""
     with suppress_direct_internal_attribute_access_warning():
         tm = TransformationManager()
         [cs1, cs2], _ = fully_connected_two_point_graph
@@ -265,7 +267,41 @@ def test_remove_transformation_nonexistent(fully_connected_two_point_graph):
         with pytest.raises(
             TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
         ):
-            tm.remove_all_transformations(cs1, cs2)
+            tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
+
+
+def test_remove_specific_transformation_between_coordinate_systems(five_point_graph):
+    """Test removing specific transformation between coordinate systems."""
+
+    with suppress_direct_internal_attribute_access_warning():
+        tm = TransformationManager()
+        [_cs1, _cs2, cs3, _cs4, cs5], [_transform1, _transform2, _transform3, transform4, transform5] = five_point_graph
+        tm.add_coordinate_system(cs3)
+        tm.add_coordinate_system(cs5)
+
+        tm.add_transformation(cs3, cs5, transform4)
+        tm.add_transformation(cs3, cs5, transform5)
+
+        tm.remove_specific_transformation(cs3, cs5, transform4)
+        assert not tm.graph.has_edge(cs3, cs5, key=tm._get_edge_key_from_transform(transform4))
+
+
+def test_remove_specific_transformation_between_coordinate_systems_non_existent(five_point_graph):
+    """
+    Test that removing non-existent specific transformation between coordinate systems raises
+    TransformationNotFoundError.
+    """
+
+    with suppress_direct_internal_attribute_access_warning():
+        tm = TransformationManager()
+        [_cs1, _cs2, cs3, _cs4, cs5], [_transform1, _transform2, _transform3, transform4, transform5] = five_point_graph
+        tm.add_coordinate_system(cs3)
+        tm.add_coordinate_system(cs5)
+
+        with pytest.raises(
+            TransformationNotFoundError, match=f"Transformation from '{cs3.name}' to '{cs5.name}' not found"
+        ):
+            tm.remove_specific_transformation(cs3, cs5, transform4)
 
 
 def test_get_all_shortest_transformation_sequences_direct(four_point_graph):
@@ -354,17 +390,16 @@ def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges
     tm.add_transformation(cs2, cs3, transform2)
     tm.add_transformation(cs1, cs4, transform2)
     tm.add_transformation(cs4, cs3, transform1)
-    tm.add_transformation(cs1, cs3, transform3)
-    tm.add_transformation(cs4, cs5, transform4)
-    tm.add_transformation(cs4, cs5, transform5)
+    # tm.add_transformation(cs1, cs3, transform3)
+    tm.add_transformation(cs3, cs5, transform4)
+    tm.add_transformation(cs3, cs5, transform5)
 
     sequences = tm.get_all_shortest_transformation_sequences(
         cs1, cs5, expected_intermediate_transformations=[transform4]
     )
-    assert len(sequences) == 3
+    assert len(sequences) == 2
     assert [transform1, transform2, transform4] in sequences
     assert [transform2, transform1, transform4] in sequences
-    assert [transform3, transform4] in sequences
 
 
 def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges_failure(five_point_graph):
@@ -382,11 +417,11 @@ def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges
     tm.add_transformation(cs1, cs4, transform2)
     tm.add_transformation(cs4, cs3, transform1)
     tm.add_transformation(cs1, cs3, transform3)
-    tm.add_transformation(cs4, cs5, transform4)
-    tm.add_transformation(cs4, cs5, transform5)
+    tm.add_transformation(cs3, cs5, transform4)
+    tm.add_transformation(cs3, cs5, transform5)
 
     with pytest.raises(TransformationPathAmbiguousError, match="Transformation Path ambiguous"):
-        tm.get_all_shortest_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4])
+        tm.get_all_shortest_transformation_sequences(cs1, cs5)
 
 
 def test_get_all_transformation_sequences(four_point_graph):
@@ -446,8 +481,8 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_success(
     tm.add_transformation(cs1, cs4, transform2)
     tm.add_transformation(cs4, cs3, transform1)
     tm.add_transformation(cs1, cs3, transform3)
-    tm.add_transformation(cs4, cs5, transform4)
-    tm.add_transformation(cs4, cs5, transform5)
+    tm.add_transformation(cs3, cs5, transform4)
+    tm.add_transformation(cs3, cs5, transform5)
 
     sequences = tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4])
     assert len(sequences) == 3
@@ -471,11 +506,11 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_failure(
     tm.add_transformation(cs1, cs4, transform2)
     tm.add_transformation(cs4, cs3, transform1)
     tm.add_transformation(cs1, cs3, transform3)
-    tm.add_transformation(cs4, cs5, transform4)
-    tm.add_transformation(cs4, cs5, transform5)
+    tm.add_transformation(cs3, cs5, transform4)
+    tm.add_transformation(cs3, cs5, transform5)
 
     with pytest.raises(TransformationPathAmbiguousError, match="Transformation Path ambiguous"):
-        tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4])
+        tm.get_all_transformation_sequences(cs1, cs5)
 
 
 def test_get_all_transformation_sequences_no_path(four_point_graph):

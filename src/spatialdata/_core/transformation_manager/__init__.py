@@ -375,8 +375,8 @@ class TransformationManager:
         with suppress_direct_internal_attribute_access_warning():
             transforms = []
             assert target_cs in self.graph[source_cs], TransformationNotFoundError(source_cs.name, target_cs.name)
-            for _edge_key, edge in self.graph[source_cs][target_cs]:
-                transform: BaseTransformation = edge[TRANSFORM_KEY]
+            for edge_data in self.graph[source_cs][target_cs].values():
+                transform: BaseTransformation = edge_data[TRANSFORM_KEY]
                 transforms.append(transform)
             return transforms
 
@@ -415,7 +415,7 @@ class TransformationManager:
             )
             self.graph.remove_edge(source_cs, target_cs, key=expected_edge_key)
 
-    def remove_all_transformations(
+    def remove_all_transformations_between_coordinate_systems(
         self,
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
@@ -441,12 +441,13 @@ class TransformationManager:
         # also checks if source_cs and target_cs exist
         with suppress_direct_internal_attribute_access_warning():
             assert len(self.graph[source_cs][target_cs]), TransformationNotFoundError(source_cs.name, target_cs.name)
-            for edge_key, _edge in self.graph[source_cs][target_cs]:
+            for edge_key in list(self.graph[source_cs][target_cs].keys()):
+                # need to covert keys() to list to freeze it, else it will change during the following removal
                 self.graph.remove_edge(source_cs, target_cs, key=edge_key)
 
     def _get_transformation_sequences_from_path_after_disambiguation(
         self,
-        paths: Sequence[list[NgffCoordinateSystem]],
+        paths: list[list[NgffCoordinateSystem]],
         expected_intermediate_transformations: list[BaseTransformation] | None,
     ) -> list[list[BaseTransformation]]:
         """
@@ -471,11 +472,12 @@ class TransformationManager:
                 self._get_edge_key_from_transform(it) for it in expected_intermediate_transformations
             }
         all_sequences = []
-        for path in paths:
+        deduplicated_paths = list({repr(x): x for x in paths}.values())
+        for path in deduplicated_paths:
             sequence = []
             for i in range(len(path) - 1):
                 edge_data = self.graph[path[i]][path[i + 1]]
-                if len(edge_data) >= 1:
+                if len(edge_data) > 1:
                     # when there are multiple edges between a pair of coordinate systems in the path
                     intermediate_transformation_key_here = intermediate_transformation_edge_keys & set(edge_data.keys())
                     if len(intermediate_transformation_key_here) == 0:
@@ -486,7 +488,9 @@ class TransformationManager:
                     # choosing the first one arbitrarily
                     sequence.append(edge_data[edge_key_to_use][TRANSFORM_KEY])
                 else:
-                    sequence.append(edge_data[0][TRANSFORM_KEY])
+                    # Only one edge, no ambiguity
+                    edge_key = next(iter(edge_data.keys()))
+                    sequence.append(edge_data[edge_key][TRANSFORM_KEY])
             all_sequences.append(sequence)
         return all_sequences
 
@@ -528,7 +532,7 @@ class TransformationManager:
         """
         with suppress_direct_internal_attribute_access_warning():
             try:
-                paths = list(nx.shortest_simple_paths(self.graph, source=source_cs, target=target_cs))
+                paths = list(nx.all_shortest_paths(self.graph, source=source_cs, target=target_cs))
 
             except nx.NetworkXNoPath as nxe:
                 raise TransformationPathNotFoundError(source_cs.name, target_cs.name) from nxe

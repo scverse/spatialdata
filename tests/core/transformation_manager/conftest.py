@@ -62,7 +62,7 @@ def four_point_graph() -> tuple[list[NgffCoordinateSystem], list[Scale | Transla
 
 
 @pytest.fixture
-def five_point_graph() -> tuple[list[NgffCoordinateSystem], list[Scale | Translation]]:
+def five_point_graph() -> tuple[list[NgffCoordinateSystem], list[Scale | Translation | Affine]]:
     """Fixture providing a five-point graph with five coordinate systems and five transformations."""
 
     coordinate_systems = [
