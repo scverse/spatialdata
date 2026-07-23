@@ -509,7 +509,7 @@ class Scale(BaseTransformation):
 class Affine(BaseTransformation):
     def __init__(
         self,
-        matrix: list[Number] | ArrayLike,
+        matrix: list[list[Number]] | ArrayLike,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
     ) -> None:
