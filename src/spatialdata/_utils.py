@@ -35,7 +35,7 @@ def disable_dask_tune_optimization() -> Generator[None, None, None]:
         config.set({"optimization.tune.active": old_setting})
 
 
-def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
+def _parse_list_into_array(array: list[list[Number]] | list[Number] | ArrayLike) -> ArrayLike:
     if isinstance(array, list):
         array = np.array(array)
     if array.dtype != float:
