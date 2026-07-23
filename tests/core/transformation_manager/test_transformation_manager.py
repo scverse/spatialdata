@@ -22,6 +22,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     TransformationPathNotFoundError,
     suppress_direct_internal_attribute_access_warning,
 )
+from spatialdata.transformations.transformations import Sequence
 
 
 def test_initialization():
@@ -320,7 +321,7 @@ def test_get_all_shortest_transformation_sequences_direct(four_point_graph):
 
     sequences = tm.get_all_shortest_transformation_sequences(cs1, cs3)
     assert len(sequences) == 1
-    assert [transform4] in sequences
+    assert Sequence([transform4]) in sequences
 
 
 def test_get_all_shortest_transformation_sequences_indirect_one_path(four_point_graph):
@@ -336,7 +337,7 @@ def test_get_all_shortest_transformation_sequences_indirect_one_path(four_point_
 
     sequences = tm.get_all_shortest_transformation_sequences(cs1, cs3)
     assert len(sequences) == 1
-    assert [transform1, transform2] in sequences
+    assert Sequence([transform1, transform2]) in sequences
 
 
 def test_get_all_shortest_transformation_sequences_indirect_two_paths(five_point_graph):
@@ -355,8 +356,8 @@ def test_get_all_shortest_transformation_sequences_indirect_two_paths(five_point
 
     sequences = tm.get_all_shortest_transformation_sequences(cs1, cs3)
     assert len(sequences) == 2
-    assert [transform1, transform2] in sequences
-    assert [transform2, transform1] in sequences
+    assert Sequence([transform1, transform2]) in sequences
+    assert Sequence([transform2, transform1]) in sequences
 
 
 def test_get_all_shortest_transformation_sequences_no_path(four_point_graph):
@@ -398,8 +399,8 @@ def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges
         cs1, cs5, expected_intermediate_transformations=[transform4]
     )
     assert len(sequences) == 2
-    assert [transform1, transform2, transform4] in sequences
-    assert [transform2, transform1, transform4] in sequences
+    assert Sequence([transform1, transform2, transform4]) in sequences
+    assert Sequence([transform2, transform1, transform4]) in sequences
 
 
 def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges_failure(five_point_graph):
@@ -440,8 +441,8 @@ def test_get_all_transformation_sequences(four_point_graph):
 
     sequences = tm.get_all_transformation_sequences(cs1, cs4)
     assert len(sequences) == 2
-    assert [transform1, transform2, transform3] in sequences
-    assert [transform4, transform3] in sequences
+    assert Sequence([transform1, transform2, transform3]) in sequences
+    assert Sequence([transform4, transform3]) in sequences
 
 
 def test_get_all_transformation_sequences_multiple_paths(five_point_graph):
@@ -461,9 +462,9 @@ def test_get_all_transformation_sequences_multiple_paths(five_point_graph):
 
     sequences = tm.get_all_transformation_sequences(cs1, cs3)
     assert len(sequences) == 3
-    assert [transform1, transform2] in sequences
-    assert [transform2, transform1] in sequences
-    assert [transform3] in sequences
+    assert Sequence([transform1, transform2]) in sequences
+    assert Sequence([transform2, transform1]) in sequences
+    assert Sequence([transform3]) in sequences
 
 
 def test_get_all_transformation_sequences_multiple_paths_multiple_edges_success(five_point_graph):
@@ -486,9 +487,9 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_success(
 
     sequences = tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4])
     assert len(sequences) == 3
-    assert [transform1, transform2, transform4] in sequences
-    assert [transform2, transform1, transform4] in sequences
-    assert [transform3, transform4] in sequences
+    assert Sequence([transform1, transform2, transform4]) in sequences
+    assert Sequence([transform2, transform1, transform4]) in sequences
+    assert Sequence([transform3, transform4]) in sequences
 
 
 def test_get_all_transformation_sequences_multiple_paths_multiple_edges_failure(five_point_graph):

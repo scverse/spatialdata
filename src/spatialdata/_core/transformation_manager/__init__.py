@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Sequence
 
 import networkx as nx
 
@@ -20,7 +19,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     suppress_direct_internal_attribute_access_warning,
 )
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
-from spatialdata.transformations.transformations import BaseTransformation
+from spatialdata.transformations.transformations import BaseTransformation, Sequence
 
 TRANSFORM_KEY = "transformation"
 
@@ -449,7 +448,7 @@ class TransformationManager:
         self,
         paths: list[list[NgffCoordinateSystem]],
         expected_intermediate_transformations: list[BaseTransformation] | None,
-    ) -> list[list[BaseTransformation]]:
+    ) -> list[Sequence]:
         """
         Traverses paths to form sequence of Transformations.
 
@@ -474,7 +473,7 @@ class TransformationManager:
         all_sequences = []
         deduplicated_paths = list({repr(x): x for x in paths}.values())
         for path in deduplicated_paths:
-            sequence = []
+            transformation_list = []
             for i in range(len(path) - 1):
                 edge_data = self.graph[path[i]][path[i + 1]]
                 if len(edge_data) > 1:
@@ -486,12 +485,12 @@ class TransformationManager:
 
                     edge_key_to_use = list(intermediate_transformation_key_here)[0]
                     # choosing the first one arbitrarily
-                    sequence.append(edge_data[edge_key_to_use][TRANSFORM_KEY])
+                    transformation_list.append(edge_data[edge_key_to_use][TRANSFORM_KEY])
                 else:
                     # Only one edge, no ambiguity
                     edge_key = next(iter(edge_data.keys()))
-                    sequence.append(edge_data[edge_key][TRANSFORM_KEY])
-            all_sequences.append(sequence)
+                    transformation_list.append(edge_data[edge_key][TRANSFORM_KEY])
+            all_sequences.append(Sequence(transformation_list))
         return all_sequences
 
     def get_all_shortest_transformation_sequences(
@@ -499,7 +498,7 @@ class TransformationManager:
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
         expected_intermediate_transformations: list[BaseTransformation] | None = None,
-    ) -> list[list[BaseTransformation]]:
+    ) -> list[Sequence]:
         """
         Get all shortest sequences of transformations between two coordinate systems.
 
@@ -515,7 +514,7 @@ class TransformationManager:
 
         Returns
         -------
-        list[list[BaseTransformation]]
+        list[Sequence]
             All shortest sequences of transformations from source_cs to target_cs.
             When multiple transformations are defined between the same coordinate systems, only those containing
             a transformation among intermediate transformations are included.
@@ -549,7 +548,7 @@ class TransformationManager:
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
         expected_intermediate_transformations: list[BaseTransformation] | None = None,
-    ) -> list[list[BaseTransformation]]:
+    ) -> list[Sequence]:
         """
         Get all existing sequences of transformations between two coordinate systems.
 
@@ -565,7 +564,7 @@ class TransformationManager:
 
         Returns
         -------
-        list[list[BaseTransformation]]
+        list[Sequence]
             All existing sequences of transformations from source_cs to target_cs.
             When multiple transformations are defined between the same coordinate systems, only those containing
             a transformation among intermediate transformations are included.

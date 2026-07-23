@@ -52,9 +52,10 @@ class TransformationNotFoundError(KeyError):
     def __init__(self, source_cs_name: str, target_cs_name: str, edge_key: str | None = None) -> None:
         self.input_cs_name = source_cs_name
         self.output_cs_name = target_cs_name
+        self.edge_key = edge_key
         msg = f"Transformation from '{source_cs_name}' to '{target_cs_name}' not found"
         if edge_key is not None:
-            msg = f"{msg} with key '{edge_key}'"
+            msg += f" with key '{edge_key}'"
         super().__init__(msg)
 
 
