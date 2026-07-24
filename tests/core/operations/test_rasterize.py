@@ -11,6 +11,7 @@ from multiscale_spatial_image import MultiscaleSpatialImage
 from shapely import MultiPolygon, box
 from spatial_image import SpatialImage
 from xarray import DataArray, DataTree
+from xarray.testing import assert_identical
 
 from spatialdata import SpatialData, get_extent
 from spatialdata._core.operations.rasterize import rasterize
@@ -117,6 +118,34 @@ def test_rasterize_raster(_get_raster):
                     "ratio is too small; ideally this number would be 100% but there is an offset error that needs "
                     "to be addressed. Also to get 100% we need to disable interpolation"
                 )
+
+
+@pytest.mark.parametrize(
+    ("get_raster", "element_name", "return_regions_as_labels"),
+    [
+        pytest.param(_get_images, "image2d", False, id="image-2d"),
+        pytest.param(_get_labels, "labels2d", True, id="labels-2d"),
+        pytest.param(_get_images, "image3d_multiscale_numpy", False, id="image-3d-multiscale"),
+    ],
+)
+def test_rasterize_raster_in_tiles(get_raster, element_name, return_regions_as_labels):
+    raster = get_raster()[element_name]
+    spatial_axes = get_spatial_axes(get_axes_names(raster))
+    kwargs = {
+        "axes": spatial_axes,
+        "min_coordinate": [0] * len(spatial_axes),
+        "max_coordinate": [10] * len(spatial_axes),
+        "target_coordinate_system": "global",
+        "target_width": 11,
+        "return_regions_as_labels": return_regions_as_labels,
+    }
+
+    expected = rasterize(raster, **kwargs)
+    actual = rasterize(raster, tile_size=7, **kwargs)
+
+    assert any(max(expected.data.chunks[expected.get_axis_num(ax)]) > 7 for ax in spatial_axes)
+    assert all(max(actual.data.chunks[actual.get_axis_num(ax)]) <= 7 for ax in spatial_axes)
+    assert_identical(actual.compute(), expected.compute())
 
 
 def test_rasterize_labels_value_key_specified():
@@ -467,6 +496,54 @@ def test_rasterize_points_selects_label_dtype():
 
     assert result.dtype == np.uint32
     assert result.max().compute() == n_points
+
+
+def test_rasterize_points_in_tiles():
+    points = PointsModel.parse(
+        dd.from_pandas(
+            pd.DataFrame({"x": [0, 1.9, 2, 4.9, 5], "y": [0, 1.9, 2, 2.9, 3]}),
+            npartitions=2,
+        )
+    )
+    kwargs = {
+        "axes": ("x", "y"),
+        "min_coordinate": [0, 0],
+        "max_coordinate": [5, 3],
+        "target_coordinate_system": "global",
+        "target_width": 5,
+    }
+
+    expected = rasterize(points, **kwargs)
+    actual = rasterize(points, tile_size=2, **kwargs)
+
+    assert actual.data.chunks == ((1,), (2, 1), (2, 2, 1))
+    assert_identical(actual.compute(), expected.compute())
+    with pytest.raises(ValueError, match="tile_size must be a positive integer"):
+        rasterize(points, tile_size=0, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "rasterize_kwargs",
+    [
+        {"return_regions_as_labels": True},
+        {"value_key": "cat_values", "return_single_channel": False},
+    ],
+)
+def test_rasterize_shapes_in_tiles(rasterize_kwargs):
+    _, shapes, _ = _rasterize_shapes_prepare_data()
+    kwargs = {
+        "axes": ("x", "y"),
+        "min_coordinate": [0, 0],
+        "max_coordinate": [50, 40],
+        "target_coordinate_system": "global",
+        "target_unit_to_pixels": 1,
+        **rasterize_kwargs,
+    }
+
+    expected = rasterize(shapes, **kwargs)
+    actual = rasterize(shapes, tile_size=17, **kwargs)
+
+    assert_identical(actual.compute(), expected.compute())
 
 
 def test_rasterize_spatialdata(full_sdata):
