@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+from numbers import Integral
 from typing import TYPE_CHECKING
 
 import numpy as np
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
-from shapely import Point
+from shapely import Point, box
 from xarray import DataArray, DataTree
 
 if TYPE_CHECKING:
     import datashader as ds
+    import pandas as pd
 
 from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
@@ -44,6 +46,170 @@ from spatialdata.transformations.transformations import (
 )
 
 VALUES_COLUMN = "__values_column"
+
+
+def _filter_points_for_tile(
+    data: pd.DataFrame,
+    *,
+    x_range: tuple[Number, Number],
+    y_range: tuple[Number, Number],
+    include_x_max: bool,
+    include_y_max: bool,
+) -> pd.DataFrame:
+    x_upper_bound = data["x"] <= x_range[1] if include_x_max else data["x"] < x_range[1]
+    y_upper_bound = data["y"] <= y_range[1] if include_y_max else data["y"] < y_range[1]
+    return data[(data["x"] >= x_range[0]) & x_upper_bound & (data["y"] >= y_range[0]) & y_upper_bound]
+
+
+def _rasterize_tile(
+    partitions: list[pd.DataFrame | GeoDataFrame],
+    *,
+    is_shapes: bool,
+    shape_positions: np.ndarray | None,
+    plot_height: int,
+    plot_width: int,
+    x_range: tuple[Number, Number],
+    y_range: tuple[Number, Number],
+    agg_func: ds.reductions.Reduction,
+    crop: tuple[slice, ...],
+    empty_shape: tuple[int, ...],
+    empty_dtype: np.dtype,
+    empty_fill_value: Number,
+) -> np.ndarray:
+    import datashader as ds
+    import pandas as pd
+
+    canvas = ds.Canvas(plot_height=plot_height, plot_width=plot_width, x_range=x_range, y_range=y_range)
+    if is_shapes:
+        assert len(partitions) == 1
+        data = partitions[0]
+        assert isinstance(data, GeoDataFrame)
+        assert shape_positions is not None
+        visible_data = data.iloc[shape_positions].copy()
+        if len(visible_data) == 0:
+            return np.full(empty_shape, empty_fill_value, dtype=empty_dtype)[crop]
+        aggregate = canvas.polygons(visible_data, "geometry", agg=agg_func)
+    else:
+        data = pd.concat(partitions)
+        aggregate = canvas.points(data, x="x", y="y", agg=agg_func)
+    return np.asarray(aggregate.data)[crop]
+
+
+def _rasterize_tiled(
+    data: DaskDataFrame | GeoDataFrame,
+    *,
+    is_shapes: bool,
+    plot_height: int,
+    plot_width: int,
+    x_range: tuple[Number, Number],
+    y_range: tuple[Number, Number],
+    agg_func: ds.reductions.Reduction,
+    tile_size: int,
+) -> DataArray:
+    import dask
+    import dask.array as da
+    import datashader as ds
+
+    sample = data.iloc[:1].copy() if is_shapes else data._meta
+    sample_canvas = ds.Canvas(plot_height=1, plot_width=1, x_range=x_range, y_range=y_range)
+    if is_shapes:
+        sample_aggregate = sample_canvas.polygons(sample, "geometry", agg=agg_func)
+    else:
+        sample_aggregate = sample_canvas.points(sample, x="x", y="y", agg=agg_func)
+    y_axis = sample_aggregate.dims.index("y")
+    x_axis = sample_aggregate.dims.index("x")
+
+    partitions = list(data.to_delayed()) if isinstance(data, DaskDataFrame) else [dask.delayed(data, pure=True)]
+    spatial_index = data.sindex if is_shapes else None
+    x_scale = (x_range[1] - x_range[0]) / plot_width
+    y_scale = (y_range[1] - y_range[0]) / plot_height
+    rows = []
+    for y_start in range(0, plot_height, tile_size):
+        y_stop = min(y_start + tile_size, plot_height)
+        row = []
+        for x_start in range(0, plot_width, tile_size):
+            x_stop = min(x_start + tile_size, plot_width)
+            render_x_start = max(0, x_start - 1) if is_shapes else x_start
+            render_x_stop = min(plot_width, x_stop + 1) if is_shapes else x_stop
+            render_y_start = max(0, y_start - 1) if is_shapes else y_start
+            render_y_stop = min(plot_height, y_stop + 1) if is_shapes else y_stop
+            tile_x_range = (
+                x_range[0] + render_x_start * x_scale,
+                x_range[0] + render_x_stop * x_scale,
+            )
+            tile_y_range = (
+                y_range[0] + render_y_start * y_scale,
+                y_range[0] + render_y_stop * y_scale,
+            )
+            crop = [slice(None)] * sample_aggregate.ndim
+            crop[y_axis] = slice(
+                y_start - render_y_start,
+                y_stop - render_y_start,
+            )
+            crop[x_axis] = slice(
+                x_start - render_x_start,
+                x_stop - render_x_start,
+            )
+            render_shape = list(sample_aggregate.shape)
+            render_shape[y_axis] = render_y_stop - render_y_start
+            render_shape[x_axis] = render_x_stop - render_x_start
+            empty_fill_value = 0 if sample_aggregate.dtype.kind in "uib" else np.nan
+            tile_partitions = partitions
+            shape_positions = None
+            if is_shapes:
+                assert spatial_index is not None
+                shape_positions = np.sort(
+                    spatial_index.query(
+                        box(tile_x_range[0], tile_y_range[0], tile_x_range[1], tile_y_range[1]),
+                        predicate="intersects",
+                    )
+                )
+            if not is_shapes:
+                tile_partitions = [
+                    dask.delayed(_filter_points_for_tile, pure=True)(
+                        partition,
+                        x_range=tile_x_range,
+                        y_range=tile_y_range,
+                        include_x_max=x_stop == plot_width,
+                        include_y_max=y_stop == plot_height,
+                    )
+                    for partition in partitions
+                ]
+            tile = dask.delayed(_rasterize_tile, pure=True)(
+                tile_partitions,
+                is_shapes=is_shapes,
+                shape_positions=shape_positions,
+                plot_height=render_y_stop - render_y_start,
+                plot_width=render_x_stop - render_x_start,
+                x_range=tile_x_range,
+                y_range=tile_y_range,
+                agg_func=agg_func,
+                crop=tuple(crop),
+                empty_shape=tuple(render_shape),
+                empty_dtype=sample_aggregate.dtype,
+                empty_fill_value=empty_fill_value,
+            )
+            shape = list(sample_aggregate.shape)
+            shape[y_axis] = y_stop - y_start
+            shape[x_axis] = x_stop - x_start
+            row.append(da.from_delayed(tile, shape=tuple(shape), dtype=sample_aggregate.dtype))
+        rows.append(da.concatenate(row, axis=x_axis))
+    aggregate = da.concatenate(rows, axis=y_axis)
+
+    coords = {
+        "y": y_range[0] + (np.arange(plot_height) + 0.5) * y_scale,
+        "x": x_range[0] + (np.arange(plot_width) + 0.5) * x_scale,
+    }
+    for dim in sample_aggregate.dims:
+        if dim not in coords:
+            coords[dim] = sample_aggregate.coords[dim].values
+    return DataArray(
+        aggregate,
+        coords=coords,
+        dims=sample_aggregate.dims,
+        name=sample_aggregate.name,
+        attrs=sample_aggregate.attrs,
+    )
 
 
 def _compute_target_dimensions(
@@ -167,9 +333,9 @@ def rasterize(
     value_key: str | None = None,
     table_name: str | None = None,
     return_regions_as_labels: bool = False,
-    # extra arguments only for shapes and points
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
+    tile_size: int | None = None,
 ) -> SpatialData | DataArray:
     """
     Rasterize a `SpatialData` object or a `SpatialElement` (image, labels, points, shapes).
@@ -230,6 +396,9 @@ def rasterize(
     return_single_channel
         Only used when rasterizing points and shapes and when `value_key` refers to a categorical column. If `False`,
         each category will be rasterized in a separate channel.
+    tile_size
+        Maximum size, in pixels, of each spatial output chunk. For points and shapes, this controls the Datashader
+        canvas size. For images and labels, this controls the Dask output chunks.
 
     Returns
     -------
@@ -276,6 +445,9 @@ def rasterize(
     - for shapes, each pixel gets a single index among the ones of the shapes that intersect it (the index of the
       shapes is interpreted as a categorical column and then the `first` function is used).
     """
+    if tile_size is not None and (isinstance(tile_size, bool) or not isinstance(tile_size, Integral) or tile_size <= 0):
+        raise ValueError("tile_size must be a positive integer.")
+
     if isinstance(data, SpatialData):
         if sdata is not None:
             raise ValueError("When data is a SpatialData object, sdata must be None.")
@@ -303,6 +475,7 @@ def rasterize(
                     sdata=data,
                     return_regions_as_labels=return_regions_as_labels,
                     return_single_channel=return_single_channel if element_type in ("points", "shapes") else None,
+                    tile_size=tile_size,
                 )
                 new_name = f"{name}_rasterized_{element_type}"
                 model = get_model(rasterized)
@@ -331,6 +504,7 @@ def rasterize(
             target_width=target_width,
             target_height=target_height,
             target_depth=target_depth,
+            tile_size=tile_size,
         )
         transformations = get_transformation(rasterized, get_all=True)
         assert isinstance(transformations, dict)
@@ -368,6 +542,7 @@ def rasterize(
             return_regions_as_labels=return_regions_as_labels,
             agg_func=agg_func,
             return_single_channel=return_single_channel,
+            tile_size=tile_size,
         )
     raise ValueError(f"Unsupported model {model}.")
 
@@ -509,6 +684,7 @@ def rasterize_images_labels(
     target_width: float | None = None,
     target_height: float | None = None,
     target_depth: float | None = None,
+    tile_size: int | None = None,
 ) -> DataArray:
     import dask_image.ndinterp
 
@@ -580,6 +756,14 @@ def rasterize_images_labels(
         if f is not None:
             output_shape_.append(int(f))
     output_shape = tuple(output_shape_)
+    output_chunks = None
+    if tile_size is not None:
+        output_chunks = tuple(
+            min(tile_size, output_shape[i])
+            if ax in spatial_axes
+            else min(xdata.data.chunksize[xdata.get_axis_num(ax)], output_shape[i])
+            for i, ax in enumerate(dims)
+        )
 
     # get kwargs and schema
     schema = get_model(data)
@@ -596,6 +780,7 @@ def rasterize_images_labels(
         xdata.data,
         matrix=matrix,
         output_shape=output_shape,
+        output_chunks=output_chunks,
         **kwargs,
     )
     assert isinstance(transformed_dask, DaskArray)
@@ -630,6 +815,7 @@ def rasterize_shapes_points(
     return_regions_as_labels: bool = False,
     agg_func: str | ds.reductions.Reduction | None = None,
     return_single_channel: bool | None = None,
+    tile_size: int | None = None,
 ) -> DataArray:
     import datashader as ds
 
@@ -653,9 +839,8 @@ def rasterize_shapes_points(
     data = data[columns]
 
     plot_width, plot_height = int(target_width), int(target_height)
-    y_range = [min_coordinate[axes.index("y")], max_coordinate[axes.index("y")]]
-    x_range = [min_coordinate[axes.index("x")], max_coordinate[axes.index("x")]]
-
+    y_range = (min_coordinate[axes.index("y")], max_coordinate[axes.index("y")])
+    x_range = (min_coordinate[axes.index("x")], max_coordinate[axes.index("x")])
     t = get_transformation(data, target_coordinate_system)
     if not isinstance(t, Identity):
         data = transform(data, to_coordinate_system=target_coordinate_system)
@@ -701,13 +886,26 @@ def rasterize_shapes_points(
 
         agg_func = getattr(ds, agg_func)(column=value_key)
 
-    cnv = ds.Canvas(plot_height=plot_height, plot_width=plot_width, x_range=x_range, y_range=y_range)
-
-    if isinstance(data, GeoDataFrame):
+    is_shapes = isinstance(data, GeoDataFrame)
+    if is_shapes:
         data = to_polygons(data)
-        agg = cnv.polygons(data, "geometry", agg=agg_func)
+    if tile_size is None:
+        cnv = ds.Canvas(plot_height=plot_height, plot_width=plot_width, x_range=x_range, y_range=y_range)
+        if is_shapes:
+            agg = cnv.polygons(data, "geometry", agg=agg_func)
+        else:
+            agg = cnv.points(data, x="x", y="y", agg=agg_func)
     else:
-        agg = cnv.points(data, x="x", y="y", agg=agg_func)
+        agg = _rasterize_tiled(
+            data,
+            is_shapes=is_shapes,
+            plot_height=plot_height,
+            plot_width=plot_width,
+            x_range=x_range,
+            y_range=y_range,
+            agg_func=agg_func,
+            tile_size=int(tile_size),
+        )
 
     if label_index_to_category is not None and isinstance(agg_func, ds.first):
         agg.attrs["label_index_to_category"] = label_index_to_category
