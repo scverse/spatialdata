@@ -446,6 +446,29 @@ def test_rasterize_points():
     assert d[res[1, 2]] == 4
 
 
+def test_rasterize_points_selects_label_dtype():
+    n_points = np.iinfo(np.uint16).max + 1
+    points = PointsModel.parse(
+        dd.from_pandas(
+            pd.DataFrame({"x": np.arange(n_points), "y": np.zeros(n_points)}),
+            npartitions=1,
+        )
+    )
+
+    result = rasterize(
+        points,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[n_points, 1],
+        target_coordinate_system="global",
+        target_width=n_points,
+        return_regions_as_labels=True,
+    )
+
+    assert result.dtype == np.uint32
+    assert result.max().compute() == n_points
+
+
 def test_rasterize_spatialdata(full_sdata):
     sdata = full_sdata.subset(
         ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale", "points_0", "circles"]
