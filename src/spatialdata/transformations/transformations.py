@@ -110,6 +110,15 @@ class BaseTransformation(ABC):
 
     @abstractmethod
     def inverse(self) -> BaseTransformation:
+        """
+        Return the inverse of the transformation.
+
+        Returns
+        -------
+        BaseTransformation
+            A new transformation that is the inverse of this one, such that applying
+            both in sequence yields the identity transformation.
+        """
         pass
 
     # @abstractmethod
@@ -118,8 +127,24 @@ class BaseTransformation(ABC):
 
     @abstractmethod
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-        pass
+       
+        """
+        Return the affine matrix representation of the transformation.
 
+        Parameters
+        ----------
+        input_axes
+            The axes of the input coordinate system, e.g. ``("x", "y")`` or ``("x", "y", "z")``.
+        output_axes
+            The axes of the output coordinate system.
+
+        Returns
+        -------
+        ArrayLike
+            A homogeneous affine matrix of shape ``(len(output_axes) + 1, len(input_axes) + 1)``.
+            The last row is always ``[0, 0, ..., 1]``.
+        """
+        pass
     def to_affine(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> Affine:
         affine_matrix = self.to_affine_matrix(input_axes, output_axes)
         return Affine(affine_matrix, input_axes, output_axes)
