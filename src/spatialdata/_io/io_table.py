@@ -9,6 +9,7 @@ from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
 
+from spatialdata._io.exceptions import FormatVersionUnknownError
 from spatialdata._io.format import (
     CurrentTablesFormat,
     TablesFormats,
@@ -62,10 +63,35 @@ def write_table(
     else:
         region, region_key, instance_key = (None, None, None)
 
-    write_adata(group, name, table)
-    tables_group = group[name]
-    tables_group.attrs["spatialdata-encoding-type"] = group_type
-    tables_group.attrs["region"] = region
-    tables_group.attrs["region_key"] = region_key
-    tables_group.attrs["instance_key"] = instance_key
-    tables_group.attrs["version"] = element_format.spatialdata_format_version
+    # Ensure the table group exists
+    table_group = group.require_group(name=name)
+
+    assert element_format in TablesFormats.values(), FormatVersionUnknownError(
+        element_type="table", version_encountered=element_format
+    )
+
+    if element_format == TablesFormatV02():
+        # solution of passing path directly roughly based on:
+        # https://github.com/scverse/anndata/issues/1548#issuecomment-2199801855
+
+        # Write the table to the path of the table group
+        table.write_zarr(store=str(table_group.store_path), consolidate_metadata=False)
+        # anndata writes to zarr v3 by default, no way to specify, breaks our support for zarr v2
+        # hence the workaround with if-else ladder
+        group = zarr.open_group(group.store_path, mode="a", use_consolidated=False)
+        table_group = group[name]
+    elif element_format == TablesFormatV01():
+        write_adata(group, name, table)
+        table_group = group[name]
+    else:
+        raise NotImplementedError(
+            "This should be unreachable, please raise an issue on Github with this error message "
+            "and a minimum example that works standalone"
+        )
+        # should be unreachable
+
+    table_group.attrs["spatialdata-encoding-type"] = group_type
+    table_group.attrs["region"] = region
+    table_group.attrs["region_key"] = region_key
+    table_group.attrs["instance_key"] = instance_key
+    table_group.attrs["version"] = element_format.spatialdata_format_version
