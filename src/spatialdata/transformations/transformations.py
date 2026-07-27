@@ -127,7 +127,6 @@ class BaseTransformation(ABC):
 
     @abstractmethod
     def to_affine_matrix(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> ArrayLike:
-       
         """
         Return the affine matrix representation of the transformation.
 
@@ -145,6 +144,7 @@ class BaseTransformation(ABC):
             The last row is always ``[0, 0, ..., 1]``.
         """
         pass
+
     def to_affine(self, input_axes: tuple[ValidAxis_t, ...], output_axes: tuple[ValidAxis_t, ...]) -> Affine:
         affine_matrix = self.to_affine_matrix(input_axes, output_axes)
         return Affine(affine_matrix, input_axes, output_axes)
