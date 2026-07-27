@@ -64,6 +64,7 @@ extra  = [
 [dependency-groups]
 dev = [
     "bump2version",
+    "prek>=0.4.11",
 ]
 test = [
     "pytest",
