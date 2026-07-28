@@ -16,7 +16,6 @@ import pytest
 import zarr
 from anndata import AnnData
 from numpy.random import default_rng
-from packaging.version import Version
 from shapely import MultiPolygon, Polygon
 from upath import UPath
 from xarray import DataArray
@@ -1294,8 +1293,7 @@ def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
 
     Regression test for https://github.com/scverse/spatialdata/issues/399
     Previously this raised TypeError: expected unicode string, found nan.
-    Now the write succeeds, though NaN values in object-dtype columns are
-    converted to the string "nan" after round-trip.
+    Now the write succeeds, and NaN values are preserved round trip
     """
     from spatialdata.models import TableModel
 
@@ -1329,8 +1327,5 @@ def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
 
     assert r1.iloc[0] == "string"
     assert r2.iloc[1] == 3
-    if Version(pd.__version__) >= Version("3"):
-        assert pd.isna(r1.iloc[1])
-    else:  # After round-trip, NaN in object-dtype column becomes string "nan" on pandas 2
-        assert r1.iloc[1] == "nan"
+    assert pd.isna(r1.iloc[1])
     assert np.isnan(r2.iloc[0])
