@@ -9,6 +9,7 @@ from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
 
+from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._io.exceptions import FormatVersionUnknownError
 from spatialdata._io.format import (
     CurrentTablesFormat,
@@ -74,13 +75,17 @@ def write_table(
         # solution of passing path directly roughly based on:
         # https://github.com/scverse/anndata/issues/1548#issuecomment-2199801855
 
+        # resolve the store from the group
+        # needed by `AnnData.write_zarr` below to directly write into the path of the group
+        resolved_store = _resolve_zarr_store(table_group)
+
         # Write the table to the path of the table group
-        table.write_zarr(store=str(table_group.store_path), consolidate_metadata=False)
+        table.write_zarr(store=resolved_store, consolidate_metadata=False)
         # anndata writes to zarr v3 by default, no way to specify, breaks our support for zarr v2
         # hence the workaround with if-else ladder
-        group = zarr.open_group(group.store_path, mode="a", use_consolidated=False)
         table_group = group[name]
     elif element_format == TablesFormatV01():
+        table.strings_to_categoricals()
         write_adata(group, name, table)
         table_group = group[name]
     else:
