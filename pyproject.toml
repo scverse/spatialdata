@@ -246,3 +246,24 @@ memray-flame = "memray flamegraph --temporal"
 
 [tool.pixi.environments]
 profiling = { features = ["profiling"], solve-group = "default" }
+
+[tool.hatch.envs.test]
+dependency-groups = ["test"]
+
+[tool.hatch.envs.test-anndata-pandas]
+template = "test"
+extra-dependencies = ["zarr>=3"]
+scripts.test-readwrite = ["pip list|grep anndata && pip list|grep pandas && pytest tests/io/test_readwrite.py"]
+scripts.test-all = ["pip list|grep anndata && pip list|grep pandas && pytest ."]
+
+[[tool.hatch.envs.test-anndata-pandas.matrix]]
+anndata-pandas = ["0.13-2", "0.13-3"]
+
+[tool.hatch.envs.test-anndata-pandas.overrides]
+matrix.anndata-pandas.extra-dependencies = [
+    # every option when if is True gets included
+    {value="anndata~=0.13", if = ["0.13-2"]},
+    {value="pandas>=2.3,<3", if = ["0.13-2"]},
+    {value="anndata~=0.13", if = ["0.13-3"]},
+    {value="pandas~=3.0", if = ["0.13-3"]},
+]
