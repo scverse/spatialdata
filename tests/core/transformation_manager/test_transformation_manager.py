@@ -213,7 +213,7 @@ def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
         tm.add_transformation(cs1, cs2, transform)
 
 
-def test_get_existing_transformation(fully_connected_two_point_graph):
+def test_get_direct_transformations(fully_connected_two_point_graph):
     """Test getting an existing transformation."""
     tm = TransformationManager()
     [cs1, cs2], [transform] = fully_connected_two_point_graph
@@ -226,7 +226,7 @@ def test_get_existing_transformation(fully_connected_two_point_graph):
     assert retrieved == [transform]
 
 
-def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph):
+def test_get_direct_transformations_nonexistent(fully_connected_two_point_graph):
     """Test getting a non-existent transformation."""
     tm = TransformationManager()
     coordinate_systems, _transformations = fully_connected_two_point_graph
@@ -234,13 +234,11 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
 
-    with pytest.raises(
-        TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
-    ):
-        tm.get_direct_transformations(cs1, cs2)
+    retrieved = tm.get_direct_transformations(cs1, cs2)
+    assert retrieved == []
 
 
-def test_remove_all_transformations_between_coordinate_systems(fully_connected_two_point_graph):
+def test_remove_all_transformations_between_coordinate_systems(fully_connected_two_point_graph, mocker):
     """Test removing all transformations  between coordinate systems."""
 
     tm = TransformationManager()
@@ -250,21 +248,23 @@ def test_remove_all_transformations_between_coordinate_systems(fully_connected_t
 
     tm.add_transformation(cs1, cs2, transform)
 
+    spy = mocker.spy(tm.graph, "remove_edge")
     tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
+    assert spy.call_count == 1
     assert not tm.graph.has_edge(cs1, cs2)
 
 
-def test_remove_all_transformation_nonexistent(fully_connected_two_point_graph):
+def test_remove_all_transformation_nonexistent(fully_connected_two_point_graph, mocker):
     """Test that removing non-existent transformations between coordinate systems raises TransformationNotFoundError."""
 
     tm = TransformationManager()
     [cs1, cs2], _ = fully_connected_two_point_graph
     tm.graph.add_node(cs1)
     tm.graph.add_node(cs2)
-    with pytest.raises(
-        TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
-    ):
-        tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
+
+    spy = mocker.spy(tm.graph, "remove_edge")
+    tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
+    assert spy.call_count == 0
 
 
 def test_remove_specific_transformation_between_coordinate_systems(five_point_graph):

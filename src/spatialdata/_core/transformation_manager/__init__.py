@@ -341,22 +341,21 @@ class TransformationManager:
 
         Returns
         -------
-        List of transformations
+        List of transformations (empty if there are no direct transformations).
 
         Raises
         ------
         CoordinateSystemNotFoundError
             If either coordinate system does not exist.
-        TransformationNotFoundError
-            If the transformation does not exist.
         """
-        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs)
-        # also checks if source_cs and target_cs exist
+        self.assert_coordinate_system_exists(source_cs)
+        self.assert_coordinate_system_exists(target_cs)
+
         transforms = []
-        assert target_cs in self.graph[source_cs], TransformationNotFoundError(source_cs.name, target_cs.name)
-        for edge_data in self.graph[source_cs][target_cs].values():
-            transform: BaseTransformation = edge_data[TRANSFORM_KEY]
-            transforms.append(transform)
+        if self.graph.has_edge(source_cs, target_cs):
+            for edge_data in self.graph[source_cs][target_cs].values():
+                transform: BaseTransformation = edge_data[TRANSFORM_KEY]
+                transforms.append(transform)
         return transforms
 
     def remove_specific_transformation(
@@ -415,11 +414,12 @@ class TransformationManager:
         TransformationNotFoundError
             If no transformation exists between the coordiante systems
         """
-        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs)
-        # also checks if source_cs and target_cs exist
-        for edge_key in list(self.graph[source_cs][target_cs].keys()):
-            # need to covert keys() to list to freeze it, else it will change during the following removal
-            self.graph.remove_edge(source_cs, target_cs, key=edge_key)
+        self.assert_coordinate_system_exists(source_cs)
+        self.assert_coordinate_system_exists(target_cs)
+        if self.graph.has_edge(source_cs, target_cs):
+            for edge_key in list(self.graph[source_cs][target_cs].keys()):
+                # need to covert keys() to list to freeze it, else it will change during the following removal
+                self.graph.remove_edge(source_cs, target_cs, key=edge_key)
 
     def _get_transformation_sequences_from_path_after_disambiguation(
         self,
