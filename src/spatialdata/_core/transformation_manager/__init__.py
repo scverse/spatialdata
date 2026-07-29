@@ -23,13 +23,13 @@ TRANSFORM_KEY = "transformation"
 class TransformationManager:
     def __init__(self) -> None:
         """Initialize a TransformationManager with empty graph and mappings."""
-        self._graph = nx.MultiDiGraph[NgffCoordinateSystem]()
+        self._graph: nx.MultiDiGraph[NgffCoordinateSystem] = nx.MultiDiGraph()
         # MultiDiGraph with NgffCoordinateSystem objects as nodes and transforms as edge attributes
         self._element_to_cs_mapping: dict[str, NgffCoordinateSystem] = {}
         # mapping element_name to the coordinate system to which the element belongs
 
     @property
-    def graph(self) -> nx.MultiDiGraph:
+    def graph(self) -> nx.MultiDiGraph[NgffCoordinateSystem]:
         """
         Get the internal transformation graph.
 
