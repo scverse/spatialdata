@@ -62,9 +62,9 @@ class TransformationManager:
         """
         return self._element_to_cs_mapping
 
-    def check_if_element_exists_else_raise_error(self, element_name: str) -> None:
+    def assert_element_exists(self, element_name: str) -> None:
         """
-        Check if an element exists in the transformation manager.
+        Assert that an element exists in the transformation manager.
 
         Parameters
         ----------
@@ -79,9 +79,26 @@ class TransformationManager:
         if element_name not in self.element_to_cs_mapping:
             raise ElementNotFoundError(element_name)
 
-    def check_if_coordinate_system_exists_else_raise_error(self, cs: NgffCoordinateSystem) -> None:
+    def assert_element_does_not_exists(self, element_name: str) -> None:
         """
-        Check if a coordinate system exists in the graph.
+        Assert than an element doesn't exist in the transformation manager.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element to check.
+
+        Raises
+        ------
+        ElementAlreadyExistsError
+            If the element already exists.
+        """
+        if element_name in self.element_to_cs_mapping:
+            raise ElementAlreadyExistsError(element_name)
+
+    def assert_coordinate_system_exists(self, cs: NgffCoordinateSystem) -> None:
+        """
+        Assert that coordinate system exists in the graph.
 
         Parameters
         ----------
@@ -96,11 +113,11 @@ class TransformationManager:
         if cs not in self.graph:
             raise CoordinateSystemNotFoundError(cs.name)
 
-    def check_if_any_edge_exists_else_raise_error(
+    def assert_an_edge_exists_between_coordinate_systems(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem
     ) -> None:
         """
-        Check if an edge exists between coordinate systems.
+        Assert that an edge exists between coordinate systems.
 
         Parameters
         ----------
@@ -116,14 +133,14 @@ class TransformationManager:
         TransformationNotFoundError
             If the edge does not exist.
         """
-        self.check_if_coordinate_system_exists_else_raise_error(source_cs)
-        self.check_if_coordinate_system_exists_else_raise_error(target_cs)
+        self.assert_coordinate_system_exists(source_cs)
+        self.assert_coordinate_system_exists(target_cs)
         if not self.graph.has_edge(source_cs, target_cs):
             raise TransformationNotFoundError(source_cs.name, target_cs.name)
 
-    def check_if_coordinate_system_has_no_transformations_else_raise_error(self, cs: NgffCoordinateSystem) -> None:
+    def assert_coordinate_system_has_no_transformations(self, cs: NgffCoordinateSystem) -> None:
         """
-        Check if a coordinate system has associated transformations.
+        Assert that coordinate system has no associated transformations.
 
         Parameters
         ----------
@@ -143,9 +160,9 @@ class TransformationManager:
         if transformations:
             raise CoordinateSystemHasTransformationsError(cs.name)
 
-    def check_if_coordinate_system_has_no_elements_else_raise_error(self, cs: NgffCoordinateSystem) -> None:
+    def assert_coordinate_system_has_no_elements(self, cs: NgffCoordinateSystem) -> None:
         """
-        Check if a coordinate system has elements that belong to it.
+        Assert that a coordinate system doesn't have elements belonging to it.
 
         Parameters
         ----------
@@ -177,7 +194,7 @@ class TransformationManager:
             If the coordinate system already exists.
         """
         try:
-            self.check_if_coordinate_system_exists_else_raise_error(cs)
+            self.assert_coordinate_system_exists(cs)
         except CoordinateSystemNotFoundError:
             self.graph.add_node(cs)
             return
@@ -195,17 +212,15 @@ class TransformationManager:
 
         Raises
         ------
-        CoordinateSystemHasTransformationsError
-            If the coordinate system has associated transformations.
-        CoordinateSystemHasElementsError
-            If the coordinate system has associated elements.
+        CannotRemoveCoordinateSystemError
+            If the coordinate system cannot be removed.
         CoordinateSystemNotFoundError
             If the coordinate system is not found
         """
         try:
-            self.check_if_coordinate_system_has_no_transformations_else_raise_error(cs)
-            # also checks if cs exists
-            self.check_if_coordinate_system_has_no_elements_else_raise_error(cs)
+            self.assert_coordinate_system_has_no_transformations(cs)
+            # also asserts that cs exists
+            self.assert_coordinate_system_has_no_elements(cs)
         except (CoordinateSystemHasTransformationsError, CoordinateSystemHasElementsError) as err:
             raise CannotRemoveCoordinateSystemError(cs.name) from err
 
@@ -237,14 +252,9 @@ class TransformationManager:
         CoordinateSystemNotFoundError
             If the coordinate system is not found.
         """
-        try:
-            self.check_if_element_exists_else_raise_error(element_name)
-        except ElementNotFoundError:
-            self.check_if_coordinate_system_exists_else_raise_error(coordinate_system)
-            self.element_to_cs_mapping[element_name] = coordinate_system
-            return
-
-        raise ElementAlreadyExistsError(element_name)
+        self.assert_element_does_not_exists(element_name)
+        self.assert_coordinate_system_exists(coordinate_system)
+        self.element_to_cs_mapping[element_name] = coordinate_system
 
     def get_element_coordinate_system(self, element_name: str) -> NgffCoordinateSystem:
         """
@@ -264,7 +274,7 @@ class TransformationManager:
         ElementNotFoundError
             If the element does not exist.
         """
-        self.check_if_element_exists_else_raise_error(element_name)
+        self.assert_element_exists(element_name)
         return self.element_to_cs_mapping[element_name]
 
     def unset_element(self, element_name: str) -> None:
@@ -281,7 +291,7 @@ class TransformationManager:
         ElementNotFoundError
             If the element has not been registered to any coordinate system.
         """
-        self.check_if_element_exists_else_raise_error(element_name)
+        self.assert_element_exists(element_name)
         del self.element_to_cs_mapping[element_name]
 
     @staticmethod
@@ -309,8 +319,8 @@ class TransformationManager:
         CoordinateSystemNotFoundError
             If either coordinate system does not exist.
         """
-        self.check_if_coordinate_system_exists_else_raise_error(source_cs)
-        self.check_if_coordinate_system_exists_else_raise_error(target_cs)
+        self.assert_coordinate_system_exists(source_cs)
+        self.assert_coordinate_system_exists(target_cs)
 
         edge_key = self._get_edge_key_from_transform(transformation)
         edge_attributes = {TRANSFORM_KEY: transformation}
@@ -340,7 +350,7 @@ class TransformationManager:
         TransformationNotFoundError
             If the transformation does not exist.
         """
-        self.check_if_any_edge_exists_else_raise_error(source_cs, target_cs)
+        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs)
         # also checks if source_cs and target_cs exist
         transforms = []
         assert target_cs in self.graph[source_cs], TransformationNotFoundError(source_cs.name, target_cs.name)
@@ -375,7 +385,7 @@ class TransformationManager:
         TransformationNotFoundError
             If the transformation does not exist.
         """
-        self.check_if_any_edge_exists_else_raise_error(source_cs, target_cs)
+        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs)
         # also checks if source_cs and target_cs exist
         expected_edge_key = self._get_edge_key_from_transform(transformation)
         assert expected_edge_key in self.graph[source_cs][target_cs], TransformationNotFoundError(
@@ -405,9 +415,8 @@ class TransformationManager:
         TransformationNotFoundError
             If no transformation exists between the coordiante systems
         """
-        self.check_if_any_edge_exists_else_raise_error(source_cs, target_cs)
+        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs)
         # also checks if source_cs and target_cs exist
-        assert len(self.graph[source_cs][target_cs]), TransformationNotFoundError(source_cs.name, target_cs.name)
         for edge_key in list(self.graph[source_cs][target_cs].keys()):
             # need to covert keys() to list to freeze it, else it will change during the following removal
             self.graph.remove_edge(source_cs, target_cs, key=edge_key)
@@ -570,7 +579,7 @@ class TransformationManager:
         -------
         List of transformations
         """
-        self.check_if_coordinate_system_exists_else_raise_error(cs)
+        self.assert_coordinate_system_exists(cs)
 
         transformations = []
         # Check outgoing edges (cs -> other)
@@ -603,7 +612,7 @@ class TransformationManager:
             If the coordinate system does not exist.
 
         """
-        self.check_if_coordinate_system_exists_else_raise_error(cs)
+        self.assert_coordinate_system_exists(cs)
 
         elements = []
         for element_name, element_cs in self.element_to_cs_mapping.items():
