@@ -297,7 +297,7 @@ class TransformationManager:
     @staticmethod
     def _get_edge_key_from_transform(transform: BaseTransformation) -> str:
 
-        return repr(transform)
+        return f"{id(transform)}_{transform}"
 
     def add_transformation(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem, transformation: BaseTransformation
