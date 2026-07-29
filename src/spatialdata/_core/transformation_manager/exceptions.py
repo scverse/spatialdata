@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
+
 
 class CoordinateSystemNotFoundError(ValueError):
     """
@@ -118,7 +120,47 @@ class TransformationPathAmbiguousError(ValueError):
     def __init__(self, source_cs_name: str, target_cs_name: str) -> None:
         self.source_cs_name = source_cs_name
         self.target_cs_name = target_cs_name
-        super().__init__(f"Transformation Path ambiguous from {source_cs_name} to {target_cs_name}")
+        base_msg = f"Transformation Path ambiguous from {source_cs_name} to {target_cs_name}."
+        cause_of_confusion = self.cause_of_confusion()
+        msg = f"{base_msg} {cause_of_confusion}" if cause_of_confusion else base_msg
+        super().__init__(msg)
+
+    def cause_of_confusion(self) -> str:
+        return ""
+
+
+class TransformationPathAmbiguousNoEdgeExpectedError(TransformationPathAmbiguousError):
+    def __init__(self, source_cs_name: str, target_cs_name: str) -> None:
+        super().__init__(source_cs_name, target_cs_name)
+
+    def cause_of_confusion(self) -> str:
+
+        return "None of the edges were specified to be expected"
+
+
+class TransformationPathAmbiguousMultipleEdgeExpectedError(TransformationPathAmbiguousError):
+    def __init__(self, source_cs_name: str, target_cs_name: str, number_of_edges_expected: int) -> None:
+        self.number_of_edges_expected = number_of_edges_expected
+        super().__init__(source_cs_name, target_cs_name)
+
+    def cause_of_confusion(self) -> str:
+        return f"Multiple ({self.number_of_edges_expected}) edges were specified to be expected"
+
+
+class TransformationPathNotSimple(ValueError):
+    """
+    Exception raised when a path represented by a list of coordinate systems is not simple.
+
+    A simple path is one in which each coordinate system appears only once
+    """
+
+    def __init__(self, path: list[NgffCoordinateSystem]) -> None:
+        self.path = path
+        css_formatted_one_per_line = "\n".join(repr(cs) for cs in path)
+        super().__init__(
+            f"Transformation Path not simple, i.e., some coordinate systems appear multiple times:\n"
+            f"{css_formatted_one_per_line}"
+        )
 
 
 class CannotRemoveCoordinateSystemError(ValueError):

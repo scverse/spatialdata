@@ -12,7 +12,10 @@ from spatialdata._core.transformation_manager.exceptions import (
     ElementNotFoundError,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
+    TransformationPathAmbiguousMultipleEdgeExpectedError,
+    TransformationPathAmbiguousNoEdgeExpectedError,
     TransformationPathNotFoundError,
+    TransformationPathNotSimple,
 )
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata.transformations.transformations import BaseTransformation, Sequence
@@ -421,7 +424,7 @@ class TransformationManager:
                 # need to covert keys() to list to freeze it, else it will change during the following removal
                 self.graph.remove_edge(source_cs, target_cs, key=edge_key)
 
-    def _get_transformation_sequences_from_path_after_disambiguation(
+    def _get_transformation_sequences_from_simple_paths_after_disambiguation(
         self,
         paths: list[list[NgffCoordinateSystem]],
         expected_intermediate_transformations: list[BaseTransformation] | None,
@@ -441,10 +444,18 @@ class TransformationManager:
         Returns
         -------
             list of sequences of transformations
+
+        Raises
+        ------
+            TransformationPathNotSimple
+                if any path in `paths` is not simple, i.e., has recurring coordinate systems
         """
-        intermediate_transformation_edge_keys = set()
+        for path in paths:
+            assert len(set(path)) == len(path), TransformationPathNotSimple(path)
+
+        expected_intermediate_transformation_edge_keys = set()
         if expected_intermediate_transformations is not None:
-            intermediate_transformation_edge_keys |= {
+            expected_intermediate_transformation_edge_keys |= {
                 self._get_edge_key_from_transform(it) for it in expected_intermediate_transformations
             }
         all_sequences = []
@@ -452,16 +463,24 @@ class TransformationManager:
         for path in deduplicated_paths:
             transformation_list = []
             for i in range(len(path) - 1):
-                edge_data = self.graph[path[i]][path[i + 1]]
+                source_cs_here, target_cs_here = path[i], path[i + 1]
+                edge_data = self.graph[source_cs_here][target_cs_here]
                 if len(edge_data) > 1:
                     # when there are multiple edges between a pair of coordinate systems in the path
-                    intermediate_transformation_key_here = intermediate_transformation_edge_keys & set(edge_data.keys())
-                    if len(intermediate_transformation_key_here) == 0:
-                        # transformation was not specified in `intermediate_transformations` for disambiguation
-                        raise TransformationPathAmbiguousError(path[i].name, path[i + 1].name)
-
-                    edge_key_to_use = list(intermediate_transformation_key_here)[0]
-                    # choosing the first one arbitrarily
+                    # find the expected edge based on key
+                    expected_intermediate_transformation_key_here = (
+                        expected_intermediate_transformation_edge_keys & set(edge_data.keys())
+                    )
+                    if len(expected_intermediate_transformation_key_here) == 0:
+                        # transformation was not specified in `expected_intermediate_transformations` for disambiguation
+                        raise TransformationPathAmbiguousNoEdgeExpectedError(source_cs_here.name, target_cs_here.name)
+                    if len(expected_intermediate_transformation_key_here) > 1:
+                        # multiple transformations were specified in `expected_intermediate_transformations`
+                        # for disambiguation
+                        raise TransformationPathAmbiguousMultipleEdgeExpectedError(
+                            source_cs_here.name, target_cs_here.name, len(expected_intermediate_transformation_key_here)
+                        )
+                    edge_key_to_use = list(expected_intermediate_transformation_key_here)[0]
                     transformation_list.append(edge_data[edge_key_to_use][TRANSFORM_KEY])
                 else:
                     # Only one edge, no ambiguity
@@ -512,11 +531,11 @@ class TransformationManager:
             raise TransformationPathNotFoundError(source_cs.name, target_cs.name) from nxe
 
         try:
-            return self._get_transformation_sequences_from_path_after_disambiguation(
+            return self._get_transformation_sequences_from_simple_paths_after_disambiguation(
                 paths, expected_intermediate_transformations
             )
         except TransformationPathAmbiguousError as tpae:
-            raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
+            raise TransformationPathAmbiguousError(source_cs.name, target_cs.name) from tpae
 
     def get_all_transformation_sequences(
         self,
@@ -560,7 +579,7 @@ class TransformationManager:
             raise TransformationPathNotFoundError(source_cs.name, target_cs.name) from nxe
 
         try:
-            return self._get_transformation_sequences_from_path_after_disambiguation(
+            return self._get_transformation_sequences_from_simple_paths_after_disambiguation(
                 paths, expected_intermediate_transformations
             )
         except TransformationPathAmbiguousError as tpae:

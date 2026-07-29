@@ -19,6 +19,8 @@ from spatialdata._core.transformation_manager.exceptions import (
     ElementNotFoundError,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
+    TransformationPathAmbiguousMultipleEdgeExpectedError,
+    TransformationPathAmbiguousNoEdgeExpectedError,
     TransformationPathNotFoundError,
 )
 from spatialdata.transformations.transformations import Sequence
@@ -503,8 +505,8 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_success(
     assert Sequence([transform3, transform4]) in sequences
 
 
-def test_get_all_transformation_sequences_multiple_paths_multiple_edges_failure(five_point_graph):
-    """Test getting all transformation sequences, with multiple paths and multiple edges between nodes."""
+def test_get_all_transformation_sequences_multiple_paths_multiple_edges_no_edge_expected(five_point_graph):
+    """Test getting all transformation sequences with multiple paths and multiple edges, no edge expected."""
     tm = TransformationManager()
     [cs1, cs2, cs3, cs4, cs5], [transform1, transform2, transform3, transform4, transform5] = five_point_graph
     tm.add_coordinate_system(cs1)
@@ -521,8 +523,34 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_failure(
     tm.add_transformation(cs3, cs5, transform4)
     tm.add_transformation(cs3, cs5, transform5)
 
-    with pytest.raises(TransformationPathAmbiguousError, match="Transformation Path ambiguous"):
-        tm.get_all_transformation_sequences(cs1, cs5)
+    with pytest.raises(
+        TransformationPathAmbiguousNoEdgeExpectedError, match="None of the edges were specified to be expected"
+    ):
+        tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[])
+
+
+def test_get_all_transformation_sequences_multiple_paths_multiple_edges_multiple_expected(five_point_graph):
+    """Test getting all transformation sequences with multiple paths and multiple edges, multiple edges expected."""
+    tm = TransformationManager()
+    [cs1, cs2, cs3, cs4, cs5], [transform1, transform2, transform3, transform4, transform5] = five_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs4)
+    tm.add_coordinate_system(cs5)
+
+    tm.add_transformation(cs1, cs2, transform1)
+    tm.add_transformation(cs2, cs3, transform2)
+    tm.add_transformation(cs1, cs4, transform2)
+    tm.add_transformation(cs4, cs3, transform1)
+    tm.add_transformation(cs1, cs3, transform3)
+    tm.add_transformation(cs3, cs5, transform4)
+    tm.add_transformation(cs3, cs5, transform5)
+
+    with pytest.raises(
+        TransformationPathAmbiguousMultipleEdgeExpectedError, match="Multiple.*edges were specified to be expected"
+    ):
+        tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_transformations=[transform4, transform5])
 
 
 def test_get_all_transformation_sequences_no_path(four_point_graph):
