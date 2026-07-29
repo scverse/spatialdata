@@ -194,6 +194,23 @@ def test_add_transformation(fully_connected_two_point_graph):
     assert tm.graph[cs1][cs2][edge_key][TRANSFORM_KEY] == transform
 
 
+def test_add_transformation_existing_edge(fully_connected_two_point_graph):
+    """Test adding a transformation between coordinate systems that already have an edge."""
+    tm = TransformationManager()
+    [cs1, cs2], [transform] = fully_connected_two_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
+
+    tm.add_transformation(cs1, cs2, transform)
+    assert tm.graph.has_edge(cs1, cs2)
+
+    # Add same transformation again between the same coordinate systems
+    tm.add_transformation(cs1, cs2, transform)
+    # Should have just rewritten the edge
+    assert tm.graph.has_edge(cs1, cs2)
+    assert len(tm.graph[cs1][cs2]) == 1
+
+
 def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
     """Test that adding a transformation with non-existent coordinate systems raises CoordinateSystemNotFoundError."""
     tm = TransformationManager()
