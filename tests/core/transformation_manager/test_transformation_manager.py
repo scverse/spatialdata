@@ -20,28 +20,27 @@ from spatialdata._core.transformation_manager.exceptions import (
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
     TransformationPathNotFoundError,
-    suppress_direct_internal_attribute_access_warning,
 )
 from spatialdata.transformations.transformations import Sequence
 
 
 def test_initialization():
     """Test that TransformationManager initializes correctly."""
-    with suppress_direct_internal_attribute_access_warning():
-        tm = TransformationManager()
-        assert len(tm.graph.nodes()) == 0
-        assert len(tm.graph.edges()) == 0
-        assert tm.element_to_cs_mapping == {}
+
+    tm = TransformationManager()
+    assert len(tm.graph.nodes()) == 0
+    assert len(tm.graph.edges()) == 0
+    assert tm.element_to_cs_mapping == {}
 
 
 def test_add_coordinate_system(one_point_graph):
     """Test adding a coordinate system."""
-    with suppress_direct_internal_attribute_access_warning():
-        tm = TransformationManager()
-        [cs1], _ = one_point_graph
 
-        tm.add_coordinate_system(cs1)
-        assert cs1 in tm.graph.nodes()
+    tm = TransformationManager()
+    [cs1], _ = one_point_graph
+
+    tm.add_coordinate_system(cs1)
+    assert cs1 in tm.graph.nodes()
 
 
 def test_add_coordinate_system_duplicate(one_point_graph):
@@ -62,8 +61,7 @@ def test_remove_coordinate_system(one_point_graph):
     tm.add_coordinate_system(cs1)
     tm.remove_coordinate_system(cs1)
 
-    with suppress_direct_internal_attribute_access_warning():
-        assert cs1 not in tm.graph.nodes()
+    assert cs1 not in tm.graph.nodes()
 
 
 def test_remove_coordinate_system_nonexistent(one_point_graph):
@@ -134,10 +132,9 @@ def test_add_element(one_point_graph):
     tm.add_coordinate_system(cs1)
     tm.add_element("image1", cs1)
 
-    with suppress_direct_internal_attribute_access_warning():
-        mapping = tm.element_to_cs_mapping
-        assert "image1" in mapping
-        assert mapping["image1"] == cs1
+    mapping = tm.element_to_cs_mapping
+    assert "image1" in mapping
+    assert mapping["image1"] == cs1
 
 
 def test_add_element_duplicate(one_point_graph):
@@ -163,8 +160,7 @@ def test_unset_element(one_point_graph):
     tm.add_element("image1", cs1)
     tm.unset_element("image1")
 
-    with suppress_direct_internal_attribute_access_warning():
-        assert "image1" not in tm.element_to_cs_mapping
+    assert "image1" not in tm.element_to_cs_mapping
 
 
 def test_unset_element_nonexistent(one_point_graph):
@@ -183,19 +179,19 @@ def test_unset_element_nonexistent(one_point_graph):
 
 def test_add_transformation(fully_connected_two_point_graph):
     """Test adding a transformation between coordinate systems."""
-    with suppress_direct_internal_attribute_access_warning():
-        tm = TransformationManager()
-        [cs1, cs2], [transform] = fully_connected_two_point_graph
 
-        tm.add_coordinate_system(cs1)
-        tm.add_coordinate_system(cs2)
+    tm = TransformationManager()
+    [cs1, cs2], [transform] = fully_connected_two_point_graph
 
-        tm.add_transformation(cs1, cs2, transform)
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
 
-        assert tm.graph.has_edge(cs1, cs2)
-        # Get the first edge key and check the transformation
-        edge_key = tm._get_edge_key_from_transform(transform)
-        assert tm.graph[cs1][cs2][edge_key][TRANSFORM_KEY] == transform
+    tm.add_transformation(cs1, cs2, transform)
+
+    assert tm.graph.has_edge(cs1, cs2)
+    # Get the first edge key and check the transformation
+    edge_key = tm._get_edge_key_from_transform(transform)
+    assert tm.graph[cs1][cs2][edge_key][TRANSFORM_KEY] == transform
 
 
 def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
@@ -246,45 +242,44 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
 
 def test_remove_all_transformations_between_coordinate_systems(fully_connected_two_point_graph):
     """Test removing all transformations  between coordinate systems."""
-    with suppress_direct_internal_attribute_access_warning():
-        tm = TransformationManager()
-        [cs1, cs2], [transform] = fully_connected_two_point_graph
-        tm.add_coordinate_system(cs1)
-        tm.add_coordinate_system(cs2)
 
-        tm.add_transformation(cs1, cs2, transform)
+    tm = TransformationManager()
+    [cs1, cs2], [transform] = fully_connected_two_point_graph
+    tm.add_coordinate_system(cs1)
+    tm.add_coordinate_system(cs2)
 
-        tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
-        assert not tm.graph.has_edge(cs1, cs2)
+    tm.add_transformation(cs1, cs2, transform)
+
+    tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
+    assert not tm.graph.has_edge(cs1, cs2)
 
 
 def test_remove_all_transformation_nonexistent(fully_connected_two_point_graph):
     """Test that removing non-existent transformations between coordinate systems raises TransformationNotFoundError."""
-    with suppress_direct_internal_attribute_access_warning():
-        tm = TransformationManager()
-        [cs1, cs2], _ = fully_connected_two_point_graph
-        tm.graph.add_node(cs1)
-        tm.graph.add_node(cs2)
-        with pytest.raises(
-            TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
-        ):
-            tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
+
+    tm = TransformationManager()
+    [cs1, cs2], _ = fully_connected_two_point_graph
+    tm.graph.add_node(cs1)
+    tm.graph.add_node(cs2)
+    with pytest.raises(
+        TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
+    ):
+        tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
 
 
 def test_remove_specific_transformation_between_coordinate_systems(five_point_graph):
     """Test removing specific transformation between coordinate systems."""
 
-    with suppress_direct_internal_attribute_access_warning():
-        tm = TransformationManager()
-        [_cs1, _cs2, cs3, _cs4, cs5], [_transform1, _transform2, _transform3, transform4, transform5] = five_point_graph
-        tm.add_coordinate_system(cs3)
-        tm.add_coordinate_system(cs5)
+    tm = TransformationManager()
+    [_cs1, _cs2, cs3, _cs4, cs5], [_transform1, _transform2, _transform3, transform4, transform5] = five_point_graph
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs5)
 
-        tm.add_transformation(cs3, cs5, transform4)
-        tm.add_transformation(cs3, cs5, transform5)
+    tm.add_transformation(cs3, cs5, transform4)
+    tm.add_transformation(cs3, cs5, transform5)
 
-        tm.remove_specific_transformation(cs3, cs5, transform4)
-        assert not tm.graph.has_edge(cs3, cs5, key=tm._get_edge_key_from_transform(transform4))
+    tm.remove_specific_transformation(cs3, cs5, transform4)
+    assert not tm.graph.has_edge(cs3, cs5, key=tm._get_edge_key_from_transform(transform4))
 
 
 def test_remove_specific_transformation_between_coordinate_systems_non_existent(five_point_graph):
@@ -293,16 +288,15 @@ def test_remove_specific_transformation_between_coordinate_systems_non_existent(
     TransformationNotFoundError.
     """
 
-    with suppress_direct_internal_attribute_access_warning():
-        tm = TransformationManager()
-        [_cs1, _cs2, cs3, _cs4, cs5], [_transform1, _transform2, _transform3, transform4, transform5] = five_point_graph
-        tm.add_coordinate_system(cs3)
-        tm.add_coordinate_system(cs5)
+    tm = TransformationManager()
+    [_cs1, _cs2, cs3, _cs4, cs5], [_transform1, _transform2, _transform3, transform4, transform5] = five_point_graph
+    tm.add_coordinate_system(cs3)
+    tm.add_coordinate_system(cs5)
 
-        with pytest.raises(
-            TransformationNotFoundError, match=f"Transformation from '{cs3.name}' to '{cs5.name}' not found"
-        ):
-            tm.remove_specific_transformation(cs3, cs5, transform4)
+    with pytest.raises(
+        TransformationNotFoundError, match=f"Transformation from '{cs3.name}' to '{cs5.name}' not found"
+    ):
+        tm.remove_specific_transformation(cs3, cs5, transform4)
 
 
 def test_get_all_shortest_transformation_sequences_direct(four_point_graph):

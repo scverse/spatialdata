@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import warnings
-
 import networkx as nx
 
 from spatialdata._core.transformation_manager.exceptions import (
@@ -12,11 +10,9 @@ from spatialdata._core.transformation_manager.exceptions import (
     CoordinateSystemNotFoundError,
     ElementAlreadyExistsError,
     ElementNotFoundError,
-    InternalAttributeAccessWarning,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
     TransformationPathNotFoundError,
-    suppress_direct_internal_attribute_access_warning,
 )
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 from spatialdata.transformations.transformations import BaseTransformation, Sequence
@@ -47,14 +43,6 @@ class TransformationManager:
         TransformationManager methods whenever possible for better maintainability
         and to ensure proper validation and error handling.
         """
-        warnings.warn(
-            "Direct access to the internal graph is discouraged. "
-            "Please use TransformationManager methods whenever possible for better "
-            "maintainability and to ensure proper validation and error handling.",
-            InternalAttributeAccessWarning,
-            stacklevel=2,
-        )
-
         return self._graph
 
     @property
@@ -72,13 +60,6 @@ class TransformationManager:
         TransformationManager methods whenever possible for better maintainability
         and to ensure proper validation and error handling.
         """
-        warnings.warn(
-            "Direct access to the internal element_to_cs_mapping is discouraged. "
-            "Please use TransformationManager methods whenever possible for better "
-            "maintainability and to ensure proper validation and error handling",
-            InternalAttributeAccessWarning,
-            stacklevel=2,
-        )
         return self._element_to_cs_mapping
 
     def check_if_element_exists_else_raise_error(self, element_name: str) -> None:
@@ -95,9 +76,8 @@ class TransformationManager:
         ElementNotFoundError
             If the element does not exist.
         """
-        with suppress_direct_internal_attribute_access_warning():
-            if element_name not in self.element_to_cs_mapping:
-                raise ElementNotFoundError(element_name)
+        if element_name not in self.element_to_cs_mapping:
+            raise ElementNotFoundError(element_name)
 
     def check_if_coordinate_system_exists_else_raise_error(self, cs: NgffCoordinateSystem) -> None:
         """
@@ -113,9 +93,8 @@ class TransformationManager:
         CoordinateSystemNotFoundError
             If the coordinate system does not exist.
         """
-        with suppress_direct_internal_attribute_access_warning():
-            if cs not in self.graph:
-                raise CoordinateSystemNotFoundError(cs.name)
+        if cs not in self.graph:
+            raise CoordinateSystemNotFoundError(cs.name)
 
     def check_if_any_edge_exists_else_raise_error(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem
@@ -139,9 +118,8 @@ class TransformationManager:
         """
         self.check_if_coordinate_system_exists_else_raise_error(source_cs)
         self.check_if_coordinate_system_exists_else_raise_error(target_cs)
-        with suppress_direct_internal_attribute_access_warning():
-            if not self.graph.has_edge(source_cs, target_cs):
-                raise TransformationNotFoundError(source_cs.name, target_cs.name)
+        if not self.graph.has_edge(source_cs, target_cs):
+            raise TransformationNotFoundError(source_cs.name, target_cs.name)
 
     def check_if_coordinate_system_has_no_transformations_else_raise_error(self, cs: NgffCoordinateSystem) -> None:
         """
@@ -201,9 +179,8 @@ class TransformationManager:
         try:
             self.check_if_coordinate_system_exists_else_raise_error(cs)
         except CoordinateSystemNotFoundError:
-            with suppress_direct_internal_attribute_access_warning():
-                self.graph.add_node(cs)
-                return
+            self.graph.add_node(cs)
+            return
 
         raise CoordinateSystemAlreadyExistsError(cs.name)
 
@@ -232,8 +209,7 @@ class TransformationManager:
         except (CoordinateSystemHasTransformationsError, CoordinateSystemHasElementsError) as err:
             raise CannotRemoveCoordinateSystemError(cs.name) from err
 
-        with suppress_direct_internal_attribute_access_warning():
-            self.graph.remove_node(cs)
+        self.graph.remove_node(cs)
 
     def list_coordinate_systems(self) -> list[NgffCoordinateSystem]:
         """
@@ -243,8 +219,7 @@ class TransformationManager:
         -------
         A list of coordinate system objects.
         """
-        with suppress_direct_internal_attribute_access_warning():
-            return list(self.graph.nodes())
+        return list(self.graph.nodes())
 
     def add_element(self, element_name: str, coordinate_system: NgffCoordinateSystem) -> None:
         """
@@ -266,9 +241,8 @@ class TransformationManager:
             self.check_if_element_exists_else_raise_error(element_name)
         except ElementNotFoundError:
             self.check_if_coordinate_system_exists_else_raise_error(coordinate_system)
-            with suppress_direct_internal_attribute_access_warning():
-                self.element_to_cs_mapping[element_name] = coordinate_system
-                return
+            self.element_to_cs_mapping[element_name] = coordinate_system
+            return
 
         raise ElementAlreadyExistsError(element_name)
 
@@ -291,8 +265,7 @@ class TransformationManager:
             If the element does not exist.
         """
         self.check_if_element_exists_else_raise_error(element_name)
-        with suppress_direct_internal_attribute_access_warning():
-            return self.element_to_cs_mapping[element_name]
+        return self.element_to_cs_mapping[element_name]
 
     def unset_element(self, element_name: str) -> None:
         """
@@ -309,8 +282,7 @@ class TransformationManager:
             If the element has not been registered to any coordinate system.
         """
         self.check_if_element_exists_else_raise_error(element_name)
-        with suppress_direct_internal_attribute_access_warning():
-            del self.element_to_cs_mapping[element_name]
+        del self.element_to_cs_mapping[element_name]
 
     @staticmethod
     def _get_edge_key_from_transform(transform: BaseTransformation) -> str:
@@ -340,10 +312,9 @@ class TransformationManager:
         self.check_if_coordinate_system_exists_else_raise_error(source_cs)
         self.check_if_coordinate_system_exists_else_raise_error(target_cs)
 
-        with suppress_direct_internal_attribute_access_warning():
-            edge_key = self._get_edge_key_from_transform(transformation)
-            edge_attributes = {TRANSFORM_KEY: transformation}
-            self.graph.add_edge(source_cs, target_cs, key=edge_key, **edge_attributes)
+        edge_key = self._get_edge_key_from_transform(transformation)
+        edge_attributes = {TRANSFORM_KEY: transformation}
+        self.graph.add_edge(source_cs, target_cs, key=edge_key, **edge_attributes)
 
     def get_existing_direct_transformations(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem
@@ -371,13 +342,12 @@ class TransformationManager:
         """
         self.check_if_any_edge_exists_else_raise_error(source_cs, target_cs)
         # also checks if source_cs and target_cs exist
-        with suppress_direct_internal_attribute_access_warning():
-            transforms = []
-            assert target_cs in self.graph[source_cs], TransformationNotFoundError(source_cs.name, target_cs.name)
-            for edge_data in self.graph[source_cs][target_cs].values():
-                transform: BaseTransformation = edge_data[TRANSFORM_KEY]
-                transforms.append(transform)
-            return transforms
+        transforms = []
+        assert target_cs in self.graph[source_cs], TransformationNotFoundError(source_cs.name, target_cs.name)
+        for edge_data in self.graph[source_cs][target_cs].values():
+            transform: BaseTransformation = edge_data[TRANSFORM_KEY]
+            transforms.append(transform)
+        return transforms
 
     def remove_specific_transformation(
         self,
@@ -407,12 +377,11 @@ class TransformationManager:
         """
         self.check_if_any_edge_exists_else_raise_error(source_cs, target_cs)
         # also checks if source_cs and target_cs exist
-        with suppress_direct_internal_attribute_access_warning():
-            expected_edge_key = self._get_edge_key_from_transform(transformation)
-            assert expected_edge_key in self.graph[source_cs][target_cs], TransformationNotFoundError(
-                source_cs.name, target_cs.name, expected_edge_key
-            )
-            self.graph.remove_edge(source_cs, target_cs, key=expected_edge_key)
+        expected_edge_key = self._get_edge_key_from_transform(transformation)
+        assert expected_edge_key in self.graph[source_cs][target_cs], TransformationNotFoundError(
+            source_cs.name, target_cs.name, expected_edge_key
+        )
+        self.graph.remove_edge(source_cs, target_cs, key=expected_edge_key)
 
     def remove_all_transformations_between_coordinate_systems(
         self,
@@ -438,11 +407,10 @@ class TransformationManager:
         """
         self.check_if_any_edge_exists_else_raise_error(source_cs, target_cs)
         # also checks if source_cs and target_cs exist
-        with suppress_direct_internal_attribute_access_warning():
-            assert len(self.graph[source_cs][target_cs]), TransformationNotFoundError(source_cs.name, target_cs.name)
-            for edge_key in list(self.graph[source_cs][target_cs].keys()):
-                # need to covert keys() to list to freeze it, else it will change during the following removal
-                self.graph.remove_edge(source_cs, target_cs, key=edge_key)
+        assert len(self.graph[source_cs][target_cs]), TransformationNotFoundError(source_cs.name, target_cs.name)
+        for edge_key in list(self.graph[source_cs][target_cs].keys()):
+            # need to covert keys() to list to freeze it, else it will change during the following removal
+            self.graph.remove_edge(source_cs, target_cs, key=edge_key)
 
     def _get_transformation_sequences_from_path_after_disambiguation(
         self,
@@ -529,19 +497,17 @@ class TransformationManager:
             When multiple transformations are defined between the same coordinate systems and transformations
             are not specified in `expeceted_intermediate_transformations` for disambiguation.
         """
-        with suppress_direct_internal_attribute_access_warning():
-            try:
-                paths = list(nx.all_shortest_paths(self.graph, source=source_cs, target=target_cs))
+        try:
+            paths = list(nx.all_shortest_paths(self.graph, source=source_cs, target=target_cs))
+        except nx.NetworkXNoPath as nxe:
+            raise TransformationPathNotFoundError(source_cs.name, target_cs.name) from nxe
 
-            except nx.NetworkXNoPath as nxe:
-                raise TransformationPathNotFoundError(source_cs.name, target_cs.name) from nxe
-
-            try:
-                return self._get_transformation_sequences_from_path_after_disambiguation(
-                    paths, expected_intermediate_transformations
-                )
-            except TransformationPathAmbiguousError as tpae:
-                raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
+        try:
+            return self._get_transformation_sequences_from_path_after_disambiguation(
+                paths, expected_intermediate_transformations
+            )
+        except TransformationPathAmbiguousError as tpae:
+            raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
 
     def get_all_transformation_sequences(
         self,
@@ -579,19 +545,17 @@ class TransformationManager:
             When multiple transformations are defined between the same coordinate systems and transformations
             are not specified in `expected_intermediate_transformations` for disambiguation.
         """
-        with suppress_direct_internal_attribute_access_warning():
-            try:
-                paths = list(nx.all_simple_paths(self.graph, source=source_cs, target=target_cs))
+        try:
+            paths = list(nx.all_simple_paths(self.graph, source=source_cs, target=target_cs))
+        except nx.NetworkXNoPath as nxe:
+            raise TransformationPathNotFoundError(source_cs.name, target_cs.name) from nxe
 
-            except nx.NetworkXNoPath as nxe:
-                raise TransformationPathNotFoundError(source_cs.name, target_cs.name) from nxe
-
-            try:
-                return self._get_transformation_sequences_from_path_after_disambiguation(
-                    paths, expected_intermediate_transformations
-                )
-            except TransformationPathAmbiguousError as tpae:
-                raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
+        try:
+            return self._get_transformation_sequences_from_path_after_disambiguation(
+                paths, expected_intermediate_transformations
+            )
+        except TransformationPathAmbiguousError as tpae:
+            raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
 
     def _get_transformations_associated_with_cs(self, cs: NgffCoordinateSystem) -> list[BaseTransformation]:
         """
@@ -608,18 +572,17 @@ class TransformationManager:
         """
         self.check_if_coordinate_system_exists_else_raise_error(cs)
 
-        with suppress_direct_internal_attribute_access_warning():
-            transformations = []
-            # Check outgoing edges (cs -> other)
-            for successor in self.graph.successors(cs):
-                transformations_outgoing = self.get_existing_direct_transformations(cs, successor)
-                transformations += transformations_outgoing
-            # Check incoming edges (other -> cs)
-            for predecessor in self.graph.predecessors(cs):
-                transformations_incoming = self.get_existing_direct_transformations(source_cs=predecessor, target_cs=cs)
-                transformations += transformations_incoming
+        transformations = []
+        # Check outgoing edges (cs -> other)
+        for successor in self.graph.successors(cs):
+            transformations_outgoing = self.get_existing_direct_transformations(cs, successor)
+            transformations += transformations_outgoing
+        # Check incoming edges (other -> cs)
+        for predecessor in self.graph.predecessors(cs):
+            transformations_incoming = self.get_existing_direct_transformations(source_cs=predecessor, target_cs=cs)
+            transformations += transformations_incoming
 
-            return transformations
+        return transformations
 
     def _get_elements_belonging_to_cs(self, cs: NgffCoordinateSystem) -> list[str]:
         """
@@ -642,21 +605,19 @@ class TransformationManager:
         """
         self.check_if_coordinate_system_exists_else_raise_error(cs)
 
-        with suppress_direct_internal_attribute_access_warning():
-            elements = []
-            for element_name, element_cs in self.element_to_cs_mapping.items():
-                if element_cs == cs:
-                    elements.append(element_name)
+        elements = []
+        for element_name, element_cs in self.element_to_cs_mapping.items():
+            if element_cs == cs:
+                elements.append(element_name)
 
-            return elements
+        return elements
 
     def __repr__(self) -> str:
         """Return a string representation of the TransformationManager."""
-        with suppress_direct_internal_attribute_access_warning():
-            return (
-                f"TransformationManager("
-                f"  coordinate_systems={list(self.graph.nodes())}, "
-                f"  coordinate_transforms={[x[TRANSFORM_KEY] for *_, x in self.graph.edges(data=True)]}, "
-                f"  elements={list(self.element_to_cs_mapping.keys())}"
-                f")"
-            )
+        return (
+            f"TransformationManager("
+            f"  coordinate_systems={list(self.graph.nodes())}, "
+            f"  coordinate_transforms={[x[TRANSFORM_KEY] for *_, x in self.graph.edges(data=True)]}, "
+            f"  elements={list(self.element_to_cs_mapping.keys())}"
+            f")"
+        )

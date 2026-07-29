@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import warnings
-from collections.abc import Iterator
-from contextlib import contextmanager
-
 
 class CoordinateSystemNotFoundError(ValueError):
     """
@@ -176,17 +172,3 @@ class TransformationManagerWarning(UserWarning):
     """Base warning category for TransformationManager."""
 
     pass
-
-
-class InternalAttributeAccessWarning(TransformationManagerWarning):
-    """Warning for direct access to internal attributes."""
-
-    pass
-
-
-@contextmanager
-def suppress_direct_internal_attribute_access_warning() -> Iterator[None]:
-    """Context manager to suppress InternalAttributeAccessWarning when accessing internal attributes."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", InternalAttributeAccessWarning)
-        yield
