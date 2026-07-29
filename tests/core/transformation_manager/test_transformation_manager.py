@@ -222,7 +222,7 @@ def test_get_existing_transformation(fully_connected_two_point_graph):
 
     tm.add_transformation(cs1, cs2, transform)
 
-    retrieved = tm.get_existing_direct_transformations(cs1, cs2)
+    retrieved = tm.get_direct_transformations(cs1, cs2)
     assert retrieved == [transform]
 
 
@@ -237,7 +237,7 @@ def test_get_existing_transformation_nonexistent(fully_connected_two_point_graph
     with pytest.raises(
         TransformationNotFoundError, match=f"Transformation from '{cs1.name}' to '{cs2.name}' not found"
     ):
-        tm.get_existing_direct_transformations(cs1, cs2)
+        tm.get_direct_transformations(cs1, cs2)
 
 
 def test_remove_all_transformations_between_coordinate_systems(fully_connected_two_point_graph):

@@ -326,7 +326,7 @@ class TransformationManager:
         edge_attributes = {TRANSFORM_KEY: transformation}
         self.graph.add_edge(source_cs, target_cs, key=edge_key, **edge_attributes)
 
-    def get_existing_direct_transformations(
+    def get_direct_transformations(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem
     ) -> list[BaseTransformation]:
         """
@@ -584,11 +584,11 @@ class TransformationManager:
         transformations = []
         # Check outgoing edges (cs -> other)
         for successor in self.graph.successors(cs):
-            transformations_outgoing = self.get_existing_direct_transformations(cs, successor)
+            transformations_outgoing = self.get_direct_transformations(cs, successor)
             transformations += transformations_outgoing
         # Check incoming edges (other -> cs)
         for predecessor in self.graph.predecessors(cs):
-            transformations_incoming = self.get_existing_direct_transformations(source_cs=predecessor, target_cs=cs)
+            transformations_incoming = self.get_direct_transformations(source_cs=predecessor, target_cs=cs)
             transformations += transformations_incoming
 
         return transformations
