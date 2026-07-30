@@ -1422,3 +1422,88 @@ class TestLazyTableLoading:
                 assert "test_table" in sdata.tables
             except ImportError:
                 pytest.skip("anndata.experimental.read_lazy not available")
+
+    @pytest.fixture
+    def sdata_with_shapes_and_table(self) -> SpatialData:
+        """A table annotating a shapes element, so the relational queries have something to join."""
+        from geopandas import GeoDataFrame
+        from scipy.sparse import csr_matrix
+        from shapely.geometry import Point
+
+        from spatialdata.models import ShapesModel, TableModel
+
+        n = 20
+        rng = default_rng(42)
+        # Circles on a line, so a bounding box selects a known prefix.
+        circles = ShapesModel.parse(
+            GeoDataFrame(
+                {"geometry": [Point(float(i), 0.0) for i in range(n)], "radius": np.full(n, 0.1)},
+                index=np.arange(n),
+            )
+        )
+        table = TableModel.parse(
+            AnnData(
+                X=csr_matrix(rng.random((n, 5)) * (rng.random((n, 5)) > 0.5)),
+                obs=pd.DataFrame({"region": pd.Categorical(["circles"] * n), "instance": np.arange(n)}),
+                var=pd.DataFrame(index=[f"g{i}" for i in range(5)]),
+            ),
+            region_key="region",
+            instance_key="instance",
+            region="circles",
+        )
+        return SpatialData(shapes={"circles": circles}, tables={"table": table})
+
+    def test_lazy_table_relational_queries_match_eager(self, sdata_with_shapes_and_table: SpatialData) -> None:
+        """Relational queries must work on a lazy table and agree with the eager read.
+
+        A lazy table's obs is an xarray Dataset2D, not a DataFrame, so any pandas-only call
+        in the join helpers (``reset_index``, ``groupby``) breaks these paths. That is not
+        covered by simply reading a table lazily, which is why it is asserted here.
+        """
+        from spatialdata import bounding_box_query, get_values, join_spatialelement_table
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "data.zarr")
+            sdata_with_shapes_and_table.write(path)
+
+            try:
+                lazy = SpatialData.read(path, lazy=True)
+            except ImportError:
+                pytest.skip("anndata.experimental.read_lazy not available")
+            eager = SpatialData.read(path, lazy=False)
+
+            # The table is genuinely lazy, otherwise the rest of this test proves nothing.
+            assert isinstance(lazy.tables["table"].X, da.Array)
+            assert not isinstance(lazy.tables["table"].obs, pd.DataFrame)
+
+            for how in ["left", "inner", "right", "left_exclusive", "right_exclusive"]:
+                element_dict, joined = join_spatialelement_table(
+                    spatial_element_names=["circles"],
+                    spatial_elements=[lazy.shapes["circles"]],
+                    table=lazy.tables["table"],
+                    how=how,
+                )
+                assert element_dict is not None
+
+            kwargs = {
+                "min_coordinate": [-1, -1],
+                "max_coordinate": [9.5, 1],
+                "axes": ("x", "y"),
+                "target_coordinate_system": "global",
+            }
+            assert len(bounding_box_query(lazy, **kwargs).shapes["circles"]) == len(
+                bounding_box_query(eager, **kwargs).shapes["circles"]
+            )
+
+            lazy_values = get_values("g3", sdata=lazy, element_name="circles", table_name="table")
+            eager_values = get_values("g3", sdata=eager, element_name="circles", table_name="table")
+            np.testing.assert_allclose(
+                np.asarray(lazy_values).ravel().astype(float),
+                np.asarray(eager_values).ravel().astype(float),
+            )
+
+            # X is still lazy after all of the above, and slicing it agrees with the eager read.
+            assert isinstance(lazy.tables["table"].X, da.Array)
+            lazy_block = lazy.tables["table"].X[:4, :3].compute()
+            eager_block = eager.tables["table"].X[:4, :3]
+            np.testing.assert_allclose(lazy_block.toarray(), eager_block.toarray())
