@@ -10,6 +10,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     CoordinateSystemNotFoundError,
     ElementAlreadyExistsError,
     ElementNotFoundError,
+    InvalidPathError,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
     TransformationPathAmbiguousMultipleEdgeExpectedError,
@@ -446,6 +447,8 @@ class TransformationManager:
         all_sequences = []
         deduplicated_paths = list({repr(x): x for x in paths}.values())
         for path in deduplicated_paths:
+            assert len(path) > 1, InvalidPathError(path)
+
             transformation_list = []
             for i in range(len(path) - 1):
                 source_cs_here, target_cs_here = path[i], path[i + 1]

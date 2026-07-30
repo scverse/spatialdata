@@ -87,6 +87,19 @@ class ElementAlreadyExistsError(ValueError):
         super().__init__(f"Element '{name}' already exists in the transformation manager")
 
 
+class InvalidPathError(ValueError):
+    """
+    Exception raised when a path is defined with less than 2 nodes.
+
+    Attributes
+    ----------
+    invalid_path : list[NgffCoordinateSystem]
+    """
+
+    def __init__(self, invalid_path: list[NgffCoordinateSystem]) -> None:
+        super().__init__(f"Found an invalid path with less than 2 nodes: {invalid_path}")
+
+
 class TransformationPathNotFoundError(ValueError):
     """
     Exception raised when no transformation path exists between coordinate systems.
