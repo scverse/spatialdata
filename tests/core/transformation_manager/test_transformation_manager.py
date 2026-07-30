@@ -30,9 +30,9 @@ def test_initialization():
     """Test that TransformationManager initializes correctly."""
 
     tm = TransformationManager()
-    assert len(tm.graph.nodes()) == 0
-    assert len(tm.graph.edges()) == 0
-    assert tm.element_to_cs_mapping == {}
+    assert len(tm._graph.nodes()) == 0
+    assert len(tm._graph.edges()) == 0
+    assert tm._element_to_cs_mapping == {}
 
 
 def test_add_coordinate_system(one_point_graph):
@@ -42,7 +42,7 @@ def test_add_coordinate_system(one_point_graph):
     [cs1], _ = one_point_graph
 
     tm.add_coordinate_system(cs1)
-    assert cs1 in tm.graph.nodes()
+    assert cs1 in tm._graph.nodes()
 
 
 def test_add_coordinate_system_duplicate(one_point_graph):
@@ -63,7 +63,7 @@ def test_remove_coordinate_system(one_point_graph):
     tm.add_coordinate_system(cs1)
     tm.remove_coordinate_system(cs1)
 
-    assert cs1 not in tm.graph.nodes()
+    assert cs1 not in tm._graph.nodes()
 
 
 def test_remove_coordinate_system_nonexistent(one_point_graph):
@@ -134,7 +134,7 @@ def test_add_element(one_point_graph):
     tm.add_coordinate_system(cs1)
     tm.add_element("image1", cs1)
 
-    mapping = tm.element_to_cs_mapping
+    mapping = tm._element_to_cs_mapping
     assert "image1" in mapping
     assert mapping["image1"] == cs1
 
@@ -162,7 +162,7 @@ def test_unset_element(one_point_graph):
     tm.add_element("image1", cs1)
     tm.unset_element("image1")
 
-    assert "image1" not in tm.element_to_cs_mapping
+    assert "image1" not in tm._element_to_cs_mapping
 
 
 def test_unset_element_nonexistent(one_point_graph):
@@ -190,10 +190,10 @@ def test_add_transformation(fully_connected_two_point_graph):
 
     tm.add_transformation(cs1, cs2, transform)
 
-    assert tm.graph.has_edge(cs1, cs2)
+    assert tm._graph.has_edge(cs1, cs2)
     # Get the first edge key and check the transformation
     edge_key = tm._get_edge_key((cs1, cs2, transform))
-    assert tm.graph[cs1][cs2][edge_key][TRANSFORM_KEY] == transform
+    assert tm._graph[cs1][cs2][edge_key][TRANSFORM_KEY] == transform
 
 
 def test_add_transformation_existing_edge(fully_connected_two_point_graph):
@@ -204,13 +204,13 @@ def test_add_transformation_existing_edge(fully_connected_two_point_graph):
     tm.add_coordinate_system(cs2)
 
     tm.add_transformation(cs1, cs2, transform)
-    assert tm.graph.has_edge(cs1, cs2)
+    assert tm._graph.has_edge(cs1, cs2)
 
     # Add same transformation again between the same coordinate systems
     tm.add_transformation(cs1, cs2, transform)
     # Should have just rewritten the edge
-    assert tm.graph.has_edge(cs1, cs2)
-    assert len(tm.graph[cs1][cs2]) == 1
+    assert tm._graph.has_edge(cs1, cs2)
+    assert len(tm._graph[cs1][cs2]) == 1
 
 
 def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
@@ -267,10 +267,10 @@ def test_remove_all_transformations_between_coordinate_systems(fully_connected_t
 
     tm.add_transformation(cs1, cs2, transform)
 
-    spy = mocker.spy(tm.graph, "remove_edge")
+    spy = mocker.spy(tm._graph, "remove_edge")
     tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
     assert spy.call_count == 1
-    assert not tm.graph.has_edge(cs1, cs2)
+    assert not tm._graph.has_edge(cs1, cs2)
 
 
 def test_remove_all_transformation_nonexistent(fully_connected_two_point_graph, mocker):
@@ -278,10 +278,10 @@ def test_remove_all_transformation_nonexistent(fully_connected_two_point_graph, 
 
     tm = TransformationManager()
     [cs1, cs2], _ = fully_connected_two_point_graph
-    tm.graph.add_node(cs1)
-    tm.graph.add_node(cs2)
+    tm._graph.add_node(cs1)
+    tm._graph.add_node(cs2)
 
-    spy = mocker.spy(tm.graph, "remove_edge")
+    spy = mocker.spy(tm._graph, "remove_edge")
     tm.remove_all_transformations_between_coordinate_systems(cs1, cs2)
     assert spy.call_count == 0
 
@@ -299,7 +299,7 @@ def test_remove_specific_transformation_between_coordinate_systems(five_point_gr
 
     tm.remove_specific_transformation(cs3, cs5, transform4)
     edge_key = tm._get_edge_key((cs3, cs5, transform4))
-    assert not tm.graph.has_edge(cs3, cs5, key=edge_key)
+    assert not tm._graph.has_edge(cs3, cs5, key=edge_key)
 
 
 def test_remove_specific_transformation_between_coordinate_systems_non_existent(five_point_graph):
