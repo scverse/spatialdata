@@ -250,7 +250,7 @@ class TransformationManager:
         self.assert_element_exists(element_name)
         return self._element_to_cs_mapping[element_name]
 
-    def unset_element(self, element_name: str) -> None:
+    def _unset_element(self, element_name: str) -> None:
         """
         Unregister an element from the coordinate system to which it belongs.
 

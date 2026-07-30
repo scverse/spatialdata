@@ -160,7 +160,7 @@ def test_unset_element(one_point_graph):
     [cs1], _ = one_point_graph
     tm.add_coordinate_system(cs1)
     tm.add_element("image1", cs1)
-    tm.unset_element("image1")
+    tm._unset_element("image1")
 
     assert "image1" not in tm._element_to_cs_mapping
 
@@ -176,7 +176,7 @@ def test_unset_element_nonexistent(one_point_graph):
     with pytest.raises(
         ElementNotFoundError, match=f"Element '{element_name}' not found in the transformation manager."
     ):
-        tm.unset_element(element_name)
+        tm._unset_element(element_name)
 
 
 def test_add_transformation(fully_connected_two_point_graph):
