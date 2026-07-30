@@ -1863,6 +1863,23 @@ class SpatialData:
             Note: Images, labels, and points are always read lazily (using Dask).
             This parameter only affects tables, which are normally loaded into memory.
 
+            When the stored ``X`` is sparse, the lazy table's ``X`` is a Dask array whose
+            blocks are ``scipy.sparse`` matrices, and Dask's array reductions
+            (``X.sum()``, ``X.mean()``, ``X.max()``, ``X.std()``, ...) are **not
+            supported**. They raise a ``TypeError`` or ``IndexError`` while the graph is
+            being built -- before ``.compute()`` is ever reached -- because Dask derives
+            the result metadata by calling the corresponding NumPy reduction on a
+            ``scipy.sparse`` block, and ``scipy.sparse`` does not accept the
+            ``keepdims``/``ndmin`` arguments NumPy passes down. This is a
+            Dask/``scipy.sparse`` interoperability limitation, not something this reader
+            introduces. Slicing and ``.compute()`` work normally, so reduce a materialized
+            block instead::
+
+                table.X[:1000].compute().sum()      # works
+                table.X.sum()                        # raises
+
+            or use ``dask.array.map_blocks`` with a function that handles sparse blocks.
+
         Returns
         -------
         The SpatialData object.
