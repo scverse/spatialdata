@@ -1868,6 +1868,7 @@ class SpatialData:
         file_path: str | Path | UPath | zarr.Group,
         selection: tuple[str] | None = None,
         reconsolidate_metadata: bool = False,
+        lazy: bool = False,
     ) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
@@ -1880,6 +1881,11 @@ class SpatialData:
             The elements to read (images, labels, points, shapes, table). If None, all elements are read.
         reconsolidate_metadata
             If the consolidated metadata store got corrupted this can lead to errors when trying to read the data.
+        lazy
+            If True, read tables lazily using anndata.experimental.read_lazy.
+            This keeps large tables out of memory until needed. Requires anndata >= 0.12.
+            Note: Images, labels, and points are always read lazily (using Dask).
+            This parameter only affects tables, which are normally loaded into memory.
 
         Returns
         -------
@@ -1892,7 +1898,7 @@ class SpatialData:
 
             _write_consolidated_metadata(file_path)
 
-        return read_zarr(file_path, selection=selection)
+        return read_zarr(file_path, selection=selection, lazy=lazy)
 
     @property
     def images(self) -> Images:
