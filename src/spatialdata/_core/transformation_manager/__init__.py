@@ -17,10 +17,11 @@ from spatialdata._core.transformation_manager.exceptions import (
     TransformationPathNotFoundError,
     TransformationPathNotSimple,
 )
+from spatialdata.transformations import transformations as sd_transforms
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
-from spatialdata.transformations.transformations import BaseTransformation, Sequence
 
 TRANSFORM_KEY = "transformation"
+EDGE_DEF = tuple[NgffCoordinateSystem, NgffCoordinateSystem, sd_transforms.BaseTransformation]
 
 
 class TransformationManager:
@@ -117,7 +118,7 @@ class TransformationManager:
             raise CoordinateSystemNotFoundError(cs.name)
 
     def assert_an_edge_exists_between_coordinate_systems(
-        self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem
+        self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem, edge_key: str | None = None
     ) -> None:
         """
         Assert that an edge exists between coordinate systems.
@@ -128,6 +129,9 @@ class TransformationManager:
             The input coordinate system.
         target_cs
             The output coordinate system.
+        edge_key
+            If specified, asserts that the specific edge exists between coordinate systems
+
 
         Raises
         ------
@@ -139,7 +143,7 @@ class TransformationManager:
         self.assert_coordinate_system_exists(source_cs)
         self.assert_coordinate_system_exists(target_cs)
         if not self.graph.has_edge(source_cs, target_cs):
-            raise TransformationNotFoundError(source_cs.name, target_cs.name)
+            raise TransformationNotFoundError(source_cs.name, target_cs.name, edge_key)
 
     def assert_coordinate_system_has_no_transformations(self, cs: NgffCoordinateSystem) -> None:
         """
@@ -298,12 +302,28 @@ class TransformationManager:
         del self.element_to_cs_mapping[element_name]
 
     @staticmethod
-    def _get_edge_key_from_transform(transform: BaseTransformation) -> str:
+    def _get_edge_key(edge_def: EDGE_DEF) -> str:
+        """
+        Encode the definition of an edge into a string to be used as graph-wide edge identifier.
 
-        return f"{id(transform)}_{transform}"
+        Parameters
+        ----------
+        edge_def
+            tuple, (source_cs, target_cs, transformation)
+
+        Returns
+        -------
+        edge_key
+            str, the encoded edge identifier
+        """
+        source_cs, target_cs, transform = edge_def
+        return f"{source_cs.name}_{target_cs.name}_{id(transform)}"
 
     def add_transformation(
-        self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem, transformation: BaseTransformation
+        self,
+        source_cs: NgffCoordinateSystem,
+        target_cs: NgffCoordinateSystem,
+        transformation: sd_transforms.BaseTransformation,
     ) -> None:
         """
         Add a transformation between coordinate systems.
@@ -325,13 +345,13 @@ class TransformationManager:
         self.assert_coordinate_system_exists(source_cs)
         self.assert_coordinate_system_exists(target_cs)
 
-        edge_key = self._get_edge_key_from_transform(transformation)
+        edge_key = self._get_edge_key((source_cs, target_cs, transformation))
         edge_attributes = {TRANSFORM_KEY: transformation}
         self.graph.add_edge(source_cs, target_cs, key=edge_key, **edge_attributes)
 
     def get_direct_transformations(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem
-    ) -> list[BaseTransformation]:
+    ) -> list[sd_transforms.BaseTransformation]:
         """
         Retrieve transformations directly defined between coordinate systems.
 
@@ -357,7 +377,7 @@ class TransformationManager:
         transforms = []
         if self.graph.has_edge(source_cs, target_cs):
             for edge_data in self.graph[source_cs][target_cs].values():
-                transform: BaseTransformation = edge_data[TRANSFORM_KEY]
+                transform: sd_transforms.BaseTransformation = edge_data[TRANSFORM_KEY]
                 transforms.append(transform)
         return transforms
 
@@ -365,7 +385,7 @@ class TransformationManager:
         self,
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
-        transformation: BaseTransformation,
+        transformation: sd_transforms.BaseTransformation,
     ) -> None:
         """
         Remove a specific transformation between coordinate systems.
@@ -387,12 +407,9 @@ class TransformationManager:
         TransformationNotFoundError
             If the transformation does not exist.
         """
-        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs)
+        expected_edge_key = self._get_edge_key((source_cs, target_cs, transformation))
+        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs, expected_edge_key)
         # also checks if source_cs and target_cs exist
-        expected_edge_key = self._get_edge_key_from_transform(transformation)
-        assert expected_edge_key in self.graph[source_cs][target_cs], TransformationNotFoundError(
-            source_cs.name, target_cs.name, expected_edge_key
-        )
         self.graph.remove_edge(source_cs, target_cs, key=expected_edge_key)
 
     def remove_all_transformations_between_coordinate_systems(
@@ -427,8 +444,8 @@ class TransformationManager:
     def _get_transformation_sequences_from_simple_paths_after_disambiguation(
         self,
         paths: list[list[NgffCoordinateSystem]],
-        expected_intermediate_transformations: list[BaseTransformation] | None,
-    ) -> list[Sequence]:
+        expected_intermediate_edges: list[EDGE_DEF] | None,
+    ) -> list[sd_transforms.Sequence]:
         """
         Traverses paths to form sequence of Transformations.
 
@@ -438,12 +455,13 @@ class TransformationManager:
         ----------
         paths:
             sequence of list of nodes
-        expected_intermediate_transformations:
-            list of transformation objects
+        expected_intermediate_edges:
+            list of edge definitions, for use when multiple edges are found between two coordinate systems in a path
+            An edge is defined as a tuple, (source_cs, target_cs, transform).
 
         Returns
         -------
-            list of sequences of transformations
+            list of transformations, each an instance of the transformation class Sequence
 
         Raises
         ------
@@ -454,10 +472,11 @@ class TransformationManager:
             assert len(set(path)) == len(path), TransformationPathNotSimple(path)
 
         expected_intermediate_transformation_edge_keys = set()
-        if expected_intermediate_transformations is not None:
-            expected_intermediate_transformation_edge_keys |= {
-                self._get_edge_key_from_transform(it) for it in expected_intermediate_transformations
-            }
+        if expected_intermediate_edges is not None:
+            for edge_def in expected_intermediate_edges:
+                edge_key = self._get_edge_key(edge_def)
+                expected_intermediate_transformation_edge_keys |= {edge_key}
+
         all_sequences = []
         deduplicated_paths = list({repr(x): x for x in paths}.values())
         for path in deduplicated_paths:
@@ -486,15 +505,15 @@ class TransformationManager:
                     # Only one edge, no ambiguity
                     edge_key = next(iter(edge_data.keys()))
                     transformation_list.append(edge_data[edge_key][TRANSFORM_KEY])
-            all_sequences.append(Sequence(transformation_list))
+            all_sequences.append(sd_transforms.Sequence(transformation_list))
         return all_sequences
 
     def get_all_shortest_transformation_sequences(
         self,
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
-        expected_intermediate_transformations: list[BaseTransformation] | None = None,
-    ) -> list[Sequence]:
+        expected_intermediate_edges: list[EDGE_DEF] | None = None,
+    ) -> list[sd_transforms.Sequence]:
         """
         Get all shortest sequences of transformations between two coordinate systems.
 
@@ -504,8 +523,9 @@ class TransformationManager:
             The source coordinate system.
         target_cs
             The target coordinate system.
-        expected_intermediate_transformations
-            list of intermediate transformations.
+        expected_intermediate_edges
+            list of intermediate edges expected.
+            An edge is defined as a tuple, (source_cs, target_cs, transform).
             Used to choose an edge when multiple edges are found between the same coordinate systems.
 
         Returns
@@ -532,7 +552,7 @@ class TransformationManager:
 
         try:
             return self._get_transformation_sequences_from_simple_paths_after_disambiguation(
-                paths, expected_intermediate_transformations
+                paths, expected_intermediate_edges
             )
         except TransformationPathAmbiguousError as tpae:
             raise TransformationPathAmbiguousError(source_cs.name, target_cs.name) from tpae
@@ -541,8 +561,8 @@ class TransformationManager:
         self,
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
-        expected_intermediate_transformations: list[BaseTransformation] | None = None,
-    ) -> list[Sequence]:
+        expected_intermediate_edges: list[EDGE_DEF] | None = None,
+    ) -> list[sd_transforms.Sequence]:
         """
         Get all existing sequences of transformations between two coordinate systems.
 
@@ -552,8 +572,9 @@ class TransformationManager:
             The source coordinate system.
         target_cs
             The target coordinate system.
-        expected_intermediate_transformations
-            list of intermediate transformations.
+        expected_intermediate_edges
+            list of intermediate edges expected.
+            An edge is defined as a tuple, (source_cs, target_cs, transform).
             Used to choose an edge when multiple edges are found between the same coordinate systems.
 
         Returns
@@ -580,12 +601,14 @@ class TransformationManager:
 
         try:
             return self._get_transformation_sequences_from_simple_paths_after_disambiguation(
-                paths, expected_intermediate_transformations
+                paths, expected_intermediate_edges
             )
         except TransformationPathAmbiguousError as tpae:
             raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
 
-    def _get_transformations_associated_with_cs(self, cs: NgffCoordinateSystem) -> list[BaseTransformation]:
+    def _get_transformations_associated_with_cs(
+        self, cs: NgffCoordinateSystem
+    ) -> list[sd_transforms.BaseTransformation]:
         """
         Get all transformations associated with a coordinate system.
 
