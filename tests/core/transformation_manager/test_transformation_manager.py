@@ -17,11 +17,13 @@ from spatialdata._core.transformation_manager.exceptions import (
     CoordinateSystemNotFoundError,
     ElementAlreadyExistsError,
     ElementNotRegisteredToAnyCoordinateSystemError,
+    InvalidPathError,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
     TransformationPathAmbiguousMultipleEdgeExpectedError,
     TransformationPathAmbiguousNoEdgeExpectedError,
     TransformationPathNotFoundError,
+    TransformationPathNotSimple,
 )
 from spatialdata.transformations.transformations import Sequence
 
@@ -554,6 +556,35 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_multiple
     expected_msg = f"Transformation Path ambiguous from {cs3.name} to {cs5.name}."
     with pytest.raises(TransformationPathAmbiguousMultipleEdgeExpectedError, match=expected_msg):
         tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_edges=expected_intermediate_edges)
+
+
+def test_get_transformation_sequences_from_simple_paths_after_disambiguation_with_non_simple_paths(
+    fully_connected_two_point_graph,
+):
+    """Test _get_transformation_sequences_from_simple_paths_after_disambiguation with non-simple paths."""
+    tm = TransformationManager()
+    [cs1, cs2], _ = fully_connected_two_point_graph
+
+    tm.add_coordinate_system(cs1)
+
+    paths = [[cs1, cs2, cs1, cs2]]
+
+    with pytest.raises(TransformationPathNotSimple):
+        tm._get_transformation_sequences_from_simple_paths_after_disambiguation(paths, ())
+
+
+def test_get_transformation_sequences_from_simple_paths_after_disambiguation_with_single_node_path(
+    fully_connected_two_point_graph,
+):
+    """Test _get_transformation_sequences_from_simple_paths_after_disambiguation with a path with only one node."""
+    tm = TransformationManager()
+    [cs1, cs2], [transformation] = fully_connected_two_point_graph
+
+    tm.add_coordinate_system(cs1)
+
+    paths = [[cs1]]
+    with pytest.raises(InvalidPathError):
+        tm._get_transformation_sequences_from_simple_paths_after_disambiguation(paths, ())
 
 
 def test_get_all_transformation_sequences_no_path(four_point_graph):

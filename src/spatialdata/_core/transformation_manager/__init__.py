@@ -443,7 +443,8 @@ class TransformationManager:
                 if any path in `paths` is not simple, i.e., has recurring coordinate systems
         """
         for path in paths:
-            assert len(set(path)) == len(path), TransformationPathNotSimple(path)
+            if len(set(path)) != len(path):
+                raise TransformationPathNotSimple(path)
 
         expected_intermediate_transformation_edge_keys = set()
         if expected_intermediate_edges is not None:
@@ -454,7 +455,8 @@ class TransformationManager:
         all_sequences = []
         deduplicated_paths = list({repr(x): x for x in paths}.values())
         for path in deduplicated_paths:
-            assert len(path) > 1, InvalidPathError(path)
+            if len(path) <= 1:
+                raise InvalidPathError(path)
 
             transformation_list = []
             for i in range(len(path) - 1):
