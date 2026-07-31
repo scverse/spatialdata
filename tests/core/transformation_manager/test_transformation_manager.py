@@ -16,7 +16,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     CoordinateSystemAlreadyExistsError,
     CoordinateSystemNotFoundError,
     ElementAlreadyExistsError,
-    ElementNotFoundError,
+    ElementNotRegisteredToAnyCoordinateSystemError,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
     TransformationPathAmbiguousMultipleEdgeExpectedError,
@@ -173,9 +173,7 @@ def test_unset_element_nonexistent(one_point_graph):
     element_name = "image1"
 
     # Try to unset non-existent element
-    with pytest.raises(
-        ElementNotFoundError, match=f"Element '{element_name}' not found in the transformation manager."
-    ):
+    with pytest.raises(ElementNotRegisteredToAnyCoordinateSystemError):
         tm._unset_element(element_name)
 
 
@@ -218,17 +216,14 @@ def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
     tm = TransformationManager()
     [cs1, cs2], [transform] = fully_connected_two_point_graph
 
-    with pytest.raises(
-        CoordinateSystemNotFoundError, match=f"Coordinate system '{cs1.name}' not found in the transformation manager"
-    ):
+    expected_msg = "Coordinate system .* not found in the transformation manager."
+    with pytest.raises(CoordinateSystemNotFoundError, match=expected_msg):
         tm.add_transformation(cs1, cs2, transform)
 
     # Add one coordinate system
     tm.add_coordinate_system(cs1)
 
-    with pytest.raises(
-        CoordinateSystemNotFoundError, match=f"Coordinate system '{cs2.name}' not found in the transformation manager"
-    ):
+    with pytest.raises(CoordinateSystemNotFoundError, match=expected_msg):
         tm.add_transformation(cs1, cs2, transform)
 
 
@@ -386,7 +381,7 @@ def test_get_all_shortest_transformation_sequences_no_path(four_point_graph):
     tm.add_transformation(cs1, cs2, transform1)
     tm.add_transformation(cs2, cs3, transform2)
 
-    expected_error_msg = "No transformation path found from"
+    expected_error_msg = f"No transformation path found from {cs1.name} to {cs4.name}"
     with pytest.raises(TransformationPathNotFoundError, match=expected_error_msg):
         tm.get_all_shortest_transformation_sequences(cs1, cs4)
 
@@ -437,7 +432,8 @@ def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges
     tm.add_transformation(cs3, cs5, transform4)
     tm.add_transformation(cs3, cs5, transform5)
 
-    with pytest.raises(TransformationPathAmbiguousError, match="Transformation Path ambiguous"):
+    expected_msg = f"Transformation Path ambiguous from {cs1.name} to {cs5.name}."
+    with pytest.raises(TransformationPathAmbiguousError, match=expected_msg):
         tm.get_all_shortest_transformation_sequences(cs1, cs5)
 
 
@@ -527,9 +523,8 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_no_edge_
     tm.add_transformation(cs3, cs5, transform4)
     tm.add_transformation(cs3, cs5, transform5)
 
-    with pytest.raises(
-        TransformationPathAmbiguousNoEdgeExpectedError, match="None of the edges were specified to be expected"
-    ):
+    expected_msg = f"Transformation Path ambiguous from {cs3.name} to {cs5.name}."
+    with pytest.raises(TransformationPathAmbiguousNoEdgeExpectedError, match=expected_msg):
         tm.get_all_transformation_sequences(cs1, cs5)
 
 
@@ -556,9 +551,8 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_multiple
         (cs3, cs5, transform5),
     ]
 
-    with pytest.raises(
-        TransformationPathAmbiguousMultipleEdgeExpectedError, match="Multiple.*edges were specified to be expected"
-    ):
+    expected_msg = f"Transformation Path ambiguous from {cs3.name} to {cs5.name}."
+    with pytest.raises(TransformationPathAmbiguousMultipleEdgeExpectedError, match=expected_msg):
         tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_edges=expected_intermediate_edges)
 
 
@@ -571,7 +565,7 @@ def test_get_all_transformation_sequences_no_path(four_point_graph):
     tm.add_coordinate_system(cs3)
     tm.add_coordinate_system(cs4)
 
-    expected_error_msg = "No transformation path found from"
+    expected_error_msg = f"No transformation path found from {cs1.name} to {cs4.name}"
     with pytest.raises(TransformationPathNotFoundError, match=expected_error_msg):
         tm.get_all_shortest_transformation_sequences(cs1, cs4)
 

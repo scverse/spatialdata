@@ -18,7 +18,7 @@ class CoordinateSystemNotFoundError(ValueError):
         super().__init__(f"Coordinate system '{name}' not found in the transformation manager.")
 
 
-class ElementNotFoundError(KeyError):
+class ElementNotRegisteredToAnyCoordinateSystemError(KeyError):
     """
     Exception raised when an element is not found in the transformation manager.
 
@@ -30,7 +30,7 @@ class ElementNotFoundError(KeyError):
 
     def __init__(self, element_name: str) -> None:
         self.element_name = element_name
-        super().__init__(f"Element '{element_name}' not found in the transformation manager.")
+        super().__init__(f"Element '{element_name}' has not been registered to any coordinate system.")
 
 
 class TransformationNotFoundError(KeyError):
@@ -148,7 +148,7 @@ class TransformationPathAmbiguousNoEdgeExpectedError(TransformationPathAmbiguous
 
     def cause_of_confusion(self) -> str:
 
-        return "None of the edges were specified to be expected"
+        return "Multiple edges found. None of them were specified to be expected"
 
 
 class TransformationPathAmbiguousMultipleEdgeExpectedError(TransformationPathAmbiguousError):

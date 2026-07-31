@@ -11,7 +11,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     CoordinateSystemHasTransformationsError,
     CoordinateSystemNotFoundError,
     ElementAlreadyExistsError,
-    ElementNotFoundError,
+    ElementNotRegisteredToAnyCoordinateSystemError,
     InvalidPathError,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
@@ -50,7 +50,7 @@ class TransformationManager:
             If the element does not exist.
         """
         if element_name not in self._element_to_cs_mapping:
-            raise ElementNotFoundError(element_name)
+            raise ElementNotRegisteredToAnyCoordinateSystemError(element_name)
 
     def assert_element_does_not_exists(self, element_name: str) -> None:
         """
