@@ -52,7 +52,7 @@ class TransformationManager:
         if element_name not in self._element_to_cs_mapping:
             raise ElementNotRegisteredToAnyCoordinateSystemError(element_name)
 
-    def assert_element_does_not_exists(self, element_name: str) -> None:
+    def assert_element_does_not_exist(self, element_name: str) -> None:
         """
         Assert than an element doesn't exist in the transformation manager.
 
@@ -190,10 +190,13 @@ class TransformationManager:
 
         Raises
         ------
-        CannotRemoveCoordinateSystemError
-            If the coordinate system cannot be removed.
         CoordinateSystemNotFoundError
             If the coordinate system is not found
+        CannotRemoveCoordinateSystemError
+            If the coordinate system cannot be removed.
+            Chained from
+                CoordinateSystemHasTransformationsError or
+                CoordinateSystemHasElementsError when the system has dependencies.
         """
         try:
             self.assert_coordinate_system_has_no_transformations(cs)
@@ -230,7 +233,7 @@ class TransformationManager:
         CoordinateSystemNotFoundError
             If the coordinate system is not found.
         """
-        self.assert_element_does_not_exists(element_name)
+        self.assert_element_does_not_exist(element_name)
         self.assert_coordinate_system_exists(coordinate_system)
         self._element_to_cs_mapping[element_name] = coordinate_system
 
