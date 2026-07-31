@@ -129,9 +129,11 @@ class TransformationManager:
             If the coordinate system has associated transformations.
 
         """
-        transformations = self._get_transformations_associated_with_cs(cs)
-        # also checks if cs exists
-        if transformations:
+        self.assert_coordinate_system_exists(cs)
+        has_successors = next(self._graph.successors(cs), None) is not None
+        has_predecessors = next(self._graph.predecessors(cs), None) is not None
+
+        if has_successors or has_predecessors:
             raise CoordinateSystemHasTransformationsError(cs.name)
 
     def assert_coordinate_system_has_no_elements(self, cs: NgffCoordinateSystem) -> None:
@@ -574,35 +576,6 @@ class TransformationManager:
             )
         except TransformationPathAmbiguousError as tpae:
             raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
-
-    def _get_transformations_associated_with_cs(
-        self, cs: NgffCoordinateSystem
-    ) -> list[sd_transforms.BaseTransformation]:
-        """
-        Get all transformations associated with a coordinate system.
-
-        Parameters
-        ----------
-        cs
-            The coordinate system to check.
-
-        Returns
-        -------
-        List of transformations
-        """
-        self.assert_coordinate_system_exists(cs)
-
-        transformations = []
-        # Check outgoing edges (cs -> other)
-        for successor in self._graph.successors(cs):
-            transformations_outgoing = self.get_direct_transformations(cs, successor)
-            transformations += transformations_outgoing
-        # Check incoming edges (other -> cs)
-        for predecessor in self._graph.predecessors(cs):
-            transformations_incoming = self.get_direct_transformations(source_cs=predecessor, target_cs=cs)
-            transformations += transformations_incoming
-
-        return transformations
 
     def _get_elements_belonging_to_cs(self, cs: NgffCoordinateSystem) -> list[str]:
         """
