@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import networkx as nx
 
 from spatialdata._core.transformation_manager.exceptions import (
@@ -413,7 +415,7 @@ class TransformationManager:
     def _get_transformation_sequences_from_simple_paths_after_disambiguation(
         self,
         paths: list[list[NgffCoordinateSystem]],
-        expected_intermediate_edges: list[EDGE_DEF] | None,
+        expected_intermediate_edges: Sequence[EDGE_DEF],
     ) -> list[sd_transforms.Sequence]:
         """
         Traverses paths to form sequence of Transformations.
@@ -483,7 +485,7 @@ class TransformationManager:
         self,
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
-        expected_intermediate_edges: list[EDGE_DEF] | None = None,
+        expected_intermediate_edges: Sequence[EDGE_DEF] = (),
     ) -> list[sd_transforms.Sequence]:
         """
         Get all shortest sequences of transformations between two coordinate systems.
@@ -532,7 +534,7 @@ class TransformationManager:
         self,
         source_cs: NgffCoordinateSystem,
         target_cs: NgffCoordinateSystem,
-        expected_intermediate_edges: list[EDGE_DEF] | None = None,
+        expected_intermediate_edges: Sequence[EDGE_DEF] = (),
     ) -> list[sd_transforms.Sequence]:
         """
         Get all existing sequences of transformations between two coordinate systems.

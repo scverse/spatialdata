@@ -530,7 +530,7 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_no_edge_
     with pytest.raises(
         TransformationPathAmbiguousNoEdgeExpectedError, match="None of the edges were specified to be expected"
     ):
-        tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_edges=[])
+        tm.get_all_transformation_sequences(cs1, cs5)
 
 
 def test_get_all_transformation_sequences_multiple_paths_multiple_edges_multiple_expected(five_point_graph):
