@@ -14,3 +14,13 @@ class FormatVersionUnknownError(ValueError):
             f"`{self.version_encountered}` for element of type `{self.element_type}`"
         )
         super().__init__(self.message)
+
+
+class WritingToZarrV2DeprecationWarning(DeprecationWarning):
+    """Warning raised when writing to zarr v2 format."""
+
+    message = (
+        "Writing to zarr v2 format is currently deprecated in spatialdata "
+        "and will be removed in a future version. "
+        "Please consider writing to zarr v3."
+    )

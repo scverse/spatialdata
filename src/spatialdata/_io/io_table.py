@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +12,7 @@ from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
 
 from spatialdata._io._utils import _resolve_zarr_store
-from spatialdata._io.exceptions import FormatVersionUnknownError
+from spatialdata._io.exceptions import FormatVersionUnknownError, WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import (
     CurrentTablesFormat,
     TablesFormats,
@@ -58,6 +60,11 @@ def write_table(
     group_type: str = "ngff:regions_table",
     element_format: Format = CurrentTablesFormat(),
 ) -> None:
+    if element_format.zarr_format == 2:
+        warnings.warn(
+            message=WritingToZarrV2DeprecationWarning.message, category=WritingToZarrV2DeprecationWarning, stacklevel=2
+        )
+
     if TableModel.ATTRS_KEY in table.uns:
         region, region_key, instance_key = get_table_keys(table)
         TableModel.validate(table)
@@ -71,29 +78,22 @@ def write_table(
         element_type="table", version_encountered=element_format
     )
 
-    if element_format == TablesFormatV02():
-        # solution of passing path directly roughly based on:
+    if element_format.zarr_format == 3 and version("anndata") >= "0.13":
+        # `write_zarr` in anndata v0.13 and above can only write to zarr v3
+        # solution of passing resolved store directly roughly based on:
         # https://github.com/scverse/anndata/issues/1548#issuecomment-2199801855
 
         # resolve the store from the group
-        # needed by `AnnData.write_zarr` below to directly write into the path of the group
         resolved_store = _resolve_zarr_store(table_group)
 
         # Write the table to the path of the table group
         table.write_zarr(store=resolved_store, consolidate_metadata=False)
-        # anndata writes to zarr v3 by default, no way to specify, breaks our support for zarr v2
-        # hence the workaround with if-else ladder
+
         table_group = group[name]
-    elif element_format == TablesFormatV01():
+    else:
         table.strings_to_categoricals()
         write_adata(group, name, table)
         table_group = group[name]
-    else:
-        raise NotImplementedError(
-            "This should be unreachable, please raise an issue on Github with this error message "
-            "and a minimum example that works standalone"
-        )
-        # should be unreachable
 
     table_group.attrs["spatialdata-encoding-type"] = group_type
     table_group.attrs["region"] = region
