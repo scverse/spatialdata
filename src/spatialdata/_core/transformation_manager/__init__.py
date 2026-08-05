@@ -24,7 +24,7 @@ from spatialdata.transformations import transformations as sd_transforms
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 TRANSFORM_KEY = "transformation"
-EDGE_DEF = tuple[NgffCoordinateSystem, NgffCoordinateSystem, sd_transforms.BaseTransformation]
+type EDGE_DEF = tuple[NgffCoordinateSystem, NgffCoordinateSystem, sd_transforms.BaseTransformation]
 
 
 class TransformationManager:
