@@ -86,6 +86,23 @@ class TransformationManager:
         if cs not in self._graph:
             raise CoordinateSystemNotFoundError(cs.name)
 
+    def assert_coordinate_system_does_not_exist(self, cs: NgffCoordinateSystem) -> None:
+        """
+        Assert that coordinate system doesn't exist in the graph.
+
+        Parameters
+        ----------
+        cs
+            The coordinate system to check.
+
+        Raises
+        ------
+        CoordinateSystemAlreadyExistsError
+            If the coordinate system already exists.
+        """
+        if cs in self._graph:
+            raise CoordinateSystemAlreadyExistsError(cs.name)
+
     def assert_an_edge_exists_between_coordinate_systems(
         self, source_cs: NgffCoordinateSystem, target_cs: NgffCoordinateSystem, edge_key: str | None = None
     ) -> None:
@@ -149,8 +166,8 @@ class TransformationManager:
 
         Raises
         ------
-        Co
-
+        CoordinateSystemHasElementsError
+            if the coordinate system has elements belonging to it.
         """
         elements = self._get_elements_belonging_to_cs(cs)
         # also checks if cs exists
@@ -171,13 +188,8 @@ class TransformationManager:
         CoordinateSystemAlreadyExistsError
             If the coordinate system already exists.
         """
-        try:
-            self.assert_coordinate_system_exists(cs)
-        except CoordinateSystemNotFoundError:
-            self._graph.add_node(cs)
-            return
-
-        raise CoordinateSystemAlreadyExistsError(cs.name)
+        self.assert_coordinate_system_does_not_exist(cs)
+        self._graph.add_node(cs)
 
     def remove_coordinate_system(self, cs: NgffCoordinateSystem) -> None:
         """

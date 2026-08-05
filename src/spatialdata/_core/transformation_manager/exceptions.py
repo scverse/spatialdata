@@ -18,6 +18,21 @@ class CoordinateSystemNotFoundError(ValueError):
         super().__init__(f"Coordinate system '{name}' not found in the transformation manager.")
 
 
+class CoordinateSystemAlreadyExistsError(ValueError):
+    """
+    Exception raised when a coordinate system already exists in the transformation manager.
+
+    Attributes
+    ----------
+    name : str
+        The name of the coordinate system to check.
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"Coordinate system '{name}' already exists in the transformation manager.")
+
+
 class ElementNotRegisteredToAnyCoordinateSystemError(KeyError):
     """
     Exception raised when an element is not found in the transformation manager.
@@ -55,21 +70,6 @@ class TransformationNotFoundError(KeyError):
         if edge_key is not None:
             msg += f" with key '{edge_key}'"
         super().__init__(msg)
-
-
-class CoordinateSystemAlreadyExistsError(ValueError):
-    """
-    Exception raised when coordinate system already exists.
-
-    Attributes
-    ----------
-    name : str
-        The name of the coordinate system that already exists.
-    """
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"Coordinate system '{name}' already exists")
 
 
 class ElementAlreadyExistsError(ValueError):
