@@ -207,9 +207,6 @@ if TYPE_CHECKING:
     # _core.spatialdata
     from spatialdata._core.spatialdata import SpatialData
 
-    # _core.transformation_manager
-    from spatialdata._core.transformation_manager import TransformationManager
-
     # _io._utils
     from spatialdata._io._utils import get_dask_backing_files
 
