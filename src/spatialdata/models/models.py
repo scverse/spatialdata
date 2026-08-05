@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal
 
 import dask.dataframe as dd
 import numpy as np
@@ -398,6 +398,13 @@ class RasterSchema:
             for d in data:
                 cls._check_chunk_size_not_too_large(data[d][name])
 
+    def _validate_labels_dtype(data: DataArray | DataTree) -> None:
+        dtype = data.dtype if isinstance(data, DataArray) else data["scale0"]["image"].dtype
+        if not (np.issubdtype(dtype, np.integer) or np.issubdtype(dtype, np.bool_)):
+            raise ValueError(
+                f"Labels must have an integer dtype, found {dtype}. Cast the data, e.g. `.astype(np.uint16)`."
+            )
+
 
 class Labels2DModel(RasterSchema):
     dims = (Y, X)
@@ -412,6 +419,11 @@ class Labels2DModel(RasterSchema):
             raise ValueError("`c_coords` is not supported for labels")
         return super().parse(*args, **kwargs)
 
+    @classmethod
+    def validate(cls, data: Any) -> None:
+        super().validate(data)
+        cls._validate_labels_dtype(data)
+
 
 class Labels3DModel(RasterSchema):
     dims = (Z, Y, X)
@@ -421,6 +433,11 @@ class Labels3DModel(RasterSchema):
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
         return super().parse(*args, **kwargs)
+
+    @classmethod
+    def validate(cls, data: Any) -> None:
+        super().validate(data)
+        cls._validate_labels_dtype(data)
 
 
 class Image2DModel(RasterSchema):
@@ -1252,7 +1269,7 @@ class TableModel:
         return adata
 
 
-Schema_t: TypeAlias = (
+type Schema_t = (
     type[Image2DModel]
     | type[Image3DModel]
     | type[Labels2DModel]

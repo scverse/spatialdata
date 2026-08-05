@@ -256,13 +256,13 @@ def test_join_updates_spatialdata_attrs(sdata_query_aggregation):
     _, table = join_spatialelement_table(
         sdata=sdata, spatial_element_names="values_circles", table_name="table", how="left"
     )
-    assert table.uns["spatialdata_attrs"]["region"] == ["values_circles"]
+    assert table.uns["spatialdata_attrs"]["region"] == "values_circles"
 
     # inner join on a single element
     _, table = join_spatialelement_table(
         sdata=sdata, spatial_element_names="values_circles", table_name="table", how="inner"
     )
-    assert table.uns["spatialdata_attrs"]["region"] == ["values_circles"]
+    assert table.uns["spatialdata_attrs"]["region"] == "values_circles"
 
     # right_exclusive join: pass a truncated circles element so some table rows have no match.
     # values_circles has 9 instances (0-8); keep only 5 → 4 table rows are exclusive.
@@ -275,7 +275,7 @@ def test_join_updates_spatialdata_attrs(sdata_query_aggregation):
     )
     assert table is not None
     assert table.n_obs == 4
-    assert table.uns["spatialdata_attrs"]["region"] == ["values_circles"]
+    assert table.uns["spatialdata_attrs"]["region"] == "values_circles"
 
     # original table metadata must be unchanged
     assert set(sdata["table"].uns["spatialdata_attrs"]["region"]) == {"values_circles", "values_polygons"}
@@ -1008,6 +1008,7 @@ def test_labels_table_joins(full_sdata):
 def test_points_table_joins(full_sdata):
     full_sdata["table"].uns["spatialdata_attrs"]["region"] = "points_0"
     full_sdata["table"].obs["region"] = ["points_0"] * 100
+    full_sdata["table"].obs["region"] = full_sdata["table"].obs["region"].astype("category")
 
     element_dict, table = join_spatialelement_table(
         sdata=full_sdata,

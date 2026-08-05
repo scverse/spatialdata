@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-import spatialdata
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from spatialdata.dataloader.datasets import ImageTilesDataset
@@ -12,10 +10,10 @@ __all__ = [
 ]
 
 
-def __getattr__(attr_name: str) -> ImageTilesDataset | Any:
+def __getattr__(attr_name: str) -> type[ImageTilesDataset]:
     if attr_name == "ImageTilesDataset":
         from spatialdata.dataloader.datasets import ImageTilesDataset
 
         return ImageTilesDataset
 
-    return getattr(spatialdata.dataloader, attr_name)
+    raise AttributeError(f"module {__name__!r} has no attribute {attr_name!r}")

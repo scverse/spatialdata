@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TypeAlias
+from typing import Any
 
 import numpy as np
 from xarray import DataArray, DataTree
@@ -12,5 +12,5 @@ from numpy.typing import DTypeLike, NDArray
 ArrayLike = NDArray[np.floating[Any]]
 IntArrayLike = NDArray[np.integer[Any]]
 
-Raster_T: TypeAlias = DataArray | DataTree
+type Raster_T = DataArray | DataTree
 ColorLike = tuple[float, ...] | str

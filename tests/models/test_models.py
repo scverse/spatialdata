@@ -163,12 +163,12 @@ class TestModels:
             converter = partial(converter, dims=dims)
         elif converter is to_spatial_image:
             converter = partial(converter, dims=model.dims)
-        if n_dims == 2:
-            image: ArrayLike = RNG.uniform(size=(10, 10))
-        elif n_dims == 3:
-            image: ArrayLike = RNG.uniform(size=(3, 10, 10))
-        elif n_dims == 4:
-            image: ArrayLike = RNG.uniform(size=(2, 3, 10, 10))
+        # labels must be integer-valued, images can be float
+        shape = {2: (10, 10), 3: (3, 10, 10), 4: (2, 3, 10, 10)}[n_dims]
+        if model in [Labels2DModel, Labels3DModel]:
+            image: ArrayLike = RNG.integers(0, 100, size=shape)
+        else:
+            image = RNG.uniform(size=shape)
         image = converter(image)
         self._parse_transformation_from_multiple_places(model, image)
         spatial_image = model.parse(image)
@@ -891,8 +891,8 @@ def test_label_no_c_coords(model: Labels2DModel | Labels3DModel):
 
 
 def test_warning_on_large_chunks():
-    data_small = DataArray(dask.array.zeros((100, 100), chunks=(50, 50)), dims=["x", "y"])
-    data_large = DataArray(dask.array.zeros((50000, 50000), chunks=(50000, 50000)), dims=["x", "y"])
+    data_small = DataArray(dask.array.zeros((100, 100), chunks=(50, 50), dtype=np.int64), dims=["x", "y"])
+    data_large = DataArray(dask.array.zeros((50000, 50000), chunks=(50000, 50000), dtype=np.int64), dims=["x", "y"])
     assert np.array(data_large.shape).prod().item() > LARGE_CHUNK_THRESHOLD_BYTES
 
     # single and multiscale, small chunk size

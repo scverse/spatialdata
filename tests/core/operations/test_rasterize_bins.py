@@ -24,7 +24,6 @@ from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata.models.models import (
     Image2DModel,
-    Labels2DModel,
     PointsModel,
     ShapesModel,
     TableModel,
@@ -266,23 +265,6 @@ def test_rasterize_bins_invalid():
     with pytest.raises(
         ValueError,
         match=re.escape("If bins is a DataArray, it should hold labels; found a image element instead, with"),
-    ):
-        _ = rasterize_bins(
-            sdata=sdata,
-            bins="points",
-            table_name="table",
-            col_key="col_index",
-            row_key="row_index",
-            value_key="instance_id",
-        )
-
-    # if bins is a DataArray, it should hold integers
-    image = Labels2DModel.parse(RNG.normal(size=(3, 3)), dims=("y", "x"))
-    del sdata["points"]
-    sdata["points"] = image
-    with pytest.raises(
-        ValueError,
-        match=f"If bins is a DataArray, it should hold integers. Found dtype {image.dtype}.",
     ):
         _ = rasterize_bins(
             sdata=sdata,

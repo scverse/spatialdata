@@ -391,7 +391,7 @@ def _bounding_box_mask_points(
     axes: tuple[str, ...],
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
-) -> list[ArrayLike]:
+) -> list[np.ndarray]:
     """Compute a mask that is true for the points inside axis-aligned bounding boxes.
 
     Parameters
