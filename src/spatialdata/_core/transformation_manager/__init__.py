@@ -194,7 +194,7 @@ class TransformationManager:
             If the coordinate system is not found
         CannotRemoveCoordinateSystemError
             If the coordinate system cannot be removed.
-            Chained from
+            Caused by
                 CoordinateSystemHasTransformationsError or
                 CoordinateSystemHasElementsError when the system has dependencies.
         """
