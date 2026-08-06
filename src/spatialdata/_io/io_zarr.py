@@ -136,7 +136,7 @@ def read_zarr(
         Path, URL, or zarr.Group to the zarr store (on-disk or remote).
 
     selection
-        List of elements to read from the zarr store (images, labels, points, shapes, table). If None, all elements are
+        List of elements to read from the zarr store (images, labels, points, shapes, tables). If None, all elements are
         read.
 
     on_bad_files
