@@ -54,3 +54,18 @@ _version.py
 # benchmarking and profiling
 .asv/
 profile.speedscope.json
+
+# other
+node_modules/
+
+.mypy_cache
+.ruff_cache
+
+# Kilo and plans
+.kilo/
+plans/
+
+# test coverage
+.coverage
+htmlcov/
+
