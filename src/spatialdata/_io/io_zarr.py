@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Callable
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, get_args
 
 import zarr.storage
 from anndata import AnnData
@@ -27,7 +27,13 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
-from spatialdata._types import Raster_T
+from spatialdata._types import (
+    ELEMENT_TYPE,
+    ELEMENT_TYPE_RASTER,
+    ELEMENT_TYPE_VECTOR,
+    GROUP_NAME,
+    Raster_T,
+)
 
 
 def _read_zarr_group_spatialdata_element(
@@ -36,8 +42,8 @@ def _read_zarr_group_spatialdata_element(
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: Callable[..., Any],
-    group_name: Literal["images", "labels", "shapes", "points", "tables"],
-    element_type: Literal["image", "labels", "shapes", "points", "tables"],
+    group_name: GROUP_NAME,
+    element_type: ELEMENT_TYPE,
     element_container: (dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData]),
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
 ) -> None:
@@ -67,14 +73,14 @@ def _read_zarr_group_spatialdata_element(
                         ValueError,
                     ),
                 ):
-                    if element_type in ["image", "labels"]:
+                    if element_type in get_args(ELEMENT_TYPE_RASTER):
                         reader_format = get_raster_format_for_read(elem_group, sdata_version)
                         element = read_func(
                             elem_group_path,
-                            cast(Literal["image", "labels"], element_type),
+                            cast(ELEMENT_TYPE_RASTER, element_type),
                             reader_format,
                         )
-                    elif element_type in ["shapes", "points", "tables"]:
+                    elif element_type in get_args(ELEMENT_TYPE_VECTOR) + (ELEMENT_TYPE.TABLES,):
                         element = read_func(elem_group_path)
                     else:
                         raise ValueError(f"Unknown element type {element_type}")
@@ -183,19 +189,19 @@ def read_zarr(
 
     # we could make this more readable. One can get lost when looking at this dict and iteration over the items
     group_readers: dict[
-        Literal["images", "labels", "shapes", "points", "tables"],
+        GROUP_NAME,
         tuple[
             Callable[..., Any],
-            Literal["image", "labels", "shapes", "points", "tables"],
+            ELEMENT_TYPE,
             dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
         ],
     ] = {
-        # ome-zarr-py needs a kwargs that has "image" has key. So here we have "image" and not "images"
-        "images": (_read_multiscale, "image", images),
-        "labels": (_read_multiscale, "labels", labels),
-        "points": (_read_points, "points", points),
-        "shapes": (_read_shapes, "shapes", shapes),
-        "tables": (_read_table, "tables", tables),
+        # ome-zarr-py needs a kwargs that has "image" as key. So here we have "image" and not "images"
+        GROUP_NAME.IMAGES: (_read_multiscale, ELEMENT_TYPE.IMAGE, images),
+        GROUP_NAME.LABELS: (_read_multiscale, ELEMENT_TYPE.LABELS, labels),
+        GROUP_NAME.POINTS: (_read_points, ELEMENT_TYPE.POINTS, points),
+        GROUP_NAME.SHAPES: (_read_shapes, ELEMENT_TYPE.SHAPES, shapes),
+        GROUP_NAME.TABLES: (_read_table, ELEMENT_TYPE.TABLES, tables),
     }
     for group_name, (
         read_func,

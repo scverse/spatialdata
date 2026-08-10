@@ -64,6 +64,7 @@ extra  = [
 [dependency-groups]
 dev = [
     "bump2version",
+    "pandas-stubs>=3.0.3.260530",
 ]
 test = [
     "pytest",
