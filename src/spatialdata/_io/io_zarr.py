@@ -302,7 +302,7 @@ def _get_groups_for_element(
     The Zarr groups for the root, element_type and element for a specific element.
     """
     if not isinstance(zarr_path, Path):
-        raise ValueError("zarr_path should be a Path object")
+        raise TypeError("zarr_path should be a Path object")
 
     if element_type not in [
         "images",
