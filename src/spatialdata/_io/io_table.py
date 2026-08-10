@@ -74,9 +74,8 @@ def write_table(
     # Ensure the table group exists
     table_group = group.require_group(name=name)
 
-    assert element_format in TablesFormats.values(), FormatVersionUnknownError(
-        element_type="table", version_encountered=element_format
-    )
+    if element_format not in TablesFormats.values():
+        raise FormatVersionUnknownError(element_type="table", version_encountered=element_format)
 
     if element_format.zarr_format == 3 and version("anndata") >= "0.13":
         # `write_zarr` in anndata v0.13 and above can only write to zarr v3
