@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, TypeGuard
+from typing import Any, Literal, TypeGuard, get_args
 
 import dask.array as da
 import numpy as np
@@ -30,6 +30,7 @@ from spatialdata._io.format import (
     RasterFormatType,
     get_ome_zarr_format,
 )
+from spatialdata._types import ELEMENT_TYPE, ELEMENT_TYPE_RASTER, GROUP_NAME
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
@@ -162,10 +163,12 @@ def _prepare_storage_options(
 
 
 def _read_multiscale(
-    store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+    store: str | Path, raster_type: ELEMENT_TYPE_RASTER, reader_format: Format
 ) -> DataArray | DataTree:
     assert isinstance(store, str | Path)
-    assert raster_type in ["image", "labels"]
+    assert raster_type in get_args(ELEMENT_TYPE_RASTER), ValueError(
+        f"{raster_type} is not a valid raster type. Must be one of {get_args(ELEMENT_TYPE_RASTER)}."
+    )
 
     nodes: list[Node] = []
     image_loc = ZarrLocation(store, fmt=reader_format)
@@ -214,7 +217,7 @@ def _read_multiscale(
     transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
     # if image, read channels metadata
     channels: list[Any] | None = None
-    if raster_type == "image":
+    if raster_type == ELEMENT_TYPE.IMAGE:
         if legacy_channels_metadata is not None:
             channels = [d["label"] for d in legacy_channels_metadata["channels"]]
         if omero_metadata is not None:
@@ -229,7 +232,7 @@ def _read_multiscale(
     data = loaded_node.array(resolution=datasets[0])
     si = DataArray(
         data,
-        name="image",
+        name=ELEMENT_TYPE.IMAGE,
         dims=axes,
         coords={"c": channels} if channels is not None else {},
     )
@@ -265,7 +268,7 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
 
 
 def _get_raster_element_group(
-    raster_type: Literal["image", "labels"], group: zarr.Group, element_name: str
+    raster_type: ELEMENT_TYPE_RASTER, group: zarr.Group, element_name: str
 ) -> zarr.Group:
     """Get the Zarr group holding a raster element that has just been written.
 
@@ -299,7 +302,7 @@ def _get_raster_element_group(
 
 
 def _write_raster(
-    raster_type: Literal["image", "labels"],
+    raster_type: ELEMENT_TYPE_RASTER,
     raster_data: DataArray | DataTree,
     group: zarr.Group,
     name: str,
@@ -332,12 +335,13 @@ def _write_raster(
     metadata
         Additional metadata for the raster element
     """
-    if raster_type not in ["image", "labels"]:
-        raise ValueError(f"{raster_type} is not a valid raster type. Must be 'image' or 'labels'.")
+    assert raster_type in get_args(ELEMENT_TYPE_RASTER), ValueError(
+        f"{raster_type} is not a valid raster type. Must be one of {get_args(ELEMENT_TYPE_RASTER)}."
+    )
     # "name" and "label_metadata" are only used for labels. "name" is written in write_multiscale_ngff() but ignored in
     # write_image_ngff() (possibly an ome-zarr-py bug). We only use "name" to ensure correct group access in the
     # ome-zarr API.
-    if raster_type == "labels":
+    if raster_type == ELEMENT_TYPE.LABELS:
         metadata["name"] = name
         metadata["label_metadata"] = label_metadata
 
@@ -367,7 +371,7 @@ def _write_raster(
         raise ValueError("Not a valid labels object")
 
     group = _get_raster_element_group(raster_type, group, name)
-    if raster_type == "image":
+    if raster_type == ELEMENT_TYPE.IMAGE:
         # ome-zarr-py >= 0.18 no longer writes the omero channel metadata, so we write it ourselves.
         overwrite_channel_names(group, raster_data)
     if ATTRS_KEY not in group.attrs:
@@ -463,7 +467,7 @@ def _apply_compression(
 
 
 def _write_raster_dataarray(
-    raster_type: Literal["image", "labels"],
+    raster_type: ELEMENT_TYPE_RASTER,
     group: zarr.Group,
     element_name: str,
     raster_data: DataArray,
@@ -493,7 +497,7 @@ def _write_raster_dataarray(
     metadata
         Additional metadata for the raster element
     """
-    write_single_scale_ngff = write_image_ngff if raster_type == "image" else write_labels_ngff
+    write_single_scale_ngff = write_image_ngff if raster_type == ELEMENT_TYPE.IMAGE else write_labels_ngff
 
     data = raster_data.data
     transformations = _get_transformations(raster_data)
@@ -532,7 +536,7 @@ def _write_raster_dataarray(
 
 
 def _write_raster_datatree(
-    raster_type: Literal["image", "labels"],
+    raster_type: ELEMENT_TYPE_RASTER,
     group: zarr.Group,
     element_name: str,
     raster_data: DataTree,
@@ -562,7 +566,9 @@ def _write_raster_datatree(
     metadata
         Additional metadata for the raster element
     """
-    write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
+    write_multi_scale_ngff = (
+        write_multiscale_ngff if raster_type == ELEMENT_TYPE.IMAGE else write_multiscale_labels_ngff
+    )
     data = get_pyramid_levels(raster_data, attr="data")
     list_of_input_axes: list[Any] = get_pyramid_levels(raster_data, attr="dims")
     assert len(set(list_of_input_axes)) == 1
@@ -632,7 +638,7 @@ def write_image(
         )
 
     _write_raster(
-        raster_type="image",
+        raster_type=ELEMENT_TYPE.IMAGE,
         raster_data=image,
         group=group,
         name=name,
@@ -659,7 +665,7 @@ def write_labels(
         )
 
     _write_raster(
-        raster_type="labels",
+        raster_type=ELEMENT_TYPE.LABELS,
         raster_data=labels,
         group=group,
         name=name,
