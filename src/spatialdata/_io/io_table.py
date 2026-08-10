@@ -10,6 +10,7 @@ from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
+from packaging.version import Version
 
 from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._io.exceptions import FormatVersionUnknownError, WritingToZarrV2DeprecationWarning
@@ -77,7 +78,7 @@ def write_table(
     if element_format not in TablesFormats.values():
         raise FormatVersionUnknownError(element_type="table", version_encountered=element_format)
 
-    if element_format.zarr_format == 3 and version("anndata") >= "0.13":
+    if element_format.zarr_format == 3 and Version(version("anndata")) >= Version("0.13"):
         # `write_zarr` in anndata v0.13 and above can only write to zarr v3
         # solution of passing resolved store directly roughly based on:
         # https://github.com/scverse/anndata/issues/1548#issuecomment-2199801855
