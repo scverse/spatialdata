@@ -113,13 +113,11 @@ def write_table(
             convert_strings_to_categoricals=convert_strings_to_categoricals,
         )
 
-        table_group = group[name]
     else:
         if convert_strings_to_categoricals:
             table.strings_to_categoricals()
 
         write_adata(group, name, table)
-        table_group = group[name]
 
     table_group.attrs["spatialdata-encoding-type"] = group_type
     table_group.attrs["region"] = region
