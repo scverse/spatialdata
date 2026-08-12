@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 from collections.abc import Callable
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,6 +17,8 @@ import pytest
 import zarr
 from anndata import AnnData
 from numpy.random import default_rng
+from packaging.version import Version
+from pandas.testing import assert_series_equal
 from shapely import MultiPolygon, Polygon
 from upath import UPath
 from xarray import DataArray
@@ -1288,7 +1291,8 @@ def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
     assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_zarr_group)
 
 
-def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
+@pytest.mark.parametrize("convert_strings_to_categoricals", (True, False))
+def test_sdata_with_nan_in_obs(tmp_path: Path, convert_strings_to_categoricals: bool) -> None:
     """Test writing SpatialData with mixed string/NaN values in obs works correctly.
 
     Regression test for https://github.com/scverse/spatialdata/issues/399
@@ -1317,8 +1321,17 @@ def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
     assert sdata["table"].obs["column_only_region1"].iloc[1] is np.nan
     assert np.isnan(sdata["table"].obs["column_only_region2"].iloc[0])
 
+    dtypes_before_writing = sdata["table"].obs.dtypes.copy()
+
     path = tmp_path / "data.zarr"
-    sdata.write(path)
+    sdata.write(path, convert_table_strings_to_categoricals=convert_strings_to_categoricals)
+
+    if convert_strings_to_categoricals:
+        expected_dtypes = dtypes_before_writing.copy()
+        expected_dtypes["column_only_region1"] = "category"
+        assert_series_equal(sdata["table"].obs.dtypes, expected_dtypes)
+    else:
+        assert_series_equal(sdata["table"].obs.dtypes, dtypes_before_writing)
 
     sdata2 = SpatialData.read(path)
     assert "column_only_region1" in sdata2["table"].obs.columns
@@ -1327,5 +1340,12 @@ def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
 
     assert r1.iloc[0] == "string"
     assert r2.iloc[1] == 3
-    assert pd.isna(r1.iloc[1])
     assert np.isnan(r2.iloc[0])
+
+    if Version(version("pandas")) >= Version("3"):
+        assert pd.isna(r1.iloc[1])
+    else:  # After round-trip, NaN in object-dtype column becomes string
+        if convert_strings_to_categoricals:
+            assert pd.isna(r1.iloc[1])
+        else:
+            assert r1.iloc[1] == "nan"
