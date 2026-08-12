@@ -62,6 +62,25 @@ def write_table(
     element_format: Format = CurrentTablesFormat(),
     convert_strings_to_categoricals: bool = False,
 ) -> None:
+    """
+    Write a table to a Zarr store.
+
+    Parameters
+    ----------
+    table
+        The table to write.
+    group
+        The table will be written into a subgroup of this group
+    name
+        The name of the subgroup of `group` to which table is to be written.
+    group_type
+        The type of the group.
+    element_format
+        The format to use for writing the table.
+    convert_strings_to_categoricals
+        If True, convert string columns to categoricals before writing.
+        Note that this will have a side effect of modifying dtypes of the input table in place.
+    """
     if element_format.zarr_format == 2:
         warnings.warn(
             message=WritingToZarrV2DeprecationWarning.message, category=WritingToZarrV2DeprecationWarning, stacklevel=2

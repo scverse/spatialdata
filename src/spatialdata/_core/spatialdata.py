@@ -1167,6 +1167,9 @@ class SpatialData:
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
             supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
             ordered for more efficient compression.
+        convert_table_strings_to_categoricals
+            If True, convert string columns of all tables to categoricals before writing.
+            Note that this will have a side effect of modifying string columns into categoricals in place.
         """
         from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
         from spatialdata._io.format import _parse_formats
@@ -1313,11 +1316,14 @@ class SpatialData:
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
-         raster_compressor
+        raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
             supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
             ordered for more efficient compression.
+        convert_table_strings_to_categoricals
+            If True, and if element to be written is a table, convert string columns to categoricals before writing.
+            Note that this will have a side effect of modifying string columns into categoricals in place.
 
         Notes
         -----
