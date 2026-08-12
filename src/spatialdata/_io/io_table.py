@@ -60,6 +60,7 @@ def write_table(
     name: str,
     group_type: str = "ngff:regions_table",
     element_format: Format = CurrentTablesFormat(),
+    convert_strings_to_categoricals: bool = False,
 ) -> None:
     if element_format.zarr_format == 2:
         warnings.warn(
@@ -87,11 +88,17 @@ def write_table(
         resolved_store = _resolve_zarr_store(table_group)
 
         # Write the table to the path of the table group
-        table.write_zarr(store=resolved_store, consolidate_metadata=False)
+        table.write_zarr(
+            store=resolved_store,
+            consolidate_metadata=False,
+            convert_strings_to_categoricals=convert_strings_to_categoricals,
+        )
 
         table_group = group[name]
     else:
-        table.strings_to_categoricals()
+        if convert_strings_to_categoricals:
+            table.strings_to_categoricals()
+
         write_adata(group, name, table)
         table_group = group[name]
 

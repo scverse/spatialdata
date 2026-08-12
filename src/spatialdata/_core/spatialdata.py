@@ -1114,6 +1114,7 @@ class SpatialData:
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+        convert_table_strings_to_categoricals: bool = False,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1194,6 +1195,7 @@ class SpatialData:
                 parsed_formats=parsed,
                 shapes_geometry_encoding=shapes_geometry_encoding,
                 raster_compressor=raster_compressor,
+                convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1212,6 +1214,7 @@ class SpatialData:
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+        convert_table_strings_to_categoricals: bool = False,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1279,6 +1282,7 @@ class SpatialData:
                 group=element_type_group,
                 name=element_name,
                 element_format=parsed_formats["tables"],
+                convert_strings_to_categoricals=convert_table_strings_to_categoricals,
             )
         else:
             raise ValueError(f"Unknown element type: {element_type}")
@@ -1290,6 +1294,7 @@ class SpatialData:
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+        convert_table_strings_to_categoricals: bool = False,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1332,6 +1337,7 @@ class SpatialData:
                     sdata_formats=sdata_formats,
                     shapes_geometry_encoding=shapes_geometry_encoding,
                     raster_compressor=raster_compressor,
+                    convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
                 )
             return
 
@@ -1368,6 +1374,7 @@ class SpatialData:
             parsed_formats=parsed_formats,
             shapes_geometry_encoding=shapes_geometry_encoding,
             raster_compressor=raster_compressor,
+            convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
         if self.has_consolidated_metadata():
