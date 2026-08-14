@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import Any, Literal
 
 import dask.dataframe.core
@@ -79,6 +80,24 @@ def raccoon() -> SpatialData:
     return RaccoonDataset().raccoon()
 
 
+def _shipped_registry() -> tuple[str | None, dict[str, Any]]:
+    """Parse the ``datasets.yaml`` registry shipped inside the ``spatialdata`` package."""
+    import importlib.resources
+
+    from scverse_misc.datasets import parse_registry
+
+    registry = importlib.resources.files("spatialdata").joinpath("datasets.yaml")
+    with importlib.resources.as_file(registry) as registry_path:
+        return parse_registry(registry_path)
+
+
+def _cache_dir(path: str | None) -> Path:
+    """Resolve the cache directory, defaulting to the OS cache location for ``"spatialdata"``."""
+    import pooch
+
+    return Path(path) if path is not None else Path(pooch.os_cache("spatialdata"))
+
+
 def cells(path: str | None = None) -> SpatialData:
     """
     Cells dataset.
@@ -86,6 +105,12 @@ def cells(path: str | None = None) -> SpatialData:
     Download the ``cells`` example dataset and load it as a :class:`~spatialdata.SpatialData`
     object. The download is hash-verified and cached, so repeated calls reuse the local copy
     instead of downloading again.
+
+    The dataset is a small region of a Xenium Prime Cervical Cancer sample and contains three
+    multiscale images (``he_aligned``, ``he_image``, ``morphology_focus``), three multiscale
+    label layers (``cell_labels``, ``nucleus_labels``, ``tissue_labels``), the ``transcripts``
+    points, the ``cell_boundaries`` and ``nucleus_boundaries`` shapes, and a cell-by-gene
+    ``table`` annotating the 94 cells.
 
     Parameters
     ----------
@@ -97,17 +122,10 @@ def cells(path: str | None = None) -> SpatialData:
     -------
     SpatialData object with the cells dataset.
     """
-    import importlib.resources
-    from pathlib import Path
+    from scverse_misc.datasets import fetch
 
-    import pooch
-    from scverse_misc.datasets import fetch, parse_registry
-
-    cache_dir = Path(path) if path is not None else Path(pooch.os_cache("spatialdata"))
-    registry = importlib.resources.files("spatialdata").joinpath("datasets.yaml")
-    with importlib.resources.as_file(registry) as registry_path:
-        base_url, datasets = parse_registry(registry_path)
-    sdata: SpatialData = fetch(datasets["cells"], cache_dir, base_url=base_url)
+    base_url, datasets = _shipped_registry()
+    sdata: SpatialData = fetch(datasets["cells"], _cache_dir(path), base_url=base_url)
     return sdata
 
 
