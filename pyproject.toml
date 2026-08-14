@@ -266,8 +266,16 @@ anndata-pandas = [
 [tool.hatch.envs.test-anndata-pandas.overrides]
 matrix.anndata-pandas.extra-dependencies = [
     # every option where the if-condition is True gets included
+
+    # anndata 0.13
     {value="anndata~=0.13", if = ["0.13-2", "0.13-3"]},
+
+    # anndata 0.12
     {value="anndata>=0.12,<0.13", if = ["0.12-2"]},
+
+    # pandas 2
     {value="pandas>=2.3,<3", if = ["0.13-2", "0.12-2"]},
+
+    # pandas 3
     {value="pandas~=3.0", if = ["0.13-3"]},
 ]
