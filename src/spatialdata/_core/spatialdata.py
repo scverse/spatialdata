@@ -1175,10 +1175,11 @@ class SpatialData:
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
+
         self._validate_can_safely_write_to_path(file_path, overwrite=overwrite)
+        store = _resolve_zarr_store(file_path)
         self._validate_all_elements()
 
-        store = _resolve_zarr_store(file_path)
         zarr_format = parsed["SpatialData"].zarr_format
         zarr_group = zarr.create_group(store=store, overwrite=overwrite, zarr_format=zarr_format)
         self.write_attrs(zarr_group=zarr_group, sdata_format=parsed["SpatialData"])
