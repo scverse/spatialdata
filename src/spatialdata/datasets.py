@@ -88,7 +88,10 @@ def _shipped_registry() -> tuple[str | None, dict[str, Any]]:
 
     registry = importlib.resources.files("spatialdata").joinpath("datasets.yaml")
     with importlib.resources.as_file(registry) as registry_path:
-        return parse_registry(registry_path)
+        base_url: str | None
+        datasets: dict[str, Any]
+        base_url, datasets = parse_registry(registry_path)
+    return base_url, datasets
 
 
 def _cache_dir(path: str | None) -> Path:
