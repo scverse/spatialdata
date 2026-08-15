@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any, Literal, TypeGuard, cast
 
 import dask.array as da
@@ -28,6 +27,7 @@ from spatialdata._io.format import (
     RasterFormatType,
     get_ome_zarr_format,
 )
+from spatialdata._store import store_from_group
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
@@ -160,13 +160,15 @@ def _prepare_storage_options(
 
 
 def _read_multiscale(
-    store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
+    group: zarr.Group, raster_type: Literal["image", "labels"], reader_format: Format
 ) -> DataArray | DataTree:
-    assert isinstance(store, str | Path)
     assert raster_type in ["image", "labels"]
+    # ome_zarr.io.ZarrLocation needs a store rooted at this group's location, not at the
+    # SpatialData container root, so we re-root the parent store at ``group.path``.
+    resolved_store = store_from_group(group, read_only=True)
 
     nodes: list[Node] = []
-    image_loc = ZarrLocation(store, fmt=reader_format)
+    image_loc = ZarrLocation(resolved_store, fmt=reader_format)
     if exists := image_loc.exists():
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)

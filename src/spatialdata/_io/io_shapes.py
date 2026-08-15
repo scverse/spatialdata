@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -23,6 +22,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
+from spatialdata._store import parquet_fs_and_path
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -30,39 +30,36 @@ from spatialdata.transformations._utils import (
 )
 
 
-def _read_shapes(
-    store: str | Path,
-) -> GeoDataFrame:
-    """Read shapes from a zarr store."""
-    f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
-    version = _parse_version(f, expect_attrs_key=True)
+def _read_shapes(group: zarr.Group) -> GeoDataFrame:
+    """Read a shapes element from an open zarr group."""
+    version = _parse_version(group, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]
 
     if isinstance(shape_format, ShapesFormatV01):
-        coords = np.array(f["coords"])
-        index = np.array(f["Index"])
-        typ = shape_format.attrs_from_dict(f.attrs.asdict())
+        coords = np.array(group["coords"])
+        index = np.array(group["Index"])
+        typ = shape_format.attrs_from_dict(group.attrs.asdict())
         if typ.name == "POINT":
-            radius = np.array(f["radius"])
+            radius = np.array(group["radius"])
             geometry = from_ragged_array(typ, coords)
             geo_df = GeoDataFrame({"geometry": geometry, "radius": radius}, index=index)
         else:
-            offsets_keys = [k for k in f if k.startswith("offset")]
+            offsets_keys = [k for k in group if k.startswith("offset")]
             offsets_keys = natsorted(offsets_keys)
-            offsets = tuple(np.array(f[k]).flatten() for k in offsets_keys)
+            offsets = tuple(np.array(group[k]).flatten() for k in offsets_keys)
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = f.store_path.store.root
-        path = Path(store_root) / f.path / "shapes.parquet"
-        geo_df = read_parquet(path)
+        fs, parquet_path = parquet_fs_and_path(group, "shapes.parquet")
+        with fs.open(parquet_path, "rb") as src:
+            geo_df = read_parquet(src)
     else:
         raise ValueError(
             f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."
         )
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    transformations = _get_transformations_from_ngff_dict(group.attrs.asdict()["coordinateTransformations"])
     _set_transformations(geo_df, transformations)
     return geo_df
 
@@ -168,13 +165,13 @@ def _write_shapes_v02_v03(
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    store_root = group.store_path.store.root
-    path = store_root / group.path / "shapes.parquet"
+    fs, parquet_path = parquet_fs_and_path(group, "shapes.parquet")
 
     # Temporarily remove transformations from attrs to avoid serialization issues
     transforms = shapes.attrs[TRANSFORM_KEY]
     del shapes.attrs[TRANSFORM_KEY]
-    shapes.to_parquet(path, geometry_encoding=geometry_encoding)
+    with fs.open(parquet_path, "wb") as sink:
+        shapes.to_parquet(sink, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 
     attrs = element_format.attrs_to_dict(shapes.attrs)

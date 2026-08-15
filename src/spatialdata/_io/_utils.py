@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import filecmp
+import json
 import os.path
 import re
 import sys
@@ -11,7 +12,7 @@ from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from enum import Enum
 from functools import singledispatch
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import zarr
@@ -27,7 +28,6 @@ from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
-from spatialdata._logging import logger
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -37,6 +37,12 @@ from spatialdata.models._utils import (
 )
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
+
+
+def join_fsspec_store_path(store_path: str, relative_path: str) -> str:
+    """Append a relative zarr-group path to an FsspecStore root, yielding a fsspec key."""
+    rel = relative_path.lstrip("/")
+    return str(PurePosixPath(store_path) / rel) if rel else store_path
 
 
 def _get_transformations_from_ngff_dict(
@@ -318,6 +324,83 @@ def _find_piece_dict(obj: dict[str, tuple[str | None]] | Task) -> dict[str, tupl
     return None
 
 
+def _extract_parquet_paths_from_task(obj: Any) -> list[str]:
+    """Recursively extract parquet file paths from a dask ``read_parquet`` task.
+
+    Dask's task-graph shape changed between the version pinned before scverse/spatialdata
+    PR #1006 (https://github.com/scverse/spatialdata/pull/1006 "unpinning dask", commit
+    53b9438a https://github.com/scverse/spatialdata/commit/53b9438a328c5fc2a451d2c8afab439b945ba2b8)
+    and the current one; we tolerate both.
+
+    - Legacy shape: a dict ``{"piece": (parquet_file, None, None)}`` somewhere in the args
+      (possibly wrapped in other dicts for mixed points+images element graphs). The trailing
+      elements of the ``piece`` tuple encode row-group / filter constraints; we only support
+      unfiltered reads (hence the validation on ``check0`` / ``check1``).
+    - Current shape: a ``dask.dataframe.dask_expr.io.parquet.FragmentWrapper`` whose
+      ``.fragment.path`` is the parquet file (from ``dask_expr.io.parquet.ReadParquetPyarrowFS``).
+      The wrapper may live in Task ``kwargs["fragment_wrapper"]`` for simple reads, but in fused
+      expressions (``readparquetpyarrowfs-fused-*``) it is nested inside lists and tuples
+      inside a subgraph dict, so we walk every container uniformly rather than targeting named
+      kwargs.
+
+    ``FragmentWrapper`` is detected via the ``.fragment.path`` attribute chain instead of an
+    isinstance check to avoid importing private dask_expr internals; the ``endswith(".parquet")``
+    guard keeps false positives from random objects out of the result.
+    """
+    found: list[str] = []
+
+    frag = getattr(obj, "fragment", None)
+    if frag is not None:
+        path = getattr(frag, "path", None)
+        if isinstance(path, str) and path.endswith(".parquet"):
+            found.append(path)
+
+    if isinstance(obj, Mapping):
+        # TODO(legacy-dask): the ``"piece"`` branch targets the pre-PR-#1006 dask graph shape
+        # (``dask/dataframe/io/parquet/core.py`` produced ``{"piece": (file, rg, filters)}``). The
+        # current dask pin (``dask>=2025.12.0``) no longer emits this shape at runtime; the branch
+        # is kept only as a safety net for users forcing an older dask via pip. Remove once the
+        # lower pin is bumped past the PR-#1006 cut-off and CI covers only the new shape.
+        if "piece" in obj:
+            piece = obj["piece"]
+            # piece is ``(parquet_file, row_groups, filters)`` -- ``row_groups`` and ``filters`` may
+            # be ``None`` (single-file unfiltered) or ``[0]/[]`` (``aggregate_files=True``); both are
+            # whole-file reads and not interesting to us here, so we only validate the extension.
+            if isinstance(piece, tuple) and len(piece) >= 1 and isinstance(piece[0], str):
+                parquet_file = piece[0]
+                if not parquet_file.endswith(".parquet"):
+                    raise ValueError(
+                        f"Unable to parse the parquet file from the dask task {obj!r}. Please report this bug."
+                    )
+                found.append(parquet_file)
+        for v in obj.values():
+            found.extend(_extract_parquet_paths_from_task(v))
+        return found
+
+    if isinstance(obj, (list, tuple)):
+        for item in obj:
+            found.extend(_extract_parquet_paths_from_task(item))
+        return found
+
+    # TODO(dask-task-api): the ``kwargs`` / ``args`` getattr probes here rely on the Task wrapper
+    # object introduced alongside PR #1006. The attribute contract is not documented as public
+    # (``dask.dataframe.dask_expr``), so we access it defensively via getattr and traverse every
+    # container uniformly. If dask stabilises a public accessor (e.g. ``task.iter_leaves()`` or an
+    # expr-level ``file_paths`` property) or if ``FragmentWrapper`` becomes importable from a
+    # stable namespace, replace the attribute-chain walk with a typed call and drop the getattrs.
+    kwargs = getattr(obj, "kwargs", None)
+    if isinstance(kwargs, Mapping):
+        for v in kwargs.values():
+            found.extend(_extract_parquet_paths_from_task(v))
+
+    args = getattr(obj, "args", None)
+    if isinstance(args, (list, tuple)):
+        for a in args:
+            found.extend(_extract_parquet_paths_from_task(a))
+
+    return found
+
+
 def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> None:
     # see the types allowed for the dask graph here: https://docs.dask.org/en/stable/spec.html
 
@@ -340,66 +423,32 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                 name = k
             if name is not None:
                 if name.startswith("original-from-zarr"):
-                    # LocalStore.store does not have an attribute path, but we keep it like this for backward compat.
+                    # TODO(zarr-v3-store-path): the ``getattr(..., "path", None)`` fallback dates
+                    # back to zarr v2, where ``DirectoryStore`` exposed ``.path`` and the v3
+                    # ``LocalStore`` exposes ``.root`` instead. With the current pin
+                    # (``zarr>=3.0.0``) the getattr branch is never taken for local backends -- it
+                    # only covers exotic third-party stores that still mimic the v2 attribute.
+                    # Once we are confident no such shim stores are in use, collapse this to just
+                    # ``v.store.root`` and drop the getattr probe.
                     path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
                     files.append(str(UPath(path).resolve()))
-                elif name.startswith("read-parquet") or name.startswith("read_parquet"):
-                    # Here v is a read_parquet task with arguments and the only value is a dictionary.
-                    if "piece" in v.args[0]:
-                        # https://github.com/dask/dask/blob/ff2488aec44d641696e0b7aa41ed9e995c710705/dask/dataframe/io/parquet/core.py#L870
-                        parquet_file, check0, check1 = v.args[0]["piece"]
-                        if not parquet_file.endswith(".parquet") or check0 is not None or check1 is not None:
-                            raise ValueError(
-                                f"Unable to parse the parquet file from the dask subgraph {subgraph}. Please "
-                                f"report this bug."
-                            )
+                elif "parquet" in name.lower():
+                    # Matches every dask task-key that wraps a parquet read across versions:
+                    #   - legacy ``read-parquet-<hash>`` / ``read_parquet-<hash>`` (pre scverse/
+                    #     spatialdata PR #1006, https://github.com/scverse/spatialdata/pull/1006),
+                    #   - current ``read_parquet-<hash>`` plus fused-expression forms such as
+                    #     ``readparquetpyarrowfs-fused-values-<hash>`` produced by
+                    #     ``dask_expr.io.parquet.ReadParquetPyarrowFS`` when a parquet column is
+                    #     combined with other arrays (see ``test_self_contained``).
+                    # Any false-positive key that matches but carries no parquet payload is filtered
+                    # inside ``_extract_parquet_paths_from_task`` (paths must ``endswith(".parquet")``).
+                    for parquet_file in _extract_parquet_paths_from_task(v):
                         files.append(os.path.realpath(parquet_file))
-                    else:
-                        # This occurs when for example points and images are mixed, the main task still starts with
-                        # read_parquet, but the execution happens through a subgraph which we iterate over to get the
-                        # actual read_parquet task.
-                        #
-                        # v.args[0] has two known shapes:
-                        #   dict  – keys are task keys, values are Task objects (classic subgraph case)
-                        #   list  – list of piece dicts produced when aggregate_files=True aggregates multiple
-                        #           parquet files into one partition; check0/check1 are row-group selectors
-                        #           ([0], []) rather than None, so only the file extension is validated.
-                        args0 = v.args[0]
-                        if isinstance(args0, dict):
-                            for task in args0.values():
-                                # Recursively go through tasks, this is required because differences between dask
-                                # versions.
-                                piece_dict = _find_piece_dict(task)
-                                if isinstance(piece_dict, dict) and "piece" in piece_dict:
-                                    parquet_file, check0, check1 = piece_dict["piece"]  # type: ignore[misc]
-                                    if (
-                                        not parquet_file.endswith(".parquet")
-                                        or check0 is not None
-                                        or check1 is not None
-                                    ):
-                                        raise ValueError(
-                                            f"Unable to parse the parquet file from the dask subgraph {subgraph}. "
-                                            f"Please report this bug."
-                                        )
-                                    files.append(os.path.realpath(parquet_file))
-                        elif isinstance(args0, list):
-                            for item in args0:
-                                if isinstance(item, dict) and "piece" in item:
-                                    parquet_file = item["piece"][0]
-                                    if not parquet_file.endswith(".parquet"):
-                                        raise ValueError(
-                                            f"Unable to parse the parquet file from the dask subgraph {subgraph}. "
-                                            f"Please report this bug."
-                                        )
-                                    files.append(os.path.realpath(parquet_file))
-                        else:
-                            logger.warning(
-                                f"Unexpected type {type(args0)} for v.args[0] in the read_parquet task graph. "
-                                f"Backing files may not be detected correctly. Please report this as a bug."
-                            )
 
 
-def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
+def _backed_elements_contained_in_path(
+    path: Path | UPath, object: SpatialData | SpatialElement | AnnData
+) -> list[bool]:
     """
     Return the list of boolean values indicating if backing files for an object are child directory of a path.
 
@@ -418,9 +467,16 @@ def _backed_elements_contained_in_path(path: Path, object: SpatialData | Spatial
     -----
     If an object does not have a Dask computational graph, it will return an empty list.
     It is possible for a single SpatialElement to contain multiple files in their Dask computational graph.
+
+    For a remote ``path`` (:class:`upath.UPath`), this always returns an empty list: Dask backing paths
+    are resolved as local filesystem paths, so they cannot be compared to object-store locations.
+    :meth:`spatialdata.SpatialData.write` therefore skips the local "backing files in target" guard
+    for remote targets; ``overwrite=True`` on a remote URL must be used only when overwriting is safe.
     """
+    if isinstance(path, UPath):
+        return []
     if not isinstance(path, Path):
-        raise TypeError(f"Expected a Path object, got {type(path)}")
+        raise TypeError(f"Expected a Path or UPath object, got {type(path)}")
     return [_is_subfolder(parent=path, child=Path(fp)) for fp in get_dask_backing_files(object)]
 
 
@@ -449,16 +505,44 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
 
 
 def _is_element_self_contained(
-    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData,
+    element_path: Path | UPath,
 ) -> bool:
+    """Whether element Dask graphs only reference files under ``element_path`` (local) or N/A (remote)."""
+    if isinstance(element_path, UPath):
+        # Backing-file paths are local; cannot relate them to remote keys—assume OK for this heuristic.
+        return True
     if isinstance(element, DaskDataFrame):
         pass
     # TODO when running test_save_transformations it seems that for the same element this is called multiple times
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
+def _ensure_async_fs(fs: Any) -> Any:
+    """Return an async fsspec filesystem for use with zarr's FsspecStore.
+
+    Zarr's FsspecStore expects an async filesystem. If the given fs is synchronous,
+    it is converted using fsspec's public API (async instance or AsyncFileSystemWrapper)
+    so that ZarrUserWarning is not raised.
+    """
+    if getattr(fs, "asynchronous", False):
+        return fs
+    import fsspec
+
+    if getattr(fs, "async_impl", False):
+        fs_dict = json.loads(fs.to_json())
+        fs_dict["asynchronous"] = True
+        return fsspec.AbstractFileSystem.from_json(json.dumps(fs_dict))
+    from fsspec.implementations.asyn_wrapper import AsyncFileSystemWrapper
+
+    return AsyncFileSystemWrapper(fs, asynchronous=True)
+
+
 def _resolve_zarr_store(
-    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any
+    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group,
+    *,
+    read_only: bool = False,
+    **kwargs: Any,
 ) -> zarr.storage.StoreLike:
     """
     Normalize different Zarr store inputs into a usable store instance.
@@ -474,9 +558,14 @@ def _resolve_zarr_store(
     path
         The input representing a Zarr store or group. Can be a filesystem
         path, remote path, existing store, or Zarr group.
+    read_only
+        If ``True``, constructed ``LocalStore`` / ``FsspecStore`` instances are built with
+        ``read_only=True``. Stores that already exist (when ``path`` is a ``StoreLike`` or
+        a ``zarr.Group`` whose wrapped store is not reconstructable) are returned as-is;
+        the caller is responsible for opening them at the right mode.
     **kwargs
         Additional keyword arguments forwarded to the underlying store
-        constructor (e.g. `mode`, `storage_options`).
+        constructor.
 
     Returns
     -------
@@ -486,37 +575,39 @@ def _resolve_zarr_store(
     ------
     TypeError
         If the input type is unsupported.
-    ValueError
+        ValueError
         If a `zarr.Group` has an unsupported store type.
     """
-    # TODO: ensure kwargs like mode are enforced everywhere and passed correctly to the store
     if isinstance(path, str | Path):
-        # if the input is str or Path, map it to UPath
         path = UPath(path)
 
     if isinstance(path, PosixUPath | WindowsUPath):
         # if the input is a local path, use LocalStore
-        return LocalStore(path.path)
+        return LocalStore(path.path, read_only=read_only)
 
     if isinstance(path, zarr.Group):
-        # if the input is a zarr.Group, wrap it with a store
+        # Re-wrap the group's store at the group's subpath. Note: zarr v3 no longer ships
+        # ``ConsolidatedMetadataStore`` (v2 wrapped the backend in a store; v3 surfaces
+        # consolidated metadata as a field on ``GroupMetadata`` instead), so we only need to
+        # handle the two concrete backends below.
         if isinstance(path.store, LocalStore):
             store_path = UPath(path.store.root) / path.path
-            return LocalStore(store_path.path)
+            return LocalStore(store_path.path, read_only=read_only)
         if isinstance(path.store, FsspecStore):
-            # if the store within the zarr.Group is an FSStore, return it
-            # but extend the path of the store with that of the zarr.Group
-            return FsspecStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
-        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
-            # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
-            return path.store.store
+            return FsspecStore(
+                fs=_ensure_async_fs(path.store.fs),
+                path=join_fsspec_store_path(path.store.path, path.path),
+                read_only=read_only,
+                **kwargs,
+            )
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
-    if isinstance(path, zarr.storage.StoreLike):
-        # if the input already a store, wrap it in an FSStore
-        return FsspecStore(path, **kwargs)
     if isinstance(path, UPath):
-        # if input is a remote UPath, map it to an FSStore
-        return FsspecStore(path.path, fs=path.fs, **kwargs)
+        # Check before Store to avoid UnionType isinstance (zarr's ``StoreLike`` is a type alias).
+        return FsspecStore(_ensure_async_fs(path.fs), path=path.path, read_only=read_only, **kwargs)
+    if isinstance(path, zarr.abc.store.Store):
+        # Already a concrete store (LocalStore, FsspecStore, MemoryStore, ...). Do not pass it as ``fs=`` to
+        # FsspecStore -- that only accepts an async fsspec filesystem and raises on stores (e.g. ``async_impl``).
+        return path
     raise TypeError(f"Unsupported type: {type(path)}")
 
 

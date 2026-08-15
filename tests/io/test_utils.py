@@ -11,8 +11,29 @@ import pytest
 from upath import UPath
 
 from spatialdata import SpatialData, read_zarr
-from spatialdata._io._utils import get_dask_backing_files, handle_read_errors
+from spatialdata._io._utils import get_dask_backing_files, handle_read_errors, join_fsspec_store_path
 from spatialdata.models import PointsModel
+
+
+@pytest.mark.parametrize(
+    ("store_path", "relative_path", "expected"),
+    [
+        # empty / slash-only relative paths return the store root unchanged
+        ("bucket/store.zarr", "", "bucket/store.zarr"),
+        ("bucket/store.zarr", "/", "bucket/store.zarr"),
+        ("store.zarr", "", "store.zarr"),
+        # leading slashes on the relative path are stripped before joining
+        ("bucket/store.zarr", "/images/img", "bucket/store.zarr/images/img"),
+        ("bucket/store.zarr", "//images/img", "bucket/store.zarr/images/img"),
+        # nested and single-segment relative paths
+        ("bucket/store.zarr", "images/img", "bucket/store.zarr/images/img"),
+        ("bucket/store.zarr", "points", "bucket/store.zarr/points"),
+        ("bucket", "key", "bucket/key"),
+    ],
+)
+def test_join_fsspec_store_path(store_path: str, relative_path: str, expected: str) -> None:
+    """`join_fsspec_store_path` joins a relative zarr-group path onto an fsspec store root."""
+    assert join_fsspec_store_path(store_path, relative_path) == expected
 
 
 def test_backing_files_points(points):
