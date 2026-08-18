@@ -107,7 +107,7 @@ class SpatialData:
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
             slot.
 
-    The table can annotate regions (shapesor labels) and can be used to store additional information.
+    The table can annotate regions (shapes or labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
     annotation directly.
     """
