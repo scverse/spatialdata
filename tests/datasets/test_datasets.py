@@ -52,9 +52,9 @@ def test_cache_dir() -> None:
     assert _cache_dir(None) == Path(pooch.os_cache("spatialdata"))
 
 
-@pytest.mark.slow
+@pytest.mark.network
 def test_cells_download(tmp_path) -> None:
-    # Downloads ~3 MB from the scverse example data bucket; opt out with `-m "not slow"`.
+    # Downloads ~3 MB from the scverse example data bucket; skipped by default, opt in with `--run-network`.
     sdata = cells(path=str(tmp_path))
     assert isinstance(sdata, SpatialData)
 

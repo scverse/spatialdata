@@ -6,7 +6,9 @@
 #   type: spatialdata  ->  a .zip that extracts to a single .zarr store
 #
 # Every dataset must list its ``license``; datasets under a license that requires
-# attribution must also carry an ``attribution`` string crediting the original source.
+# attribution must also carry an ``attribution`` string crediting the original source, and
+# datasets under a license that requires linking the license (e.g. CC BY 4.0) must also carry
+# a ``license_url`` field.
 base_url: https://exampledata.scverse.org/spatialdata/
 datasets:
     cells:
