@@ -260,7 +260,7 @@ anndata-pandas = [
     "0.13-2",
     "0.13-3",
     "0.12-2"
-    # support for pandas>=3 is available only in anndata>=0.13
+    # no "0.12-3": support for pandas>=3 is available only in anndata>=0.13
 ]
 
 [tool.hatch.envs.test-anndata-pandas.overrides]

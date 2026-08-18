@@ -1327,7 +1327,7 @@ def test_sdata_with_nan_in_obs(tmp_path: Path, convert_strings_to_categoricals: 
     sdata.write(path, convert_table_strings_to_categoricals=convert_strings_to_categoricals)
 
     if convert_strings_to_categoricals:
-        expected_dtypes = dtypes_before_writing.copy()
+        expected_dtypes = dtypes_before_writing
         expected_dtypes["column_only_region1"] = "category"
         assert_series_equal(sdata["table"].obs.dtypes, expected_dtypes)
     else:
