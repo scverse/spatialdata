@@ -45,6 +45,7 @@ dependencies = [
     "spatial_image>=1.2.3",
     "scikit-image",
     "scipy!=1.17.0",
+    "scverse-misc[datasets]>=0.1.0",
     "typing_extensions>=4.8.0",
     "universal_pathlib>=0.2.6",
     "xarray>=2024.10.0",
@@ -108,6 +109,7 @@ addopts = [
 # These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "network: marks tests that require network access; skipped by default, run with '--run-network'",
     "gpu: run test on GPU using CuPY.",
     "array_api: used by anndata.tests.helpers, not us",
     "skip_with_pyarrow_strings: skipwhen pyarrow string conversion is turned on",
