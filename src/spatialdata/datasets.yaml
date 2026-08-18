@@ -13,10 +13,12 @@ datasets:
         type: spatialdata
         doc_header: Cells dataset as a SpatialData object.
         license: CC BY 4.0
+        license_url: https://creativecommons.org/licenses/by/4.0/
         attribution: >-
             Derived from the 10x Genomics Xenium Prime Cervical Cancer FFPE dataset
             (https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-cervical-cancer),
-            subset to a small tissue region. Licensed under CC BY 4.0.
+            subset to a small tissue region. Licensed under CC BY 4.0
+            (https://creativecommons.org/licenses/by/4.0/).
         files:
             - name: cells.zip
               s3_key: cells.zip

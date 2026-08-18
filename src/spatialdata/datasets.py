@@ -115,6 +115,13 @@ def cells(path: str | None = None) -> SpatialData:
     points, the ``cell_boundaries`` and ``nucleus_boundaries`` shapes, and a cell-by-gene
     ``table`` annotating the 94 cells.
 
+    Notes
+    -----
+    Derived from the 10x Genomics Xenium Prime Cervical Cancer FFPE dataset
+    (https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-cervical-cancer), subset to a
+    small tissue region. Licensed under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_;
+    see ``datasets.yaml`` for the attribution string shipped alongside the data.
+
     Parameters
     ----------
     path
