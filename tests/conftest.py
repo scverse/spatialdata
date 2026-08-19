@@ -8,7 +8,7 @@ import sys
 os.environ["NUMBA_DISABLE_JIT"] = "1"
 # If a pytest plugin already imported numba before this conftest ran, patch the cached config value too.
 if "numba.core.config" in sys.modules:
-    sys.modules["numba.core.config"].NUMBA_DISABLE_JIT = 1
+    sys.modules["numba.core.config"].DISABLE_JIT = 1
 
 import copy as _copy
 from collections.abc import Callable, Sequence
