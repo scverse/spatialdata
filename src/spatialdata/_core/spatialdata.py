@@ -107,7 +107,7 @@ class SpatialData:
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
             slot.
 
-    The table can annotate regions (shapesor labels) and can be used to store additional information.
+    The table can annotate regions (shapes or labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
     annotation directly.
     """
@@ -1114,6 +1114,7 @@ class SpatialData:
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+        convert_table_strings_to_categoricals: bool = False,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1166,6 +1167,9 @@ class SpatialData:
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
             supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
             ordered for more efficient compression.
+        convert_table_strings_to_categoricals
+            If True, convert string columns of all tables to categoricals before writing.
+            Note that this will have a side effect of modifying string columns into categoricals in place.
         """
         from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
         from spatialdata._io.format import _parse_formats
@@ -1194,6 +1198,7 @@ class SpatialData:
                 parsed_formats=parsed,
                 shapes_geometry_encoding=shapes_geometry_encoding,
                 raster_compressor=raster_compressor,
+                convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1212,6 +1217,7 @@ class SpatialData:
         parsed_formats: dict[str, SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+        convert_table_strings_to_categoricals: bool = False,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1279,6 +1285,7 @@ class SpatialData:
                 group=element_type_group,
                 name=element_name,
                 element_format=parsed_formats["tables"],
+                convert_strings_to_categoricals=convert_table_strings_to_categoricals,
             )
         else:
             raise ValueError(f"Unknown element type: {element_type}")
@@ -1290,6 +1297,7 @@ class SpatialData:
         sdata_formats: SpatialDataFormatType | list[SpatialDataFormatType] | None = None,
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
+        convert_table_strings_to_categoricals: bool = False,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1308,11 +1316,14 @@ class SpatialData:
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
             for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
-         raster_compressor
+        raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
             supported. If not specified, the compression will be `lz4` with compression level 5. Bytes are automatically
             ordered for more efficient compression.
+        convert_table_strings_to_categoricals
+            If True, and if element to be written is a table, convert string columns to categoricals before writing.
+            Note that this will have a side effect of modifying string columns into categoricals in place.
 
         Notes
         -----
@@ -1332,6 +1343,7 @@ class SpatialData:
                     sdata_formats=sdata_formats,
                     shapes_geometry_encoding=shapes_geometry_encoding,
                     raster_compressor=raster_compressor,
+                    convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
                 )
             return
 
@@ -1368,6 +1380,7 @@ class SpatialData:
             parsed_formats=parsed_formats,
             shapes_geometry_encoding=shapes_geometry_encoding,
             raster_compressor=raster_compressor,
+            convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
         if self.has_consolidated_metadata():

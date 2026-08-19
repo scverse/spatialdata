@@ -13,8 +13,7 @@ In addition to the packages needed to _use_ this package, you need additional py
 the documentation_. It's easy to install them using `pip`:
 
 ```bash
-cd spatialdata-io
-pip install -e ".[dev,test,doc]"
+pip install -e . --group dev --group test --group docs
 ```
 
 ## Code-style
@@ -51,7 +50,7 @@ and [prettier][prettier-editors].
 ## Writing tests
 
 ```{note}
-Remember to first install the package with `pip install '-e[dev,test]'`
+Remember to first install the package with `pip install -e . --group dev --group test`
 ```
 
 This package uses [pytest][] for automated testing. Please [write tests][scanpy-test-docs] for every function added to the package.

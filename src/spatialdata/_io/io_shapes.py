@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Literal
 
@@ -15,6 +16,7 @@ from spatialdata._io._utils import (
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
+from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import (
     CurrentShapesFormat,
     ShapesFormats,
@@ -93,6 +95,11 @@ def write_shapes(
         Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
         details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
     """
+    if element_format.zarr_format == 2:
+        warnings.warn(
+            message=WritingToZarrV2DeprecationWarning.message, category=WritingToZarrV2DeprecationWarning, stacklevel=2
+        )
+
     from spatialdata.config import settings
 
     if geometry_encoding is None:
