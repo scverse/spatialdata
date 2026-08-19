@@ -133,7 +133,7 @@ class BaseTransformation(ABC):
         Parameters
         ----------
         input_axes
-            The axes of the input coordinate system, e.g. ``("x", "y")`` or ``("x", "y", "z")``.
+            The axes of the input coordinate system, e.g. ``("x", "y")`` or ``("c", "z", "y", "x")``.
         output_axes
             The axes of the output coordinate system.
 
@@ -141,7 +141,7 @@ class BaseTransformation(ABC):
         -------
         ArrayLike
             A homogeneous affine matrix of shape ``(len(output_axes) + 1, len(input_axes) + 1)``.
-            The last row is always ``[0, 0, ..., 1]``.
+            The last row is always ``[0, 0, ..., 1]`` (homogeneity).
         """
         pass
 
