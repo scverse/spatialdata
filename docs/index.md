@@ -12,8 +12,8 @@ This page provides documentation on how to install, use, and extend the core `sp
 
 - `spatialdata-io`: load data from common spatial omics technologies into `spatialdata` ([repository][spatialdata-io-repo], [documentation][spatialdata-io-docs]).
 - `spatialdata-plot`: Static plotting library for `spatialdata` ([repository][spatialdata-plot-repo], [documentation][spatialdata-plot-docs]).
-- `napari-spatialdata-repo`: napari plugin for interactive exploration and annotation of `spatialdata` ([repository][napari-spatialdata-repo], [documentation][napari-spatialdata-docs]).
-- `SpatialData` (R): R implementation of the SpatialData framework ([repository][spatialdata-r-repo]).
+- `napari-spatialdata`: napari plugin for interactive exploration and annotation of `spatialdata` ([repository][napari-spatialdata-repo], [documentation][napari-spatialdata-docs]).
+- `spatialdataR`: R implementation of the SpatialData framework ([repository][spatialdata-r-repo]).
 - `SpatialData.js`: JavaScript/TypeScript implementation of the SpatialData framework ([repository][spatialdata-js-repo]).
 
 Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for citation and to learn more.
@@ -124,5 +124,5 @@ references.md
 [napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/stable/notebooks/spatialdata.html
 [spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/stable/
 [spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/api.html
-[spatialdata-r-repo]: https://github.com/HelenaLC/SpatialData
+[spatialdata-r-repo]: https://github.com/HelenaLC/spatialdataR
 [spatialdata-js-repo]: https://github.com/Taylor-CCB-Group/SpatialData.js
