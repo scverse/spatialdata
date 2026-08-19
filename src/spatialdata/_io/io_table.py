@@ -119,6 +119,12 @@ def write_table(
 
         write_adata(group, name, table)
 
+    # Re-fetch the group before setting the attributes below: the handle obtained above was cached while the group
+    # was still empty, and zarr writes attributes as a whole document based on the handle's cached view, so writing
+    # through the stale handle would erase the `encoding-type`/`encoding-version` metadata that anndata just wrote
+    # (https://github.com/scverse/spatialdata/issues/1183).
+    table_group = group[name]
+
     table_group.attrs["spatialdata-encoding-type"] = group_type
     table_group.attrs["region"] = region
     table_group.attrs["region_key"] = region_key
