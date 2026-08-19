@@ -170,6 +170,9 @@ def _read_multiscale(
     nodes: list[Node] = []
     image_loc = ZarrLocation(store, fmt=reader_format)
     if exists := image_loc.exists():
+        spatialdata_channels = (
+            zarr.open_group(store=image_loc.store, mode="r").attrs.get(ATTRS_KEY, {}).get("channel_names")
+        )
         image_reader = Reader(image_loc)()
         image_nodes = list(image_reader)
         nodes = _get_multiscale_nodes(image_nodes, nodes)
@@ -215,6 +218,8 @@ def _read_multiscale(
             channels = [d["label"] for d in legacy_channels_metadata["channels"]]
         if omero_metadata is not None:
             channels = [d["label"] for d in omero_metadata["channels"]]
+        if spatialdata_channels is not None:
+            channels = spatialdata_channels
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         arrays = [node.load(Multiscales).array(resolution=d) for d in datasets]
