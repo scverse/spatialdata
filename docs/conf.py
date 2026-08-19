@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from datetime import datetime
 from importlib.metadata import metadata
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / "extensions"))
@@ -48,6 +48,8 @@ html_context = {
 # Add any Sphinx extension module names here, as strings.
 # They can be extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
+    "git_ref",  # needs to be before scanpydoc.rtd_github_links
+    "scanpydoc.rtd_github_links",  # needs to be before sphinx.ext.linkcode
     "myst_nb",
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
@@ -57,11 +59,14 @@ extensions = [
     "sphinxcontrib.bibtex",
     "sphinx_autodoc_typehints",
     "sphinx.ext.mathjax",
+    "sphinx.ext.linkcode",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_design",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
     *[p.stem for p in (HERE / "tutorials" / "notebooks" / "extensions").glob("*.py")],
 ]
+
+rtd_links_prefix = PurePosixPath("src")
 
 autodoc_default_options = {
     "members": True,
