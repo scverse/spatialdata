@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal, TypeGuard, cast
@@ -23,6 +24,7 @@ from spatialdata._io._utils import (
     overwrite_channel_names,
     overwrite_coordinate_transformations_raster,
 )
+from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import (
     CurrentRasterFormat,
     RasterFormatType,
@@ -581,6 +583,11 @@ def write_image(
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     **metadata: str | JSONDict | list[JSONDict],
 ) -> None:
+    if element_format.zarr_format == 2:
+        warnings.warn(
+            message=WritingToZarrV2DeprecationWarning.message, category=WritingToZarrV2DeprecationWarning, stacklevel=2
+        )
+
     _write_raster(
         raster_type="image",
         raster_data=image,
@@ -603,6 +610,11 @@ def write_labels(
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     **metadata: JSONDict,
 ) -> None:
+    if element_format.zarr_format == 2:
+        warnings.warn(
+            message=WritingToZarrV2DeprecationWarning.message, category=WritingToZarrV2DeprecationWarning, stacklevel=2
+        )
+
     _write_raster(
         raster_type="labels",
         raster_data=labels,
