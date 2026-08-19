@@ -12,6 +12,7 @@ former, so we set it there.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from functools import lru_cache
@@ -35,6 +36,15 @@ def get() -> str | None:
 
     Uses branch/tag name if found, otherwise uses commit hash.
     """
+    # On Read the Docs pull request previews, HEAD is a local branch such as
+    # "external-1185" that does not exist on GitHub, so use the commit instead.
+    # GitHub serves a pull request's head commit from the base repository, also
+    # when the branch itself lives on a fork.
+    if os.environ.get("READTHEDOCS_VERSION_TYPE") == "external" and (
+        commit := os.environ.get("READTHEDOCS_GIT_COMMIT_HASH")
+    ):
+        return commit
+
     git_ref = None
     try:
         git_ref = git("name-rev", "--name-only", "--no-undefined", "HEAD")
