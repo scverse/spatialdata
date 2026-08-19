@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Callable
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import zarr.storage
 from anndata import AnnData
@@ -71,7 +71,7 @@ def _read_zarr_group_spatialdata_element(
                         reader_format = get_raster_format_for_read(elem_group, sdata_version)
                         element = read_func(
                             elem_group_path,
-                            cast(Literal["image", "labels"], element_type),
+                            element_type,
                             reader_format,
                         )
                     elif element_type in ["shapes", "points", "tables"]:
