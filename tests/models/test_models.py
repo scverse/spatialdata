@@ -26,6 +26,7 @@ from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
 from xarray import DataArray, DataTree
 
+import spatialdata
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
@@ -623,6 +624,18 @@ class TestModels:
                         TableModel.parse(adata)
                     else:
                         TableModel.validate(adata)
+
+    def test_table_model_invalid_name_suggests_public_sanitizer(self):
+        adata = AnnData(np.array([[0]]), uns={"invalid name": {}})
+
+        with pytest.raises(
+            ValidationError,
+            match=r"`spatialdata\.sanitize_table\(adata\)`",
+        ):
+            TableModel.validate(adata)
+
+        spatialdata.sanitize_table(adata)
+        TableModel.validate(adata)
 
     @pytest.mark.parametrize(
         "keys",

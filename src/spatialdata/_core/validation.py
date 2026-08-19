@@ -388,7 +388,7 @@ class raise_validation_errors:
         # Exceptions were collected that we want to raise as a combined validation error.
         if self._collector.errors:
             raise ValidationError(
-                title=self._message + "\nTo fix, run `spatialdata.utils.sanitize_table(adata)`.",
+                title=self._message + "\nTo fix, run `spatialdata.sanitize_table(adata)`.",
                 errors=self._collector.errors,
             )
         return True
