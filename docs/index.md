@@ -110,6 +110,7 @@ tutorials/notebooks/notebooks.md
 tutorials/notebooks/datasets/README.md
 glossary.md
 design_doc.md
+interoperability.md
 contributing.md
 changelog.md
 references.md
