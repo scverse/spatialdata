@@ -859,136 +859,196 @@ def _compose_affine_from_linear_and_translation(
     return Affine(matrix, input_axes=input_axes, output_axes=output_axes)
 
 
-def _decompose_transformation(
-    transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...], simple_decomposition: bool = True
-) -> Sequence:
+def _validate_square_affine_for_decomposition(
+    transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
+) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
     """
-    Decompose a given 2D transformation into a sequence of predetermined types of transformations.
+    Validate that a transformation can be decomposed, and extract the parts of its affine matrix.
 
     Parameters
     ----------
     transformation
         The transformation to decompose. It is assumed to be of a type that can be represented as a single affine
-        transformation. It should leave the input axes unmodified, and it should not transform the c channel, if this
-        is present.
+        transformation. It should leave the set of input axes unmodified (adding, dropping or renaming an axis is
+        not allowed), but the axes are allowed to come out in a different order: the matrix is always queried back
+        in ``input_axes`` order before being decomposed. There is no restriction on which axes are present: spatial
+        axes (``x``, ``y``, ``z``) and the ``c`` channel axis are all decomposed uniformly, as the matrix is
+        treated as a generic square affine.
     input_axes
-        The axes of the data the transformation is to be applied to
-    simple_decomposition
-        If true, decomposes a transformation into it's linear part (affine without translation) and translation part,
-        otherwise decomposes it into a sequence of reflection, rotation, shear, scale, translation.
+        The axes of the data the transformation is to be applied to.
 
     Returns
     -------
-    sequence
-        Returns a sequence of transformations (class :class:`~spatialdata.transformations.Sequence`) which operates only
-        on the spatial part (no c channel). The output sequence will contain either 2 either 5 transformations in the
-        following order (the first is applied first).
-        Case `simple_decomposition = True`.
+    A tuple ``(matrix, translation_part, linear_part)`` where ``matrix`` is the full homogeneous affine matrix (with
+    both rows and columns ordered as ``input_axes``), ``translation_part`` is its last column (excluding the
+    homogeneous row), and ``linear_part`` is the square matrix obtained by removing the last row and column of
+    ``matrix``.
 
-            1. Linear part (affine): linear part of the affine transformation, represented as a
-            :class:`~spatialdata.transformations.Affine` transformation.
-            2. Translation. Represented as a :class:`~spatialdata.transformations.Translation` transformation.
-
-        Case `simple_decomposition = False`.
-
-            1. Reflection. Represented as :class:`~spatialdata.transformations.Scale` transformation with elements in
-                {1, -1}.
-            2. Rotation. Represented as an :class:`~spatialdata.transformations.Affine` transformation which in its
-                matrix form presents itself as an homogeneous affine matrix with no translation part and determinant 1.
-                Please look at the source code of this function if you need to recover the angle theta.
-            3. Shear. Represented as an :class:`~spatialdata.transformations.Affine` transformation which in its matrix
-                form presents itself as an homogeneous affine matrix with no translation part. The matrix is upper
-                triangular with diagonal elements all equal to 1.
-            4. Scale. Represented as a :class:`~spatialdata.transformations.Scale` transformation with positive
-            elements.
-            5. Translation. Represented as a :class:`~spatialdata.transformations.Translation` transformation.
-
-        Note that some of these transformations may be identity transformations.
+    Raises
+    ------
+    ValueError
+        If the transformation changes the set of input axes (as opposed to merely reordering them).
+    RuntimeWarning
+        If the linear part of the affine has a large condition number, in which case the decomposition may be
+        numerically inaccurate.
     """
     output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
-    if input_axes != output_axes:
-        raise ValueError("The transformation should leave the input axes unmodified.")
-    if "z" in input_axes:
-        raise ValueError("The transformation should not transform the z axis.")
-    affine = transformation.to_affine(input_axes=input_axes, output_axes=output_axes)
+    if set(input_axes) != set(output_axes):
+        raise ValueError("The transformation should leave the set of input axes unmodified.")
+    # the axes may come out in a different order than input_axes; querying in input_axes order makes the matrix
+    # square with a consistent row/column labeling, which is what the decomposition below relies on
+    affine = transformation.to_affine(input_axes=input_axes, output_axes=input_axes)
     matrix = affine.matrix
-    if "c" in input_axes:
-        c_index = input_axes.index("c")
-        if (
-            matrix[c_index, c_index] != 1
-            or np.linalg.norm(matrix[c_index, :]) != 1
-            or np.linalg.norm(matrix[:, c_index]) != 1
-        ):
-            raise ValueError("The transformation should not transform the c channel.")
-        axes = input_axes[:c_index] + input_axes[c_index + 1 :]
-        m = np.delete(matrix, c_index, 0)
-        m = np.delete(m, c_index, 1)
-    else:
-        axes = input_axes
-        m = matrix
+    translation_part = matrix[:-1, -1]
+    linear_part = matrix[:-1, :-1]
 
-    translation_part = m[:-1, -1]
-    linear_part = m[:-1, :-1]
-
-    if simple_decomposition:
-        translation = Translation(translation_part, axes=axes)
-        linear = _compose_affine_from_linear_and_translation(
-            linear=linear_part,
-            translation=np.zeros(linear_part.shape[0]),
-            input_axes=axes,
-            output_axes=axes,
+    cond = np.linalg.cond(linear_part)
+    if cond > 1e10:
+        warn(
+            f"The linear part of the affine has a large condition number ({cond:.2e}). "
+            "The decomposition may be numerically inaccurate.",
+            RuntimeWarning,
+            stacklevel=2,
         )
-        sequence = Sequence([linear, translation])
-    else:
-        # qr factorization
-        a = linear_part
-        r, q = scipy.linalg.rq(a)
+    return matrix, translation_part, linear_part
 
-        theta = np.arctan2(q[1, 0], q[0, 0])
-        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
-        scale_matrix = np.diag(np.abs(np.diag(r)))
-        shear_matrix = np.linalg.inv(scale_matrix) @ r
-        assert np.allclose(scale_matrix @ shear_matrix, r)
-        d = np.diag(np.diag(shear_matrix))
+def _decompose_transformation_simple(
+    transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
+) -> tuple[Affine, Translation]:
+    """
+    Decompose a given transformation into its linear part and translation part.
 
-        qq = rotation_matrix.T @ q
-        # check that qq is a diagonal matrix with diagonal values in {-1, 1}
-        assert np.allclose(np.diag(qq) ** 2, np.ones(qq.shape[0]))
-        assert np.isclose(np.sum(np.abs(qq.ravel())), qq.shape[0])
-        assert np.allclose(rotation_matrix @ qq, q)
+    Parameters
+    ----------
+    transformation
+        The transformation to decompose. See :func:`_validate_square_affine_for_decomposition`.
+    input_axes
+        The axes of the data the transformation is to be applied to.
 
-        adjusted_shear_matrix = shear_matrix @ d
-        adjusted_rotation_matrix = d @ rotation_matrix @ d
-        assert np.allclose(
-            adjusted_rotation_matrix @ adjusted_rotation_matrix.T, np.eye(adjusted_rotation_matrix.shape[0])
-        )
-        adjusted_qq = d @ qq
+    Returns
+    -------
+    A tuple ``(linear, translation)``, applied in this order (``linear`` first), whose composition equals
+    ``transformation``.
 
-        aaa = scale_matrix @ shear_matrix @ d @ d @ rotation_matrix @ d @ d @ qq
-        assert np.allclose(a, aaa)
-        aa = scale_matrix @ adjusted_shear_matrix @ adjusted_rotation_matrix @ adjusted_qq
-        assert np.allclose(a, aa)
+        1. Linear part (affine): linear part of the affine transformation, represented as a
+           :class:`~spatialdata.transformations.Affine` transformation.
+        2. Translation. Represented as a :class:`~spatialdata.transformations.Translation` transformation.
 
-        scale = Scale(np.diag(scale_matrix), axes=axes)
-        shear = _compose_affine_from_linear_and_translation(
-            linear=adjusted_shear_matrix,
-            translation=np.zeros(shear_matrix.shape[0]),
-            input_axes=axes,
-            output_axes=axes,
-        )
-        rotation = _compose_affine_from_linear_and_translation(
-            linear=adjusted_rotation_matrix,
-            translation=np.zeros(rotation_matrix.shape[0]),
-            input_axes=axes,
-            output_axes=axes,
-        )
-        inversion = Scale(np.diag(adjusted_qq), axes=axes)
-        translation = Translation(translation_part, axes=axes)
-        sequence = Sequence([inversion, rotation, shear, scale, translation])
-    check_m = sequence.to_affine_matrix(input_axes=input_axes, output_axes=input_axes)
+    Note that some of these transformations may be identity transformations.
+    """
+    matrix, translation_part, linear_part = _validate_square_affine_for_decomposition(transformation, input_axes)
+
+    linear = _compose_affine_from_linear_and_translation(
+        linear=linear_part,
+        translation=np.zeros(linear_part.shape[0]),
+        input_axes=input_axes,
+        output_axes=input_axes,
+    )
+    translation = Translation(translation_part, axes=input_axes)
+
+    check_m = Sequence([linear, translation]).to_affine_matrix(input_axes=input_axes, output_axes=input_axes)
     assert np.allclose(check_m, matrix)
-    return sequence
+    return linear, translation
+
+
+def _decompose_transformation_full(
+    transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
+) -> tuple[Affine, Affine, Scale, Scale, Translation]:
+    """
+    Decompose a given transformation into rotation, shear, reflection, scale and translation.
+
+    Parameters
+    ----------
+    transformation
+        The transformation to decompose. See :func:`_validate_square_affine_for_decomposition`.
+    input_axes
+        The axes of the data the transformation is to be applied to.
+
+    Returns
+    -------
+    A tuple ``(rotation, shear, reflection, scale, translation)``, applied in this order (``rotation`` first),
+    whose composition equals ``transformation``.
+
+        1. Rotation. Represented as an :class:`~spatialdata.transformations.Affine` transformation which in its
+           matrix form presents itself as an homogeneous affine matrix with no translation part and determinant 1.
+        2. Shear. Represented as an :class:`~spatialdata.transformations.Affine` transformation which in its matrix
+           form presents itself as an homogeneous affine matrix with no translation part. The matrix is upper
+           triangular with diagonal elements all equal to 1.
+        3. Reflection. Represented as :class:`~spatialdata.transformations.Scale` transformation with elements in
+           {1, -1}.
+        4. Scale. Represented as a :class:`~spatialdata.transformations.Scale` transformation with positive
+           elements.
+        5. Translation. Represented as a :class:`~spatialdata.transformations.Translation` transformation.
+
+    Note that some of these transformations may be identity transformations.
+
+    Raises
+    ------
+    RuntimeError
+        If the decomposition fails an internal consistency check (please report this as a bug).
+    """
+    matrix, translation_part, linear_part = _validate_square_affine_for_decomposition(transformation, input_axes)
+
+    # RQ decomposition: linear_part = r @ q  (r upper-triangular, q orthogonal)
+    r, q = scipy.linalg.rq(linear_part)
+
+    # Ensure the diagonal of r is strictly positive.
+    sign_diag = np.sign(np.diag(r))
+    sign_diag[sign_diag == 0] = 1.0  # treat zero pivots as positive
+    d = np.diag(sign_diag)
+    r_pos = r @ d  # upper-triangular, positive diagonal
+    q_adj = d @ q  # still orthogonal
+
+    # Split r_pos into scale and shear.
+    scale_values = np.diag(r_pos)  # all positive
+    scale_matrix = np.diag(scale_values)
+    shear_matrix = np.linalg.inv(scale_matrix) @ r_pos  # upper-tri, 1s on diag
+
+    # Split q_adj into rotation (det = +1) and an axis-aligned reflection.
+    # Reflection flips only the first axis when det(q_adj) = -1.
+    det_sign = float(np.round(np.linalg.det(q_adj)))  # ±1
+    reflection_values = np.ones(linear_part.shape[0])
+    reflection_values[0] = det_sign
+    reflection_matrix = np.diag(reflection_values)
+    # q_adj = rotation_matrix @ reflection_matrix  ->  rotation_matrix = q_adj @ reflection_matrix
+    rotation_matrix = q_adj @ reflection_matrix  # det = det_sign * det_sign = 1
+
+    # Conjugate rotation and shear by the reflection so the sequence becomes
+    # [rotation', shear', reflection, scale, translation]. This lets callers
+    # bundle the reflection with either the shear or the scale.
+    # rotation' = reflection @ rotation @ reflection  (still orthogonal, det = 1)
+    # shear'    = reflection @ shear    @ reflection  (still upper-tri, 1s on diag)
+    rotation_matrix_adj = reflection_matrix @ rotation_matrix @ reflection_matrix
+    shear_matrix_adj = reflection_matrix @ shear_matrix @ reflection_matrix
+
+    if not np.allclose(
+        scale_matrix @ reflection_matrix @ shear_matrix_adj @ rotation_matrix_adj,
+        linear_part,
+    ):
+        raise RuntimeError("Affine decomposition failed internal consistency check. Please report this bug.")
+
+    rotation = _compose_affine_from_linear_and_translation(
+        linear=rotation_matrix_adj,
+        translation=np.zeros(rotation_matrix_adj.shape[0]),
+        input_axes=input_axes,
+        output_axes=input_axes,
+    )
+    shear = _compose_affine_from_linear_and_translation(
+        linear=shear_matrix_adj,
+        translation=np.zeros(shear_matrix_adj.shape[0]),
+        input_axes=input_axes,
+        output_axes=input_axes,
+    )
+    reflection = Scale(reflection_values, axes=input_axes)
+    scale = Scale(scale_values, axes=input_axes)
+    translation = Translation(translation_part, axes=input_axes)
+
+    check_m = Sequence([rotation, shear, reflection, scale, translation]).to_affine_matrix(
+        input_axes=input_axes, output_axes=input_axes
+    )
+    assert np.allclose(check_m, matrix)
+    return rotation, shear, reflection, scale, translation
 
 
 TRANSFORMATIONS_MAP[NgffIdentity] = Identity
