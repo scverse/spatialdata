@@ -829,79 +829,79 @@ def test_query_points_3d_bounding_box_axes_order_independent():
     assert n_xy == n_yx
 
     # Uncomment to visualize the two queries side by side (requires spatialdata_plot).
-    import matplotlib.pyplot as plt
-    import spatialdata_plot  # noqa: F401
-    from matplotlib.patches import Rectangle
-
-    from spatialdata import SpatialData
-
-    has_z = "z" in points_element.columns
-    bug_occurred = n_xy != n_yx
-    fig_title = (
-        f"z={'yes' if has_z else 'no'}, scale=({scale_x}, {scale_y}), "
-        f"bug={'YES' if bug_occurred else 'no'} (n_xy={n_xy}, n_yx={n_yx})"
-    )
-
-    sdata_3d = SpatialData(points={"transcripts": points_element})
-    fig, axes_ = plt.subplots(1, 2, figsize=(15, 8))
-    fig.suptitle(fig_title)
-    for i, (qaxes, mn, mx) in enumerate(
-        [
-            (["x", "y"], [x_min, y_min], [x_max, y_max]),
-            (["y", "x"], [y_min, x_min], [y_max, x_max]),
-        ]
-    ):
-        r = sdata_3d.query.bounding_box(
-            axes=qaxes,
-            min_coordinate=mn,
-            max_coordinate=mx,
-            target_coordinate_system="global",
-        )
-        # n = len(r["transcripts"]) if "transcripts" in r.points else "element dropped"
-        # print(f"axes={str(qaxes):14s} -> {n}")
-        subplot_title = f"querying by axes={tuple(qaxes)}"
-        sdata_3d.pl.render_points("transcripts", color="black", size=1).pl.show(
-            ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
-        )
-        r.pl.render_points("transcripts", color="genes", size=20).pl.show(
-            ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
-        )
-        # the intended box, in (x, y) order
-        axes_[i].add_patch(
-            Rectangle(
-                (x_min, y_min),
-                x_max - x_min,
-                y_max - y_min,
-                fill=False,
-                edgecolor="red",
-                linewidth=0.5,
-                label="bounding box (x, y)",
-            )
-        )
-        # the same box with x/y intervals swapped, i.e. what a buggy (y, x) query could effectively select
-        axes_[i].add_patch(
-            Rectangle(
-                (y_min, x_min),
-                y_max - y_min,
-                x_max - x_min,
-                fill=False,
-                edgecolor="blue",
-                linestyle="--",
-                linewidth=0.5,
-                label="flipped (y, x) box",
-            )
-        )
-        axes_[i].legend(loc="lower right")
-        axes_[i].set_xlim(
-            points_element["x"].min().compute().item() * scale_x - 20,
-            points_element["x"].max().compute().item() * scale_x + 20,
-        )
-        axes_[i].set_ylim(
-            points_element["y"].min().compute().item() * scale_y - 20,
-            points_element["y"].max().compute().item() * scale_y + 20,
-        )
-    plt.tight_layout()
-    plt.show()
+    # import matplotlib.pyplot as plt
+    # import spatialdata_plot  # noqa: F401
+    # from matplotlib.patches import Rectangle
+    #
+    # from spatialdata import SpatialData
+    #
+    # has_z = "z" in points_element.columns
+    # bug_occurred = n_xy != n_yx
+    # fig_title = (
+    #     f"z={'yes' if has_z else 'no'}, scale=({scale_x}, {scale_y}), "
+    #     f"bug={'YES' if bug_occurred else 'no'} (n_xy={n_xy}, n_yx={n_yx})"
+    # )
+    #
+    # sdata_3d = SpatialData(points={"transcripts": points_element})
+    # fig, axes_ = plt.subplots(1, 2, figsize=(15, 8))
+    # fig.suptitle(fig_title)
+    # for i, (qaxes, mn, mx) in enumerate(
+    #     [
+    #         (["x", "y"], [x_min, y_min], [x_max, y_max]),
+    #         (["y", "x"], [y_min, x_min], [y_max, x_max]),
+    #     ]
+    # ):
+    #     r = sdata_3d.query.bounding_box(
+    #         axes=qaxes,
+    #         min_coordinate=mn,
+    #         max_coordinate=mx,
+    #         target_coordinate_system="global",
+    #     )
+    #     # n = len(r["transcripts"]) if "transcripts" in r.points else "element dropped"
+    #     # print(f"axes={str(qaxes):14s} -> {n}")
+    #     subplot_title = f"querying by axes={tuple(qaxes)}"
+    #     sdata_3d.pl.render_points("transcripts", color="black", size=1).pl.show(
+    #         ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
+    #     )
+    #     r.pl.render_points("transcripts", color="genes", size=20).pl.show(
+    #         ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
+    #     )
+    #     # the intended box, in (x, y) order
+    #     axes_[i].add_patch(
+    #         Rectangle(
+    #             (x_min, y_min),
+    #             x_max - x_min,
+    #             y_max - y_min,
+    #             fill=False,
+    #             edgecolor="red",
+    #             linewidth=0.5,
+    #             label="bounding box (x, y)",
+    #         )
+    #     )
+    #     # the same box with x/y intervals swapped, i.e. what a buggy (y, x) query could effectively select
+    #     axes_[i].add_patch(
+    #         Rectangle(
+    #             (y_min, x_min),
+    #             y_max - y_min,
+    #             x_max - x_min,
+    #             fill=False,
+    #             edgecolor="blue",
+    #             linestyle="--",
+    #             linewidth=0.5,
+    #             label="flipped (y, x) box",
+    #         )
+    #     )
+    #     axes_[i].legend(loc="lower right")
+    #     axes_[i].set_xlim(
+    #         points_element["x"].min().compute().item() * scale_x - 20,
+    #         points_element["x"].max().compute().item() * scale_x + 20,
+    #     )
+    #     axes_[i].set_ylim(
+    #         points_element["y"].min().compute().item() * scale_y - 20,
+    #         points_element["y"].max().compute().item() * scale_y + 20,
+    #     )
+    # plt.tight_layout()
+    # plt.show()
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
