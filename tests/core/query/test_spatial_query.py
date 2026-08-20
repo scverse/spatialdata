@@ -776,6 +776,134 @@ def test_query_points_bounding_box_negative_scale_transform():
     np.testing.assert_allclose(result["y"].compute(), [0])
 
 
+def test_query_points_3d_bounding_box_axes_order_independent():
+    """Regression test for https://github.com/scverse/spatialdata/issues/1175.
+
+    For 3D points with a non-trivial Scale transformation (i.e. not scale by x=1, y=1) defined only on ("x", "y"),
+    querying with a bounding box should give the same result regardless of the order in which the axes are passed,
+    e.g. axes=("x", "y") vs. axes=("y", "x") (with min/max coordinates permuted accordingly).
+
+    - The bug does not occur if we drop the z coordinate.
+    - The bug does not occur if the scale is Scale([1, 1], axes=("x", "y"))
+
+    This currently FAILS: there is no fix yet for #1175.
+    """
+    from spatialdata.transformations import Scale
+
+    coordinates = np.array(
+        [
+            [10.0, 10.0, 1.0],
+            [70.0, 30.0, 2.0],
+            [100.0, 50.0, 3.0],
+            [150.0, 70.0, 4.0],
+            [220.0, 90.0, 5.0],
+        ]
+    )
+    points_element = _make_points(coordinates)
+    # points_element = points_element.drop(columns=["z"])
+    scale_x = 1
+    scale_y = 1.1
+    scale = Scale([scale_x, scale_y], axes=("x", "y"))
+    set_transformation(points_element, transformation=scale, to_coordinate_system="global")
+
+    x_min, x_max = 60.0, 240.0
+    y_min, y_max = 20.0, 160.0
+
+    result_xy = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=[x_min, y_min],
+        max_coordinate=[x_max, y_max],
+        target_coordinate_system="global",
+    )
+    result_yx = bounding_box_query(
+        points_element,
+        axes=("y", "x"),
+        min_coordinate=[y_min, x_min],
+        max_coordinate=[y_max, x_max],
+        target_coordinate_system="global",
+    )
+
+    n_xy = 0 if result_xy is None else len(result_xy)
+    n_yx = 0 if result_yx is None else len(result_yx)
+    assert n_xy == n_yx
+
+    # Uncomment to visualize the two queries side by side (requires spatialdata_plot).
+    import matplotlib.pyplot as plt
+    import spatialdata_plot  # noqa: F401
+    from matplotlib.patches import Rectangle
+
+    from spatialdata import SpatialData
+
+    has_z = "z" in points_element.columns
+    bug_occurred = n_xy != n_yx
+    fig_title = (
+        f"z={'yes' if has_z else 'no'}, scale=({scale_x}, {scale_y}), "
+        f"bug={'YES' if bug_occurred else 'no'} (n_xy={n_xy}, n_yx={n_yx})"
+    )
+
+    sdata_3d = SpatialData(points={"transcripts": points_element})
+    fig, axes_ = plt.subplots(1, 2, figsize=(15, 8))
+    fig.suptitle(fig_title)
+    for i, (qaxes, mn, mx) in enumerate(
+        [
+            (["x", "y"], [x_min, y_min], [x_max, y_max]),
+            (["y", "x"], [y_min, x_min], [y_max, x_max]),
+        ]
+    ):
+        r = sdata_3d.query.bounding_box(
+            axes=qaxes,
+            min_coordinate=mn,
+            max_coordinate=mx,
+            target_coordinate_system="global",
+        )
+        # n = len(r["transcripts"]) if "transcripts" in r.points else "element dropped"
+        # print(f"axes={str(qaxes):14s} -> {n}")
+        subplot_title = f"querying by axes={tuple(qaxes)}"
+        sdata_3d.pl.render_points("transcripts", color="black", size=1).pl.show(
+            ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
+        )
+        r.pl.render_points("transcripts", color="genes", size=20).pl.show(
+            ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
+        )
+        # the intended box, in (x, y) order
+        axes_[i].add_patch(
+            Rectangle(
+                (x_min, y_min),
+                x_max - x_min,
+                y_max - y_min,
+                fill=False,
+                edgecolor="red",
+                linewidth=0.5,
+                label="bounding box (x, y)",
+            )
+        )
+        # the same box with x/y intervals swapped, i.e. what a buggy (y, x) query could effectively select
+        axes_[i].add_patch(
+            Rectangle(
+                (y_min, x_min),
+                y_max - y_min,
+                x_max - x_min,
+                fill=False,
+                edgecolor="blue",
+                linestyle="--",
+                linewidth=0.5,
+                label="flipped (y, x) box",
+            )
+        )
+        axes_[i].legend(loc="lower right")
+        axes_[i].set_xlim(
+            points_element["x"].min().compute().item() * scale_x - 20,
+            points_element["x"].max().compute().item() * scale_x + 20,
+        )
+        axes_[i].set_ylim(
+            points_element["y"].min().compute().item() * scale_y - 20,
+            points_element["y"].max().compute().item() * scale_y + 20,
+        )
+    plt.tight_layout()
+    plt.show()
+
+
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize(
     "name",
