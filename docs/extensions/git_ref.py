@@ -18,10 +18,11 @@ import subprocess
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from sphinx.util.typing import ExtensionMetadata
+
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
     from sphinx.config import Config
-    from sphinx.util.typing import ExtensionMetadata
 
 
 def git(*args: str) -> str:
@@ -61,12 +62,12 @@ def get() -> str | None:
     return git_ref
 
 
-def set_ref(app: Sphinx, config: Config) -> None:
+def set_ref(app: Sphinx, config: Config):
     """`config-inited` hook to set `html_context["github_version"]`."""
-    config["html_context"]["github_version"] = get() or "main"
+    app.config["html_context"]["github_version"] = get() or "main"
 
 
 def setup(app: Sphinx) -> ExtensionMetadata:
     """App setup hook."""
     app.connect("config-inited", set_ref)
-    return {"parallel_read_safe": True}
+    return ExtensionMetadata(parallel_read_safe=True)
