@@ -39,7 +39,7 @@ dependencies = [
   "networkx",
   "numba>=0.55",
   "numpy",
-  "ome-zarr>=0.16",
+  "ome-zarr>=0.18.0",
   "pandas",
   "pooch",
   "pyarrow",
