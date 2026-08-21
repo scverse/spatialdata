@@ -33,7 +33,8 @@ from spatialdata.transformations.transformations import (
     Sequence,
     Translation,
     _decompose_affine_into_linear_and_translation,
-    _decompose_transformation,
+    _decompose_transformation_full,
+    _decompose_transformation_simple,
     _get_affine_for_element,
 )
 
@@ -787,124 +788,262 @@ def test_decompose_affine_into_linear_and_translation():
     assert np.allclose(translation.translation, np.array([10, 11]))
 
 
-@pytest.mark.parametrize(
-    "matrix,input_axes,output_axes,valid",
-    [
-        # non-square matrix are not supported
-        (
-            np.array(
-                [
-                    [1, 2, 3, 10],
-                    [4, 5, 6, 11],
-                    [0, 0, 0, 1],
-                ]
-            ),
-            ("x", "y", "z"),
-            ("x", "y"),
-            False,
+def _make_affine_xy(linear: np.ndarray, translation: np.ndarray | None = None) -> Affine:
+    matrix = np.eye(3)
+    matrix[:-1, :-1] = linear
+    if translation is not None:
+        matrix[:-1, -1] = translation
+    return Affine(matrix, input_axes=("x", "y"), output_axes=("x", "y"))
+
+
+# Shared by TestSimpleDecomposition and TestFullDecomposition's test_decompose_transformation: each case is
+# exercised, and its round trip verified, against both decomposition functions. Every case carries an id string
+# (visible in the test name) explaining what it is meant to cover.
+DECOMPOSE_TRANSFORMATION_CASES = [
+    pytest.param(
+        np.array(
+            [
+                [1, 2, 3, 10],
+                [4, 5, 6, 11],
+                [0, 0, 0, 1],
+            ]
         ),
-        (
-            np.array(
-                [
-                    [1, 2, 3],
-                    [4, 5, 6],
-                    [7, 8, 9],
-                    [0, 0, 1],
-                ]
-            ),
-            ("x", "y"),
-            ("x", "y", "z"),
-            False,
+        ("x", "y", "z"),
+        ("x", "y"),
+        False,
+        id="invalid-non-square-fewer-output-than-input-axes",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+                [7, 8, 9],
+                [0, 0, 1],
+            ]
         ),
-        # z axis should not be present
-        (
-            np.array(
-                [
-                    [1, 2, 3, 10],
-                    [4, 5, 6, 11],
-                    [7, 8, 9, 12],
-                    [0, 0, 0, 1],
-                ]
-            ),
-            ("x", "y", "z"),
-            ("x", "y", "z"),
-            False,
+        ("x", "y"),
+        ("x", "y", "z"),
+        False,
+        id="invalid-non-square-more-output-than-input-axes",
+    ),
+    pytest.param(
+        np.eye(3),
+        ("x", "y"),
+        ("x", "y"),
+        True,
+        id="valid-identity",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [1, 0, 3],
+                [0, 1, -7],
+                [0, 0, 1],
+            ]
         ),
-        # c channel is modified
-        (
-            np.array(
-                [
-                    [1, 2, 0, 4],
-                    [4, 5, 0, 7],
-                    [8, 9, 1, 10],
-                    [0, 0, 0, 1],
-                ]
-            ),
-            ("x", "y", "c"),
-            ("x", "y", "c"),
-            False,
+        ("x", "y"),
+        ("x", "y"),
+        True,
+        id="valid-pure-translation-linear-part-stays-identity",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [2, 0.5, 1],
+                [0, 3, 2],
+                [0, 0, 1],
+            ]
         ),
-        (
-            np.array(
-                [
-                    [1, 2, 0, 4],
-                    [4, 5, 0, 7],
-                    [0, 0, 0, 0],
-                    [0, 0, 0, 1],
-                ]
-            ),
-            ("x", "y", "c"),
-            ("x", "y", "c"),
-            False,
+        ("x", "y"),
+        ("x", "y"),
+        True,
+        id="valid-general-affine-with-shear",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+                [0, 0, 1],
+            ]
         ),
-        (
-            np.array(
-                [
-                    [1, 2, 3, 4],
-                    [4, 5, 6, 7],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, 1],
-                ]
-            ),
-            ("x", "y", "c"),
-            ("x", "y", "c"),
-            False,
+        ("x", "y"),
+        ("x", "y"),
+        True,
+        id="valid-general-affine-no-c-channel",
+    ),
+    pytest.param(
+        np.diag([2.0, 3.0, 1.0]),
+        ("x", "y"),
+        ("x", "y"),
+        True,
+        id="valid-pure-scale",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [-1, 0, 1],
+                [0, 1, 0],
+                [0, 0, 1],
+            ]
         ),
-        # valid, no c channel
-        (
-            np.array(
-                [
-                    [1, 2, 3],
-                    [4, 5, 6],
-                    [0, 0, 1],
-                ]
-            ),
-            ("x", "y"),
-            ("x", "y"),
-            True,
+        ("x", "y"),
+        ("x", "y"),
+        True,
+        id="valid-reflection-flips-x-axis",
+    ),
+    pytest.param(
+        np.diag([1.0, 1e-12, 1.0]),
+        ("x", "y"),
+        ("x", "y"),
+        True,
+        id="valid-ill-conditioned",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [1, 2, 3, 10],
+                [0, 1, 4, 11],
+                [5, 6, 0, 12],
+                [0, 0, 0, 1],
+            ]
         ),
-        # valid, c channel
-        (
-            np.array(
-                [
-                    [1, 2, 0, 4],
-                    [4, 5, 0, 7],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, 1],
-                ]
-            ),
-            ("x", "y", "c"),
-            ("x", "y", "c"),
-            True,
+        ("x", "y", "z"),
+        ("x", "y", "z"),
+        True,
+        id="valid-z-axis-decomposed-like-any-other-axis",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [1, 2, 0, 4],
+                [4, 5, 0, 7],
+                [8, 9, 1, 10],
+                [0, 0, 0, 1],
+            ]
         ),
-    ],
-)
-@pytest.mark.parametrize("simple_decomposition", [True, False])
-def test_decompose_transformation(matrix, input_axes, output_axes, valid, simple_decomposition):
-    affine = Affine(matrix, input_axes=input_axes, output_axes=output_axes)
-    context = nullcontext() if valid else pytest.raises(ValueError)
-    with context:
-        _ = _decompose_transformation(affine, input_axes=input_axes, simple_decomposition=simple_decomposition)
+        ("x", "y", "c"),
+        ("x", "y", "c"),
+        True,
+        id="valid-c-channel-modified-as-output",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [1, 2, 3, 4],
+                [4, 5, 6, 7],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+        ("x", "y", "c"),
+        ("x", "y", "c"),
+        True,
+        id="valid-c-channel-used-as-input-only",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [1, 2, 0, 4],
+                [4, 5, 0, 7],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
+        ("x", "y", "c"),
+        ("x", "y", "c"),
+        True,
+        id="valid-c-channel-fully-untouched",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [2, 0, 0, 1, 1],
+                [0, 3, 0, 0, 2],
+                [1, 0, 4, 0, 3],
+                [0, 0, 0, 5, 4],
+                [0, 0, 0, 0, 1],
+            ]
+        ),
+        ("x", "y", "z", "c"),
+        ("x", "y", "z", "c"),
+        True,
+        id="valid-x-y-z-c-all-mixed-together",
+    ),
+    pytest.param(
+        np.array(
+            [
+                [2, 0, 0, 1, 1],
+                [0, 3, 0, 0, 2],
+                [1, 0, 4, 0, 3],
+                [0, 0, 0, 5, 4],
+                [0, 0, 0, 0, 1],
+            ]
+        ),
+        ("c", "z", "y", "x"),
+        ("x", "y", "z", "c"),
+        True,
+        id="valid-same-axes-different-order-between-input-and-output",
+    ),
+]
+
+
+class TestSimpleDecomposition:
+    @pytest.mark.parametrize("matrix,input_axes,output_axes,valid", DECOMPOSE_TRANSFORMATION_CASES)
+    def test_decompose_transformation(self, matrix, input_axes, output_axes, valid):
+        affine = Affine(matrix, input_axes=input_axes, output_axes=output_axes)
+        context = nullcontext() if valid else pytest.raises(ValueError)
+        with context:
+            linear, translation = _decompose_transformation_simple(affine, input_axes=input_axes)
+        if valid:
+            reconstructed = Sequence([linear, translation]).to_affine_matrix(
+                input_axes=input_axes, output_axes=output_axes
+            )
+            assert np.allclose(reconstructed, matrix)
+
+    def test_ill_conditioned_warns(self):
+        # condition number ~= 1e12, well above the 1e10 warning threshold; kept as a dedicated test (in addition
+        # to the "valid-ill-conditioned" case above) because it checks that a warning is actually raised
+        affine = _make_affine_xy(np.diag([1.0, 1e-12]))
+        with pytest.warns(RuntimeWarning, match="condition number"):
+            _decompose_transformation_simple(affine, input_axes=("x", "y"))
+
+
+class TestFullDecomposition:
+    @pytest.mark.parametrize("matrix,input_axes,output_axes,valid", DECOMPOSE_TRANSFORMATION_CASES)
+    def test_decompose_transformation(self, matrix, input_axes, output_axes, valid):
+        affine = Affine(matrix, input_axes=input_axes, output_axes=output_axes)
+        context = nullcontext() if valid else pytest.raises(ValueError)
+        with context:
+            components = _decompose_transformation_full(affine, input_axes=input_axes)
+        if valid:
+            reconstructed = Sequence(list(components)).to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
+            assert np.allclose(reconstructed, matrix)
+
+    def test_ill_conditioned_warns(self):
+        # condition number ~= 1e12, well above the 1e10 warning threshold; kept as a dedicated test (in addition
+        # to the "valid-ill-conditioned" case above) because it checks that a warning is actually raised
+        affine = _make_affine_xy(np.diag([1.0, 1e-12]))
+        with pytest.warns(RuntimeWarning, match="condition number"):
+            _decompose_transformation_full(affine, input_axes=("x", "y"))
+
+    def test_component_types(self):
+        rng = np.random.default_rng(1)
+        linear = rng.standard_normal((2, 2))
+        # reject near-singular draws so the decomposition is numerically stable
+        while abs(np.linalg.det(linear)) < 0.1:
+            linear = rng.standard_normal((2, 2))
+        affine = _make_affine_xy(linear, translation=np.array([5.0, -1.0]))
+        rotation, shear, reflection, scale, translation = _decompose_transformation_full(affine, input_axes=("x", "y"))
+        assert isinstance(rotation, Affine)
+        assert isinstance(shear, Affine)
+        assert isinstance(reflection, Scale)
+        assert isinstance(scale, Scale)
+        assert isinstance(translation, Translation)
+        # algorithmic invariants that must hold regardless of the input matrix
+        assert np.all(scale.scale > 0)
+        assert np.isclose(np.linalg.det(rotation.matrix[:-1, :-1]), 1.0)
 
 
 def test_assign_xy_scale_to_cyx_image():
