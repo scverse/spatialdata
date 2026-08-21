@@ -6,6 +6,9 @@ from typing import Any, Literal, TypeGuard, cast, get_args
 
 import dask.array as da
 import numpy as np
+import ome_zarr as oz
+import ome_zarr_models.v06.coordinate_transforms as ozm06trans
+import xarray as xr
 import zarr
 from ome_zarr.format import Format
 from ome_zarr.io import ZarrLocation
@@ -17,6 +20,7 @@ from ome_zarr.writer import write_labels as write_labels_ngff
 from ome_zarr.writer import write_multiscale as write_multiscale_ngff
 from ome_zarr.writer import write_multiscale_labels as write_multiscale_labels_ngff
 from xarray import DataArray, DataTree
+from xarray.indexes import RangeIndex
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -38,6 +42,8 @@ from spatialdata.transformations._utils import (
     _set_transformations,
     compute_coordinates,
 )
+from spatialdata.transformations.graph.edge import BaseTransfEdge, parse_ngff_transf
+from spatialdata.transformations.graph.vert import Axis, CoordSystem
 
 
 def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
@@ -158,6 +164,83 @@ def _prepare_storage_options(
         if "chunks" in options:
             options["chunks"] = _normalize_explicit_chunks(options["chunks"])
     return prepared_options
+
+
+def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTransfEdge]]:
+    multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store))
+    assert isinstance(multiscale, oz.OMEZarrMultiscale)  # disambiguate from OMEZarrLabel
+
+    name_to_cs: dict[str, CoordSystem] = {}
+    for cs in multiscale.metadata.coordinateSystems or ():
+        parsed_cs = CoordSystem.try_from_model(cs)
+        name_to_cs[cs.name] = parsed_cs
+
+    parsed_transfs: list[BaseTransfEdge] = []
+    for transf in multiscale.metadata.coordinateTransformations or ():
+        in_cs_id = transf.input
+        out_cs_ref = transf.output
+        # these should not be None as per the spec
+        assert in_cs_id is not None
+        assert out_cs_ref is not None
+
+        in_cs_name = in_cs_id.name
+        out_cs_name = out_cs_ref.name
+        # FIXME: not handling references into labels yet
+        assert in_cs_name is not None
+        assert out_cs_name is not None
+
+        # assume CS references are valid via ome-zarr(-models)-py
+        input = name_to_cs[in_cs_name]
+        output = name_to_cs[out_cs_name]
+        parsed = parse_ngff_transf(input=input, output=output, model=transf)
+        parsed_transfs.append(parsed)
+
+    omero = multiscale.omero
+    channel_names = None if omero is None else [d.color for d in omero.channels]
+
+    data_tree = xr.DataTree()
+    for scale_idx, (ds_md, ds) in enumerate(zip(multiscale.metadata.datasets, multiscale.images, strict=True)):
+        transf = ds_md.coordinateTransformations[0]
+
+        out_cs = name_to_cs[multiscale.metadata.intrinsic_coordinate_system.name]
+        assert transf.input is not None
+        assert transf.input.path is not None
+        in_cs = CoordSystem(name=str(transf.input.name), axes=[Axis(name=ax.name, type=ax.type) for ax in out_cs.axes])
+
+        ozm_seq = ozm06trans.Sequence(transformations=ds_md.coordinateTransformations)
+        seq = parse_ngff_transf(input=in_cs, output=out_cs, model=ozm_seq)
+        ds_shape = np.asarray(ds.data.shape)
+        transformed_start = seq.transform_points(np.zeros_like(ds.data.shape)[np.newaxis, :])[0]
+        transformed_stop = seq.transform_points((ds_shape - 1)[np.newaxis, :])[0]
+
+        coords = xr.Coordinates()
+        for low, high, ax, extent in zip(transformed_start, transformed_stop, out_cs.axes, ds_shape, strict=True):
+            if ax.type == "channel" and channel_names is not None:
+                coords.merge({ax.name: channel_names})
+                continue
+            coords = coords.merge(
+                xr.Coordinates.from_xindex(
+                    RangeIndex.linspace(
+                        start=low,
+                        stop=high,
+                        num=extent,
+                        endpoint=True,
+                        dim=ax.name,
+                    )
+                )
+            )
+
+        data_tree[f"scale{scale_idx}"] = xr.Dataset(
+            {
+                "image": xr.DataArray(
+                    ds.data,
+                    name="image",
+                    dims=out_cs.axes_names,
+                    coords=coords,
+                )
+            }
+        )
+    return data_tree, parsed_transfs
 
 
 def _read_multiscale(
