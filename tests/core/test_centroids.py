@@ -11,9 +11,18 @@ from numpy.random import default_rng
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, TableModel, get_axes_names
-from spatialdata.transformations import Affine, Identity, get_transformation, set_transformation
+from spatialdata.transformations import Affine, Identity, Scale, get_transformation, set_transformation
 
 RNG = default_rng(42)
+
+
+def _assert_obsm_matches_points(table: AnnData, pts: pd.DataFrame) -> None:
+    # written obsm["spatial"] must match the element-level Points centroids on shared (non-background) ids.
+    inst = table.obs["instance_id"].to_numpy()
+    written = pd.DataFrame(table.obsm["spatial"], index=inst, columns=["x", "y"])
+    common = pts.index.intersection(written.index[inst != 0])
+    assert len(common) > 0
+    assert np.allclose(written.loc[common].to_numpy(), pts.loc[common][["x", "y"]].to_numpy())
 
 
 def _get_affine() -> Affine:
@@ -172,9 +181,150 @@ def test_get_centroids_labels(
         assert np.allclose(centroids.compute().values, centroids_transformed)
 
 
+def test_get_centroids_labels_area(labels):
+    # area for labels is the per-label pixel count; it rides along as a feature column of the Points.
+    element = labels["labels2d"]
+    centroids = get_centroids(element, return_area=True)
+    assert "area" in centroids.columns
+    ids, counts = np.unique(np.asarray(element.data), return_counts=True)
+    expected = dict(zip(ids, counts, strict=True))
+    got = centroids[["area"]].compute()["area"]
+    assert not (got.index == 0).any()  # background dropped
+    for label_id, area in got.items():
+        assert area == expected[label_id]
+
+
+def test_get_centroids_shapes_area_circles(shapes):
+    element = shapes["circles"]
+    centroids = get_centroids(element, return_area=True)
+    expected = np.pi * np.asarray(element["radius"], dtype=float) ** 2
+    assert np.allclose(centroids["area"].compute().to_numpy(), expected)
+
+
+@pytest.mark.parametrize("shapes_name", ["poly", "multipoly"])
+def test_get_centroids_shapes_area_polygons(shapes, shapes_name: str):
+    element = shapes[shapes_name]
+    centroids = get_centroids(element, return_area=True)
+    assert np.allclose(centroids["area"].compute().to_numpy(), element.geometry.area.to_numpy())
+
+
+def test_get_centroids_points_area_raises(points):
+    with pytest.raises(ValueError, match="not supported for points"):
+        get_centroids(points["points_0"], return_area=True)
+
+
+def test_get_centroids_area_non_identity_transform_raises(full_sdata):
+    # persist_as='Points' transforms the centroids but the area is intrinsic (untransformed); requesting
+    # both under a non-identity transform must raise rather than mix coordinate systems.
+    set_transformation(full_sdata["labels2d"], affine, "aligned")
+    with pytest.raises(ValueError, match="requires intrinsic coordinates"):
+        get_centroids(full_sdata["labels2d"], coordinate_system="aligned", return_area=True)
+
+
+def test_get_centroids_element_persist_adata_raises(labels):
+    # an element on its own has no annotating table; persist_as='adata' needs the SpatialData.
+    with pytest.raises(ValueError, match="persist_as='adata'"):
+        get_centroids(labels["labels2d"], persist_as="adata")
+
+
+def test_get_centroids_sdata_persist_into_table(full_sdata):
+    # `table` has 100 rows annotating `labels2d`; the `instance_id` column holds the label ids each row
+    # refers to (the value at a given row position is the label, not the row's position). The background
+    # label 0 has no centroid, so its row stays NaN.
+    table = full_sdata["table"]
+    assert "spatial" not in table.obsm
+    out = get_centroids(full_sdata, "labels2d", coordinate_system="global", return_area=True, persist_as="adata")
+    assert out is None  # inplace=True (default) mutates the table and returns nothing
+
+    table = full_sdata["table"]
+    assert table.obsm["spatial"].shape == (table.n_obs, 2)
+    assert "area" in table.obs
+
+    inst = table.obs["instance_id"].to_numpy()
+    finite = np.isfinite(table.obsm["spatial"]).all(axis=1)
+    assert finite[inst != 0].all()  # every non-background label got a centroid
+    assert not finite[inst == 0].any()  # background row stays NaN
+
+    # coordinates must match the element-level Points (global transform is the identity here)
+    pts = get_centroids(full_sdata["labels2d"], coordinate_system="global").compute()
+    _assert_obsm_matches_points(table, pts)
+
+    # area must equal the pixel counts of the corresponding labels
+    ids, counts = np.unique(np.asarray(full_sdata["labels2d"].data), return_counts=True)
+    count_of = dict(zip(ids, counts, strict=True))
+    area = table.obs["area"].to_numpy()
+    for row, label_id in enumerate(inst):
+        if label_id != 0:
+            assert area[row] == count_of[label_id]
+
+
+def test_get_centroids_sdata_persist_rejects_non_identity(full_sdata):
+    # obsm["spatial"] stores intrinsic coordinates only (we don't persist the coordinate system), so
+    # persist_as='adata' refuses a non-identity transform instead of silently storing transformed coords.
+    set_transformation(full_sdata["labels2d"], affine, "aligned")
+    with pytest.raises(ValueError, match="intrinsic coordinates"):
+        get_centroids(full_sdata, "labels2d", coordinate_system="aligned", persist_as="adata")
+
+
+def test_get_centroids_sdata_persist_intrinsic_matches_identity(full_sdata):
+    # coordinate_system=None (intrinsic) equals a coordinate system whose transform is the identity.
+    get_centroids(full_sdata, "labels2d", coordinate_system="global", persist_as="adata")
+    global_spatial = full_sdata["table"].obsm["spatial"].copy()
+    # overwrite=True because the first write already populated these rows.
+    get_centroids(full_sdata, "labels2d", coordinate_system=None, persist_as="adata", overwrite=True)
+    intrinsic_spatial = full_sdata["table"].obsm["spatial"]
+    finite = np.isfinite(global_spatial).all(axis=1)
+    assert np.allclose(global_spatial[finite], intrinsic_spatial[finite])
+
+
+def test_get_centroids_sdata_persist_inplace_false_returns_copy(full_sdata):
+    # inplace=False copies only the target table, writes into the copy, and leaves the sdata untouched.
+    out = get_centroids(full_sdata, "labels2d", return_area=True, persist_as="adata", inplace=False)
+    assert isinstance(out, AnnData)
+    assert out is not full_sdata["table"]
+    assert "spatial" in out.obsm and "area" in out.obs
+    assert "spatial" not in full_sdata["table"].obsm  # original table not modified
+
+
+def test_spatialdata_get_centroids_method(full_sdata):
+    # the method mirrors the module-level function for both persistence modes.
+    pts = full_sdata.get_centroids("labels2d", coordinate_system="global")
+    expected = get_centroids(full_sdata["labels2d"], coordinate_system="global")
+    assert np.allclose(pts.compute().to_numpy(), expected.compute().to_numpy())
+
+    assert full_sdata.get_centroids("labels2d", persist_as="adata") is None
+    assert "spatial" in full_sdata["table"].obsm
+
+
+def test_get_centroids_sdata_persist_instance_key_mismatch_raises(full_sdata):
+    # instance ids stored with a dtype that doesn't match the element's integer labels must fail
+    # loudly instead of silently writing NaN coordinates into obsm["spatial"].
+    table = full_sdata["table"]
+    table.obs["instance_id"] = table.obs["instance_id"].astype(str)
+    with pytest.raises(ValueError, match="No instance id annotating"):
+        get_centroids(full_sdata, "labels2d", persist_as="adata")
+
+
+def test_get_centroids_sdata_persist_refuses_dim_mismatch(full_sdata):
+    # This mismatch arises when one table annotates multiple elements of different dimensionality: e.g. a
+    # 3D element already wrote width-3 coordinates into obsm["spatial"], and we now persist 2D centroids
+    # for `labels2d`. The existing width-3 array (simulated here) must not be silently overwritten, as
+    # that would wipe the other element's coordinates sharing the table.
+    table = full_sdata["table"]
+    table.obsm["spatial"] = np.zeros((table.n_obs, 3))
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        get_centroids(full_sdata, "labels2d", persist_as="adata")
+
+
+def test_get_centroids_sdata_no_table_raises(full_sdata):
+    # points_0 is not annotated by any table -> the error points the user to persist_as='Points'.
+    with pytest.raises(ValueError, match="persist_as='Points'"):
+        get_centroids(full_sdata, "points_0", persist_as="adata")
+
+
 def test_get_centroids_invalid_element(images):
     # cannot compute centroids for images
-    with pytest.raises(ValueError, match="Expected a `Labels` element. Found an `Image` instead."):
+    with pytest.raises(ValueError, match="Centroids are not supported for elements modeled by Image2DModel"):
         get_centroids(images["image2d"])
 
     # cannot compute centroids for tables
@@ -190,5 +340,40 @@ def test_get_centroids_invalid_element(images):
 
 
 def test_get_centroids_invalid_coordinate_system(points):
-    with pytest.raises(AssertionError, match="No transformation to coordinate system"):
+    with pytest.raises(ValueError, match="No transformation to coordinate system"):
         get_centroids(points["points_0"], coordinate_system="invalid")
+
+
+def test_get_centroids_numerically_identity_transform_is_intrinsic(full_sdata):
+    # a mathematically-identity transform that is not the `Identity` class (e.g. Scale([1, 1])) must be
+    # accepted as intrinsic, both for return_area and for persist_as='adata'.
+    set_transformation(full_sdata["labels2d"], Scale([1.0, 1.0], axes=("x", "y")), "noop")
+    # persist_as='adata' must not raise "cannot apply the non-identity transform"
+    get_centroids(full_sdata, "labels2d", coordinate_system="noop", persist_as="adata")
+    assert "spatial" in full_sdata["table"].obsm
+    # return_area on the Points path must not raise "requires intrinsic coordinates"
+    out = get_centroids(full_sdata["labels2d"], coordinate_system="noop", return_area=True)
+    assert "area" in out.columns
+
+
+def test_get_centroids_points_area_non_identity_reports_points_not_intrinsic(points):
+    # a Points element with a non-identity transform + return_area must report the points-specific error,
+    # not the misleading "requires intrinsic coordinates" message.
+    set_transformation(points["points_0"], affine, "aligned")
+    with pytest.raises(ValueError, match="not supported for points"):
+        get_centroids(points["points_0"], coordinate_system="aligned", return_area=True)
+
+
+def test_get_centroids_sdata_persist_overwrite_guard(full_sdata):
+    # a pre-existing obs['area'] (possibly unrelated) must not be silently clobbered; overwrite=True allows it.
+    table = full_sdata["table"]
+    table.obs["area"] = np.arange(table.n_obs, dtype=float)
+    with pytest.raises(ValueError, match="overwrite=True"):
+        get_centroids(full_sdata, "labels2d", return_area=True, persist_as="adata")
+    # with overwrite=True it proceeds and writes the pixel-count area
+    get_centroids(full_sdata, "labels2d", return_area=True, persist_as="adata", overwrite=True)
+    assert "spatial" in table.obsm
+
+    # obsm["spatial"] is likewise guarded once populated
+    with pytest.raises(ValueError, match="overwrite=True"):
+        get_centroids(full_sdata, "labels2d", persist_as="adata")
