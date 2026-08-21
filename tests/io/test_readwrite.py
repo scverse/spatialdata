@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 import pytest
 import zarr
 from anndata import AnnData
+from anndata.io import read_elem
 from numpy.random import default_rng
 from packaging.version import Version
 from pandas.testing import assert_series_equal
@@ -685,6 +686,24 @@ def test_incremental_io_in_memory(
         sdata.tables[f"additional_{k}"] = v
         with pytest.raises(KeyError, match="Key `poly` is not unique"):
             sdata["poly"] = v
+
+
+def test_table_group_keeps_anndata_encoding_metadata(tmp_path: str, table_single_annotation: SpatialData) -> None:
+    # https://github.com/scverse/spatialdata/issues/1183
+    # Writing the spatialdata attributes on the table group must not erase the
+    # `encoding-type`/`encoding-version` metadata that anndata writes on the same
+    # group; anndata-level readers (read_elem, read_lazy) dispatch on it.
+    tmpdir = Path(tmp_path) / "tmp.zarr"
+    table_single_annotation.write(tmpdir)
+
+    on_disk = json.loads((tmpdir / "tables" / "table" / "zarr.json").read_text())["attributes"]
+    assert on_disk["encoding-type"] == "anndata"
+    assert on_disk["encoding-version"] == "0.1.0"
+    # the spatialdata attributes must be present alongside, not instead
+    assert on_disk["spatialdata-encoding-type"] == "ngff:regions_table"
+
+    table_group = zarr.open_group(tmpdir, mode="r")["tables/table"]
+    assert isinstance(read_elem(table_group), AnnData)
 
 
 def test_bug_rechunking_after_queried_raster():
