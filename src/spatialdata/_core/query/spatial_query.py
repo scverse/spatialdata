@@ -31,7 +31,12 @@ from spatialdata.models import (
 from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
-from spatialdata.transformations.transformations import Affine, BaseTransformation, _get_affine_for_element
+from spatialdata.transformations.transformations import (
+    Affine,
+    BaseTransformation,
+    _decompose_transformation_full,
+    _get_affine_for_element,
+)
 
 MIN_COORDINATE_DOCS = """\
     The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
@@ -50,7 +55,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     min_coordinate: list[Number] | ArrayLike,
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
-) -> tuple[DataArray, tuple[str, ...]]:
+) -> tuple[DataArray, tuple[str, ...], Affine]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
 
     Parameters
@@ -72,7 +77,10 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     is (2, 4) when axes has 2 spatial dimensions, and (2, 8) when axes has 3 spatial dimensions.
 
     The axes of the intrinsic coordinate system.
-    """
+
+    The transformation from the element's intrinsic coordinate system (without c) to the query coordinate system
+    (without c and adding missing axes)
+    """  # noqa: E501
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
@@ -132,6 +140,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
             coords=coords,
         ),
         input_axes_without_c,
+        spatial_transform_bb_axes,
     )
 
 
@@ -564,7 +573,7 @@ def _(
         max_coordinate=max_coordinate,
     )
 
-    intrinsic_bounding_box_corners, axes = _get_bounding_box_corners_in_intrinsic_coordinates(
+    intrinsic_bounding_box_corners, axes, _ = _get_bounding_box_corners_in_intrinsic_coordinates(
         image, axes, min_coordinate, max_coordinate, target_coordinate_system
     )
     if TYPE_CHECKING:
@@ -623,6 +632,7 @@ def _(
     max_coordinate: list[Number] | ArrayLike,
     target_coordinate_system: str,
 ) -> DaskDataFrame | list[DaskDataFrame] | None:
+    from spatialdata import transform
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
@@ -632,7 +642,6 @@ def _(
     min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
     max_coordinate = max_coordinate[np.newaxis, :] if max_coordinate.ndim == 1 else max_coordinate
 
-    # the code below is taken from _get_bounding_box_corners_in_intrinsic_coordinates()
     # for triggering validation
     _ = BoundingBoxRequest(
         target_coordinate_system=target_coordinate_system,
@@ -641,101 +650,111 @@ def _(
         max_coordinate=max_coordinate,
     )
 
-    m_without_c, input_axes_without_c, output_axes_without_c = _get_axes_of_transformation(
-        points, target_coordinate_system
+    # get the four corners of the bounding box (2D case), or the 8 corners of the "3D bounding box" (3D case)
+    intrinsic_bounding_box_corners, intrinsic_axes, spatial_transform_bb_axes = (
+        _get_bounding_box_corners_in_intrinsic_coordinates(
+            element=points,
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+            target_coordinate_system=target_coordinate_system,
+        )
     )
-    m_without_c_linear = m_without_c[:-1, :-1]
-    _ = _get_case_of_bounding_box_query(
-        m_without_c_linear,
-        input_axes_without_c,
-        output_axes_without_c,
-    )
-    axes_adjusted, min_coordinate_adjusted, max_coordinate_adjusted = _adjust_bounding_box_to_real_axes(
-        axes,
-        min_coordinate,
-        max_coordinate,
-        output_axes_without_c,
-    )
-    if set(axes_adjusted) != set(output_axes_without_c):
-        raise ValueError("The axes of the bounding box must match the axes of the transformation.")
+    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(dim="corner")
+    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(dim="corner")
 
-    # materialize the points in the intrinsic coordinate system once
+    min_coordinate_intrinsic = min_coordinate_intrinsic.data
+    max_coordinate_intrinsic = max_coordinate_intrinsic.data
+
     points_pd = points.compute()
 
-    # checking the type of the transformation
-    # in the case of an identity or scaling transform, we can skip the whole
-    # projection into intrinsic space and reprojection into the global coordinate system
-    is_identity_transform = input_axes_without_c == output_axes_without_c and np.allclose(
-        m_without_c, np.eye(m_without_c.shape[0])
+    # get the points in the intrinsic coordinate bounding box
+    in_intrinsic_bounding_box = _bounding_box_mask_points(
+        points_df=points_pd,
+        axes=intrinsic_axes,
+        min_coordinate=min_coordinate_intrinsic,
+        max_coordinate=max_coordinate_intrinsic,
     )
-    is_scaling_transform = input_axes_without_c == output_axes_without_c and _is_scaling_transform(m_without_c_linear)
 
-    # if the transform is identity, we can save extra for the affine transformation
-    if is_identity_transform:
-        bounding_box_masks = _bounding_box_mask_points(
-            points_df=points_pd,
-            axes=axes_adjusted,
-            min_coordinate=min_coordinate_adjusted,
-            max_coordinate=max_coordinate_adjusted,
+    if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
+        raise ValueError(
+            f"Length of list of dataframes `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`."
         )
-    elif is_scaling_transform:
-        # Pull scale factors from the diagonal and the translation from the last column
-        scales = np.diagonal(m_without_c_linear)  # shape: (n_axes,)
-        translation = m_without_c[:-1, -1]  # shape: (n_axes,)
-
-        # Invert the affine: x_intrinsic = (x_output - translation) / scale
-        min_intrinsic = (min_coordinate_adjusted - translation) / scales
-        max_intrinsic = (max_coordinate_adjusted - translation) / scales
-
-        # Negative scale components flip the interval; restore min < max.
-        min_intrinsic, max_intrinsic = (
-            np.minimum(min_intrinsic, max_intrinsic),
-            np.maximum(min_intrinsic, max_intrinsic),
-        )
-
-        bounding_box_masks = _bounding_box_mask_points(
-            points_df=points_pd,
-            axes=tuple(input_axes_without_c),
-            min_coordinate=min_intrinsic,
-            max_coordinate=max_intrinsic,
-        )
-    else:
-        query_coordinates = points_pd.loc[:, list(input_axes_without_c)].to_numpy(copy=False)
-        query_coordinates = query_coordinates @ m_without_c[:-1, :-1].T + m_without_c[:-1, -1]
-
-        bounding_box_masks = []
-        for box_index in range(min_coordinate_adjusted.shape[0]):
-            bounding_box_mask = np.ones(len(points_pd), dtype=bool)
-            for axis_index in range(len(output_axes_without_c)):
-                min_value = min_coordinate_adjusted[box_index, axis_index]
-                max_value = max_coordinate_adjusted[box_index, axis_index]
-                column = query_coordinates[:, axis_index]
-                bounding_box_mask &= (column > min_value) & (column < max_value)
-            bounding_box_masks.append(bounding_box_mask)
-
-    if not (len_df := len(bounding_box_masks)) == (len_bb := len(min_coordinate)):
-        raise ValueError(f"Length of list of masks `{len_df}` is not equal to the number of bounding boxes `{len_bb}`.")
-
-    old_transformations = get_transformation(points, get_all=True)
-    assert isinstance(old_transformations, dict)
-    feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
-
+    points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
     output: list[DaskDataFrame | None] = []
-    for mask_np in bounding_box_masks:
-        bounding_box_indices = np.flatnonzero(mask_np)
-        if len(bounding_box_indices) == 0:
-            output.append(None)
-            continue
-
-        # The exact mask is computed in the query coordinate system, but the returned points must stay intrinsic.
-        queried_points = points_pd.iloc[bounding_box_indices]
-        output.append(
-            PointsModel.parse(
-                dd.from_pandas(queried_points, npartitions=points.npartitions),
-                transformations=old_transformations.copy(),
-                feature_key=feature_key,
+    # attrs = points_pd.attrs.copy()
+    for mask_np in in_intrinsic_bounding_box:
+        if mask_np.sum() == 0:
+            points_in_intrinsic_bounding_box.append(None)
+        else:
+            filtered_pd = points_pd[mask_np]
+            old_transformations = get_transformation(points, get_all=True)
+            assert isinstance(old_transformations, dict)
+            feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+            points_in_intrinsic_bounding_box.append(
+                PointsModel.parse(
+                    dd.from_pandas(filtered_pd, npartitions=1),
+                    transformations=old_transformations.copy(),
+                    feature_key=feature_key,
+                )
             )
-        )
+    if len(points_in_intrinsic_bounding_box) == 0:
+        return None
+    # if the transformation was a scale, translation or identity, we can return the points already since querying from
+    # the intrinsic system using the inverse-transformed bounding box is equivalent in querying in the target system
+    rotation, shear, reflection, scale, translation = _decompose_transformation_full(
+        spatial_transform_bb_axes, input_axes=intrinsic_axes
+    )
+    no_rotation = np.allclose(
+        rotation.to_affine_matrix(input_axes=intrinsic_axes, output_axes=intrinsic_axes),
+        np.eye(len(intrinsic_axes) + 1),
+    )
+    no_shear = np.allclose(
+        shear.to_affine_matrix(input_axes=intrinsic_axes, output_axes=intrinsic_axes), np.eye(len(intrinsic_axes) + 1)
+    )
+    if no_rotation and no_shear:
+        output = points_in_intrinsic_bounding_box
+    else:
+        # assert that the number of queried points is correct
+        assert len(points_in_intrinsic_bounding_box) == len(min_coordinate)
+
+        # transform the element to the query coordinate system
+        for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate, strict=True):
+            if p is None:
+                output.append(None)
+            else:
+                points_query_coordinate_system = transform(
+                    p, to_coordinate_system=target_coordinate_system, maintain_positioning=False
+                ).compute()
+
+                # get a mask for the points in the bounding box
+                bounding_box_mask = _bounding_box_mask_points(
+                    points_df=points_query_coordinate_system,
+                    axes=axes,
+                    min_coordinate=min_c,  # type: ignore[arg-type]
+                    max_coordinate=max_c,  # type: ignore[arg-type]
+                )
+                if len(bounding_box_mask) != 1:
+                    raise ValueError(
+                        f"Expected a single mask, got {len(bounding_box_mask)} masks. Please report this bug."
+                    )
+                bounding_box_indices = np.where(bounding_box_mask[0])[0]
+
+                if len(bounding_box_indices) == 0:
+                    output.append(None)
+                else:
+                    points_df = p.compute().iloc[bounding_box_indices]
+                    old_transformations = get_transformation(p, get_all=True)
+                    assert isinstance(old_transformations, dict)
+                    feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+
+                    output.append(
+                        PointsModel.parse(
+                            dd.from_pandas(points_df, npartitions=1),
+                            transformations=old_transformations.copy(),
+                            feature_key=feature_key,
+                        )
+                    )
     if len(output) == 0:
         return None
     if len(output) == 1:
@@ -765,7 +784,7 @@ def _(
     )
 
     # get the four corners of the bounding box
-    (intrinsic_bounding_box_corners, _) = _get_bounding_box_corners_in_intrinsic_coordinates(
+    intrinsic_bounding_box_corners, _, _ = _get_bounding_box_corners_in_intrinsic_coordinates(
         element=polygons,
         axes=axes,
         min_coordinate=min_coordinate,
