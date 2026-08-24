@@ -677,7 +677,7 @@ def _(
         )
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
     output: list[DaskDataFrame | None] = []
-    # attrs = points_pd.attrs.copy()
+
     for mask_np in in_intrinsic_bounding_box:
         if mask_np.sum() == 0:
             points_in_intrinsic_bounding_box.append(None)
