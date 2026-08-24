@@ -16,7 +16,7 @@ from dask import config
 from dask.array import Array as DaskArray
 from xarray import DataArray, Dataset, DataTree
 
-from spatialdata._types import ArrayLike, Number
+from spatialdata._types import ArrayLike, ListOrNDArrayFloating
 from spatialdata.transformations import Sequence, Translation, get_transformation, set_transformation
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
@@ -34,7 +34,7 @@ def disable_dask_tune_optimization() -> Generator[None, None, None]:
         config.set({"optimization.tune.active": old_setting})
 
 
-def _parse_list_into_array(array: list[Number] | ArrayLike) -> ArrayLike:
+def _parse_list_into_array(array: ListOrNDArrayFloating) -> ArrayLike:
     if isinstance(array, list):
         array = np.array(array)
     if array.dtype != float:

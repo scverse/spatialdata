@@ -14,5 +14,8 @@ IntArrayLike = NDArray[np.integer[Any]]
 
 Number = int | float
 
+ListOrNDArrayFloating = list[Number] | ArrayLike
+
+
 type Raster_T = DataArray | DataTree
 ColorLike = tuple[float, ...] | str

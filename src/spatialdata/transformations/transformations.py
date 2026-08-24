@@ -9,7 +9,6 @@ import scipy
 import xarray as xr
 from xarray import DataArray
 
-from spatialdata._types import ArrayLike
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem, _get_spatial_axes
 from spatialdata.transformations.ngff.ngff_transformations import (
     NgffAffine,
@@ -22,7 +21,7 @@ from spatialdata.transformations.ngff.ngff_transformations import (
 )
 
 if TYPE_CHECKING:
-    from spatialdata._types import Number
+    from spatialdata._types import ArrayLike, ListOrNDArrayFloating
     from spatialdata.models import SpatialElement
     from spatialdata.models._utils import ValidAxis_t
 
@@ -366,7 +365,7 @@ class MapAxis(BaseTransformation):
 
 
 class Translation(BaseTransformation):
-    def __init__(self, translation: list[Number] | ArrayLike, axes: tuple[ValidAxis_t, ...]) -> None:
+    def __init__(self, translation: ListOrNDArrayFloating, axes: tuple[ValidAxis_t, ...]) -> None:
         from spatialdata._utils import _parse_list_into_array
 
         self.translation = _parse_list_into_array(translation)
@@ -453,7 +452,7 @@ class Translation(BaseTransformation):
 
 
 class Scale(BaseTransformation):
-    def __init__(self, scale: list[Number] | ArrayLike, axes: tuple[ValidAxis_t, ...]) -> None:
+    def __init__(self, scale: ListOrNDArrayFloating, axes: tuple[ValidAxis_t, ...]) -> None:
         from spatialdata._utils import _parse_list_into_array
 
         self.scale = _parse_list_into_array(scale)
@@ -534,7 +533,7 @@ class Scale(BaseTransformation):
 class Affine(BaseTransformation):
     def __init__(
         self,
-        matrix: list[Number] | ArrayLike,
+        matrix: ListOrNDArrayFloating,
         input_axes: tuple[ValidAxis_t, ...],
         output_axes: tuple[ValidAxis_t, ...],
     ) -> None:

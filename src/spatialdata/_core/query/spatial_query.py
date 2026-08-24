@@ -18,7 +18,7 @@ from spatialdata import to_polygons
 from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
-from spatialdata._types import ArrayLike, Number
+from spatialdata._types import ArrayLike, ListOrNDArrayFloating
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
     PointsModel,
@@ -52,8 +52,8 @@ MAX_COORDINATE_DOCS = """\
 def _get_bounding_box_corners_in_intrinsic_coordinates(
     element: SpatialElement,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
 ) -> tuple[DataArray, tuple[str, ...], Affine]:
     """Get all corners of a bounding box in the intrinsic coordinates of an element.
@@ -398,8 +398,8 @@ class BoundingBoxRequest(BaseSpatialRequest):
 def _bounding_box_mask_points(
     points_df: pd.DataFrame,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
 ) -> list[np.ndarray]:
     """Compute a mask that is true for the points inside axis-aligned bounding boxes.
 
@@ -469,8 +469,8 @@ def _dict_query_dispatcher(
 def bounding_box_query(
     element: SpatialElement | SpatialData,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     return_request_only: bool = False,
     filter_table: bool = True,
@@ -518,8 +518,8 @@ def bounding_box_query(
 def _(
     sdata: SpatialData,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     filter_table: bool = True,
 ) -> SpatialData:
@@ -548,8 +548,8 @@ def _(
 def _(
     image: DataArray | DataTree,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     return_request_only: bool = False,
 ) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray] | list[DataTree] | None:
@@ -628,8 +628,8 @@ def _(
 def _(
     points: DaskDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
 ) -> DaskDataFrame | list[DaskDataFrame] | None:
     from spatialdata import transform
@@ -766,8 +766,8 @@ def _(
 def _(
     polygons: GeoDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
 ) -> GeoDataFrame | list[GeoDataFrame] | None:
     from spatialdata.transformations import get_transformation

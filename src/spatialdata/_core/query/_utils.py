@@ -9,7 +9,7 @@ from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core._elements import Tables
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ArrayLike, Number
+from spatialdata._types import ArrayLike, ListOrNDArrayFloating
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.transformations._utils import compute_coordinates
 from spatialdata.transformations.transformations import BaseTransformation, Sequence, Translation
@@ -17,8 +17,8 @@ from spatialdata.transformations.transformations import BaseTransformation, Sequ
 
 def get_bounding_box_corners(
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
 ) -> DataArray:
     """Get the coordinates of the corners of a bounding box from the min/max values.
 

@@ -17,7 +17,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_polygons
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ArrayLike, Number
+from spatialdata._types import ListOrNDArrayFloating
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
     Image2DModel,
@@ -48,8 +48,8 @@ VALUES_COLUMN = "__values_column"
 
 def _compute_target_dimensions(
     spatial_axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_unit_to_pixels: float | None,
     target_width: float | None,
     target_height: float | None,
@@ -155,8 +155,8 @@ def rasterize(
     # required arguments
     data: SpatialData | SpatialElement | str,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     target_unit_to_pixels: float | None = None,
     target_width: float | None = None,
@@ -375,8 +375,8 @@ def rasterize(
 def _get_xarray_data_to_rasterize(
     data: DataArray | DataTree,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_sizes: dict[str, float | None],
     target_coordinate_system: str,
 ) -> tuple[DataArray, Scale | None]:
@@ -502,8 +502,8 @@ def _get_corrected_affine_matrix(
 def rasterize_images_labels(
     data: SpatialElement,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     target_unit_to_pixels: float | None = None,
     target_width: float | None = None,
@@ -616,8 +616,8 @@ def rasterize_images_labels(
 def rasterize_shapes_points(
     data: DaskDataFrame | GeoDataFrame,
     axes: tuple[str, ...],
-    min_coordinate: list[Number] | ArrayLike,
-    max_coordinate: list[Number] | ArrayLike,
+    min_coordinate: ListOrNDArrayFloating,
+    max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     target_unit_to_pixels: float | None = None,
     target_width: float | None = None,
