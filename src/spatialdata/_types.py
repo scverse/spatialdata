@@ -12,5 +12,7 @@ from numpy.typing import DTypeLike, NDArray
 ArrayLike = NDArray[np.floating[Any]]
 IntArrayLike = NDArray[np.integer[Any]]
 
+Number = int | float
+
 type Raster_T = DataArray | DataTree
 ColorLike = tuple[float, ...] | str

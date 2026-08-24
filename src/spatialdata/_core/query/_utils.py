@@ -9,8 +9,8 @@ from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core._elements import Tables
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ArrayLike
-from spatialdata._utils import Number, _parse_list_into_array
+from spatialdata._types import ArrayLike, Number
+from spatialdata._utils import _parse_list_into_array
 from spatialdata.transformations._utils import compute_coordinates
 from spatialdata.transformations.transformations import BaseTransformation, Sequence, Translation
 

@@ -16,11 +16,10 @@ from dask import config
 from dask.array import Array as DaskArray
 from xarray import DataArray, Dataset, DataTree
 
-from spatialdata._types import ArrayLike
+from spatialdata._types import ArrayLike, Number
 from spatialdata.transformations import Sequence, Translation, get_transformation, set_transformation
 
 # I was using "from numbers import Number" but this led to mypy errors, so I switched to the following:
-Number = int | float
 RT = TypeVar("RT")
 
 

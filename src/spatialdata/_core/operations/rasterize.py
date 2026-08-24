@@ -17,8 +17,8 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_polygons
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ArrayLike
-from spatialdata._utils import Number, _parse_list_into_array
+from spatialdata._types import ArrayLike, Number
+from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,

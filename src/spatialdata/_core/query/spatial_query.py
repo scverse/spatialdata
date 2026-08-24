@@ -18,8 +18,8 @@ from spatialdata import to_polygons
 from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
-from spatialdata._types import ArrayLike
-from spatialdata._utils import Number, _parse_list_into_array
+from spatialdata._types import ArrayLike, Number
+from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
     PointsModel,
     ShapesModel,

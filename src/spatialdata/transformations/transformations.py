@@ -22,7 +22,7 @@ from spatialdata.transformations.ngff.ngff_transformations import (
 )
 
 if TYPE_CHECKING:
-    from spatialdata._utils import Number
+    from spatialdata._types import Number
     from spatialdata.models import SpatialElement
     from spatialdata.models._utils import ValidAxis_t
 
