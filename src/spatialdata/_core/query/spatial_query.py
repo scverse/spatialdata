@@ -330,11 +330,6 @@ def _get_case_of_bounding_box_query(
     return case
 
 
-def _is_scaling_transform(m_linear: np.ndarray) -> bool:
-    """Check if the linear part is a diagonal (pure scaling) matrix."""
-    return np.allclose(m_linear, np.diag(np.diagonal(m_linear)))
-
-
 @dataclass(frozen=True)
 class BaseSpatialRequest:
     """Base class for spatial queries."""
