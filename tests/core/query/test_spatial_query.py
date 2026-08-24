@@ -786,7 +786,6 @@ def test_query_points_3d_bounding_box_axes_order_independent():
     - The bug does not occur if we drop the z coordinate.
     - The bug does not occur if the scale is Scale([1, 1], axes=("x", "y"))
 
-    This currently FAILS: there is no fix yet for #1175.
     """
     from spatialdata.transformations import Scale
 
@@ -800,7 +799,6 @@ def test_query_points_3d_bounding_box_axes_order_independent():
         ]
     )
     points_element = _make_points(coordinates)
-    # points_element = points_element.drop(columns=["z"])
     scale_x = 1
     scale_y = 1.1
     scale = Scale([scale_x, scale_y], axes=("x", "y"))
