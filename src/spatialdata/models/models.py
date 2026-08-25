@@ -790,8 +790,10 @@ class PointsModel:
                 df_dict[instance_key] = annotation[instance_key]
             if Z not in axes and Z in annotation.columns:
                 logger.info(f"Column `{Z}` in `annotation` will be ignored since the data is 2D.")
-            for c in set(annotation.columns) - {feature_key, instance_key, X, Y, Z}:
-                df_dict[c] = annotation[c]
+            handled_columns = {feature_key, instance_key, X, Y, Z}
+            for c in annotation.columns:
+                if c not in handled_columns:
+                    df_dict[c] = annotation[c]
 
         table: DaskDataFrame = dd.from_pandas(pd.DataFrame(**df_kwargs), **kwargs)
         return cls._add_metadata_and_validate(
@@ -881,15 +883,17 @@ class PointsModel:
                 )
         if Z not in axes and Z in data.columns:
             logger.info(f"Column `{Z}` in `data` will be ignored since the data is 2D.")
-        for c in set(data.columns) - {
+        handled_columns = {
             feature_key,
             instance_key,
             *coordinates.values(),
             X,
             Y,
             Z,
-        }:
-            table[c] = data[c]
+        }
+        for c in data.columns:
+            if c not in handled_columns:
+                table[c] = data[c]
 
         validated = cls._add_metadata_and_validate(
             table,
