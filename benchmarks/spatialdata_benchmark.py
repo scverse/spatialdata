@@ -5,7 +5,7 @@ from spatialdata.transformations import Scale, set_transformation
 import spatialdata as sd
 from spatialdata.utils.points import _make_points
 
-from spatialdata.benchmarks.utils import cluster_blobs  # type: ignore[attr-defined] # utils is a type checker minefield
+from .utils import cluster_blobs  # type: ignore[attr-defined] # utils is a type checker minefield
 import numpy as np
 
 
