@@ -776,7 +776,8 @@ def test_query_points_bounding_box_negative_scale_transform():
     np.testing.assert_allclose(result["y"].compute(), [0])
 
 
-def test_query_points_3d_bounding_box_axes_order_independent():
+@pytest.mark.parametrize("scales", [(1, 1), (1.1, 1), (0.5, 2), (1.1, -1.2)])
+def test_query_points_3d_bounding_box_axes_order_independent(scales):
     """Regression test for https://github.com/scverse/spatialdata/issues/1175.
 
     For 3D points with a non-trivial Scale transformation (i.e. not scale by x=1, y=1) defined only on ("x", "y"),
@@ -796,11 +797,15 @@ def test_query_points_3d_bounding_box_axes_order_independent():
             [100.0, 50.0, 3.0],
             [150.0, 70.0, 4.0],
             [220.0, 90.0, 5.0],
+            [10.0, -10.0, 1.0],
+            [70.0, -30.0, 2.0],
+            [100.0, -50.0, 3.0],
+            [150.0, -70.0, 4.0],
+            [220.0, -90.0, 5.0],
         ]
     )
     points_element = _make_points(coordinates)
-    scale_x = 1
-    scale_y = 1.1
+    scale_x, scale_y = scales
     scale = Scale([scale_x, scale_y], axes=("x", "y"))
     set_transformation(points_element, transformation=scale, to_coordinate_system="global")
 
@@ -826,20 +831,23 @@ def test_query_points_3d_bounding_box_axes_order_independent():
     n_yx = 0 if result_yx is None else len(result_yx)
     assert n_xy == n_yx
 
-    # Uncomment to visualize the two queries side by side (requires spatialdata_plot).
+    # Uncomment to visualize the two queries side by side (requires spatialdata_plot, matplotlib).
+    # This code also writes the plot to a file in the OS's temporary directory and
+    # throws a warning to print the path where the file was written.
+
     # import matplotlib.pyplot as plt
     # import spatialdata_plot  # noqa: F401
     # from matplotlib.patches import Rectangle
-    #
+
     # from spatialdata import SpatialData
-    #
+
     # has_z = "z" in points_element.columns
     # bug_occurred = n_xy != n_yx
     # fig_title = (
     #     f"z={'yes' if has_z else 'no'}, scale=({scale_x}, {scale_y}), "
     #     f"bug={'YES' if bug_occurred else 'no'} (n_xy={n_xy}, n_yx={n_yx})"
     # )
-    #
+
     # sdata_3d = SpatialData(points={"transcripts": points_element})
     # fig, axes_ = plt.subplots(1, 2, figsize=(15, 8))
     # fig.suptitle(fig_title)
@@ -858,12 +866,17 @@ def test_query_points_3d_bounding_box_axes_order_independent():
     #     # n = len(r["transcripts"]) if "transcripts" in r.points else "element dropped"
     #     # print(f"axes={str(qaxes):14s} -> {n}")
     #     subplot_title = f"querying by axes={tuple(qaxes)}"
-    #     sdata_3d.pl.render_points("transcripts", color="black", size=1).pl.show(
+    #     sdata_3d.pl.render_points("transcripts", color="red", size=10).pl.show(
     #         ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
     #     )
-    #     r.pl.render_points("transcripts", color="genes", size=20).pl.show(
+    #     r.pl.render_points("transcripts", color="green", size=10).pl.show(
     #         ax=axes_[i], colorbar=False, legend_loc=None, title=subplot_title
     #     )
+
+    #     # fake points to get legend entries
+    #     axes_[i].plot([], [], "ro", ms=10, label="points NOT selected by query")
+    #     axes_[i].plot([], [], "go", ms=10, label="points selected by query")
+
     #     # the intended box, in (x, y) order
     #     axes_[i].add_patch(
     #         Rectangle(
@@ -899,7 +912,15 @@ def test_query_points_3d_bounding_box_axes_order_independent():
     #         points_element["y"].max().compute().item() * scale_y + 20,
     #     )
     # plt.tight_layout()
-    # plt.show()
+    # # plt.show()
+    # import warnings
+    # from tempfile import mkdtemp
+    # import pathlib as pl
+
+    # tmpdir_path = pl.Path(mkdtemp())
+    # filename = tmpdir_path / f"iss1175_scalex_{scale_x}_scaley_{scale_y}.png"
+    # fig.savefig(filename, dpi=300)
+    # warnings.warn(f"Figure saved to {filename}")
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
