@@ -32,7 +32,6 @@ from spatialdata.transformations.transformations import (
     Scale,
     Sequence,
     Translation,
-    _decompose_affine_into_linear_and_translation,
     _decompose_transformation_full,
     _decompose_transformation_simple,
     _get_affine_for_element,
