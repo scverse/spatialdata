@@ -70,8 +70,10 @@ class TimeQueries:
 
 
 class TimeQueriesWithScaleTransformations:
-    params = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000]
+    params = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000]
     param_names = ["n_repeats"]
+    # n_repeats * 10 points; largest case is 100M points -> allow long setup/run
+    timeout = 1200
 
     def setup(self, n_repeats: int) -> None:
         coordinates = np.array(
