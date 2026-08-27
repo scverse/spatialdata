@@ -84,6 +84,7 @@ class TimeQueriesWithScaleTransformations:
                 [150.0, -70.0, 4.0],
                 [220.0, -90.0, 5.0],
             ]
+            * 1000
         )
 
         self.points_element = _make_points(coordinates)
