@@ -70,7 +70,10 @@ class TimeQueries:
 
 
 class TimeQueriesWithScaleTransformations:
-    def setup(self) -> None:
+    params = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000]
+    param_names = ["n_repeats"]
+
+    def setup(self, n_repeats: int) -> None:
         coordinates = np.array(
             [
                 [10.0, 10.0, 1.0],
@@ -84,7 +87,7 @@ class TimeQueriesWithScaleTransformations:
                 [150.0, -70.0, 4.0],
                 [220.0, -90.0, 5.0],
             ]
-            * 100000
+            * n_repeats
         )
 
         self.points_element = _make_points(coordinates)
@@ -92,7 +95,7 @@ class TimeQueriesWithScaleTransformations:
         scale = Scale([scale_x, scale_y], axes=("x", "y"))
         set_transformation(self.points_element, transformation=scale, to_coordinate_system="global")
 
-    def time_bbquery_scale_transform(self) -> None:
+    def time_bbquery_scale_transform(self, n_repeats: int) -> None:
 
         x_min, x_max = 60.0, 240.0
         y_min, y_max = 20.0, 160.0

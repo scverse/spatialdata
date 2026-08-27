@@ -498,8 +498,8 @@ def bounding_box_query(
 
     Returns
     -------
-    The SpatialData object or SpatialElement containing the requested data.
-    Eventual empty Elements are omitted by the SpatialData object.
+    The SpatialData object or SpatialElement containing the requested data, in the intrinsic coordinate system of the
+    element. Eventual empty Elements are omitted by the SpatialData object.
 
     Notes
     -----
@@ -673,7 +673,7 @@ def _(
 
     if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
         raise ValueError(
-            f"Length of list of dataframes `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`."
+            f"Length of list of masks `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`."
         )
     points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
     output: list[DaskDataFrame | None] = []
@@ -738,6 +738,8 @@ def _(
                 if len(bounding_box_indices) == 0:
                     output.append(None)
                 else:
+                    # The exact mask is computed in the query coordinate system, but the returned points are in the
+                    # intrinsic coordinate system
                     points_df = p.compute().iloc[bounding_box_indices]
                     old_transformations = get_transformation(p, get_all=True)
                     assert isinstance(old_transformations, dict)
