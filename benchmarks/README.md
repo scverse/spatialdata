@@ -9,7 +9,7 @@ Note that to run code, your current working directory should be the SpatialData 
 The benchmarks use the [airspeed velocity](https://asv.readthedocs.io/en/stable/) (asv) framework. Install it with the `benchmark` option:
 
 ```
-pip install -e '.[docs,test,benchmark]'
+pip install -e . --group dev --group test --group docs --group benchmark
 ```
 
 ## Usage
@@ -41,6 +41,9 @@ asv continuous --show-stderr -v -b timeraw main faster-import
 ```
 
 Replace `faster-import` with any branch name or commit hash. The `-v` flag prints per-sample timings; drop it for a shorter summary.
+
+In case you see a lot of variation in the results, you could run with an additional option `-a rounds=<x>` where `<x>` in the number of rounds to run (default=2). E.g.: `-a rounds=10`.
+This will run 10 sets of benchmark runs for both commits, interleaving them, and show you the statistics of the results.
 
 Alternatively, collect results separately and compare afterwards:
 

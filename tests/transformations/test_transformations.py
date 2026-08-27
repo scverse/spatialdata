@@ -32,6 +32,8 @@ from spatialdata.transformations.transformations import (
     Scale,
     Sequence,
     Translation,
+    _decompose_transformation_full,
+    _decompose_transformation_simple,
     _get_affine_for_element,
 )
 
@@ -991,7 +993,7 @@ class TestSimpleDecomposition:
         affine = Affine(matrix, input_axes=input_axes, output_axes=output_axes)
         context = nullcontext() if valid else pytest.raises(ValueError)
         with context:
-            linear, translation = affine._decompose_into_linear_and_translation()
+            linear, translation = _decompose_transformation_simple(affine, input_axes=input_axes)
         if valid:
             reconstructed = Sequence([linear, translation]).to_affine_matrix(
                 input_axes=input_axes, output_axes=output_axes
@@ -1003,7 +1005,7 @@ class TestSimpleDecomposition:
         # to the "valid-ill-conditioned" case above) because it checks that a warning is actually raised
         affine = _make_affine_xy(np.diag([1.0, 1e-12]))
         with pytest.warns(RuntimeWarning, match="condition number"):
-            affine._decompose_into_linear_and_translation()
+            _decompose_transformation_simple(affine, input_axes=("x", "y"))
 
 
 class TestFullDecomposition:
@@ -1012,7 +1014,7 @@ class TestFullDecomposition:
         affine = Affine(matrix, input_axes=input_axes, output_axes=output_axes)
         context = nullcontext() if valid else pytest.raises(ValueError)
         with context:
-            components = affine._decompose_into_5_simple_transformations()
+            components = _decompose_transformation_full(affine, input_axes=input_axes)
         if valid:
             reconstructed = Sequence(list(components)).to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
             assert np.allclose(reconstructed, matrix)
@@ -1022,7 +1024,7 @@ class TestFullDecomposition:
         # to the "valid-ill-conditioned" case above) because it checks that a warning is actually raised
         affine = _make_affine_xy(np.diag([1.0, 1e-12]))
         with pytest.warns(RuntimeWarning, match="condition number"):
-            affine._decompose_into_5_simple_transformations()
+            _decompose_transformation_full(affine, input_axes=("x", "y"))
 
     def test_component_types(self):
         rng = np.random.default_rng(1)
@@ -1031,7 +1033,7 @@ class TestFullDecomposition:
         while abs(np.linalg.det(linear)) < 0.1:
             linear = rng.standard_normal((2, 2))
         affine = _make_affine_xy(linear, translation=np.array([5.0, -1.0]))
-        rotation, shear, reflection, scale, translation = affine._decompose_into_5_simple_transformations()
+        rotation, shear, reflection, scale, translation = _decompose_transformation_full(affine, input_axes=("x", "y"))
         assert isinstance(rotation, Affine)
         assert isinstance(shear, Affine)
         assert isinstance(reflection, Scale)
