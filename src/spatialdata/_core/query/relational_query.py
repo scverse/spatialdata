@@ -255,6 +255,13 @@ def _right_exclusive_join_spatialelement_table(
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData | None]:
+    if match_rows == "left":
+        warnings.warn(
+            "Matching rows 'left' is not supported for 'right_exclusive' join; it will be treated as 'no'.",
+            UserWarning,
+            stacklevel=2,
+        )
+        match_rows = "no"
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
@@ -300,7 +307,12 @@ def _right_join_spatialelement_table(
     filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "left":
-        warnings.warn("Matching rows 'left' is not supported for 'right' join.", UserWarning, stacklevel=2)
+        warnings.warn(
+            "Matching rows 'left' is not supported for 'right' join; it will be treated as 'no'.",
+            UserWarning,
+            stacklevel=2,
+        )
+        match_rows = "no"
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
@@ -412,6 +424,13 @@ def _left_exclusive_join_spatialelement_table(
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData | None]:
+    if match_rows == "right":
+        warnings.warn(
+            "Matching rows 'right' is not supported for 'left_exclusive' join; it will be treated as 'no'.",
+            UserWarning,
+            stacklevel=2,
+        )
+        match_rows = "no"
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
@@ -448,7 +467,12 @@ def _left_join_spatialelement_table(
     filter_label_pixels: bool | None = None,
 ) -> tuple[dict[str, Any], AnnData]:
     if match_rows == "right":
-        warnings.warn("Matching rows 'right' is not supported for 'left' join.", UserWarning, stacklevel=2)
+        warnings.warn(
+            "Matching rows 'right' is not supported for 'left' join; it will be treated as 'no'.",
+            UserWarning,
+            stacklevel=2,
+        )
+        match_rows = "no"
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
