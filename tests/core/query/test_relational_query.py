@@ -1127,6 +1127,69 @@ def test_join_preserves_row_order_multiple_interleaved_regions(how, match_rows):
             assert list(actual_element.index) == expected_index
 
 
+def test_join_scoping_for_a_region_not_among_the_queried_elements():
+    """
+    A table can declare a region for which, at join time, no element is passed in `spatial_element_names`. This
+    can happen for two different reasons:
+
+      - the element genuinely exists elsewhere in the `SpatialData` object, it's just not part of this
+        particular query (e.g. only some of the annotated elements are of interest right now);
+      - the element doesn't exist anywhere in the `SpatialData` object at all (e.g. after
+        `sdata.subset(..., filter_tables=False)`, which keeps the table whole while dropping elements; this
+        also triggers `SpatialData`'s own "table is annotating '{name}', which is not present" warning).
+
+    This test documents that `join_spatialelement_table` currently can't tell these two cases apart -- and,
+    across the five join types, treats "not among the queried elements" inconsistently:
+
+      - "left", "left_exclusive", "inner" and "right_exclusive" all scope themselves strictly to the elements
+        actually passed in `spatial_element_names`: rows for any other region never appear in their output,
+        matched or not.
+      - "right" instead always returns the table completely unfiltered (real SQL right-join semantics: every
+        right-hand row is kept, whether or not the left side covers its key at all), so rows for a region
+        outside the query leak into the result regardless.
+
+    This means "right_exclusive" is *not* simply "right minus inner" here, unlike what its name may suggest.
+    Which of these two behaviors is actually intended is an open design question (see
+    https://github.com/scverse/spatialdata/issues/1162); until it's resolved, this test only pins down the
+    current, observed behavior so a future change is a deliberate, visible diff here.
+    """
+    from geopandas import GeoDataFrame
+    from shapely.geometry import Point
+
+    from spatialdata.models import ShapesModel
+
+    def circle() -> GeoDataFrame:
+        return ShapesModel.parse(GeoDataFrame({"geometry": [Point(0, 0)], "radius": [1.0]}, index=pd.Index([0])))
+
+    obs = pd.DataFrame(
+        {"region": pd.Categorical(["a", "b", "c"]), "instance_id": [0, 0, 0], "label": ["a0", "b0", "c0"]},
+        index=["0", "1", "2"],
+    )
+    table = TableModel.parse(
+        AnnData(X=np.zeros((3, 1)), obs=obs), region=["a", "b", "c"], region_key="region", instance_key="instance_id"
+    )
+    sdata_c_exists_unqueried = SpatialData(shapes={"a": circle(), "b": circle(), "c": circle()}, tables={"table": table})
+    with pytest.warns(UserWarning, match="is annotating 'c'"):
+        sdata_c_missing_entirely = sdata_c_exists_unqueried.subset(["a", "b"], filter_tables=False)
+
+    expected_labels_by_how = {
+        "left": ["a0", "b0"],
+        "left_exclusive": None,
+        "inner": ["a0", "b0"],
+        "right": ["a0", "b0", "c0"],
+        "right_exclusive": None,
+    }
+    for sdata in (sdata_c_exists_unqueried, sdata_c_missing_entirely):
+        for how, expected_labels in expected_labels_by_how.items():
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                _, joined_table = join_spatialelement_table(
+                    sdata=sdata, spatial_element_names=["a", "b"], table_name="table", how=how
+                )
+            actual_labels = None if joined_table is None else joined_table.obs["label"].tolist()
+            assert actual_labels == expected_labels, f"how={how!r}"
+
+
 def test_filter_table_non_annotating(full_sdata):
     obs = pd.DataFrame({"test": ["a", "b", "c"]}, index=list(map(str, range(3))))
     adata = AnnData(obs=obs)
