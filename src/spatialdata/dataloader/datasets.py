@@ -5,12 +5,13 @@ from collections.abc import Callable, Mapping
 from functools import partial
 from itertools import chain
 from types import MappingProxyType
-from typing import Any
+from typing import Any, cast
 
 import anndata as ad
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from pandas import CategoricalDtype
 from scipy.sparse import issparse
@@ -494,7 +495,7 @@ def _get_tile_coords(
 
     # extent, aka the tile size
     extent = (circles.radius * 2).values.reshape(-1, 1)
-    centroids_points = get_centroids(circles, coordinate_system=cs)
+    centroids_points = cast(DaskDataFrame, get_centroids(circles, coordinate_system=cs))
     axes = get_axes_names(centroids_points)
     centroids_numpy = centroids_points.compute().values
 
