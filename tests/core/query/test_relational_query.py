@@ -1168,7 +1168,9 @@ def test_join_scoping_for_a_region_not_among_the_queried_elements():
     table = TableModel.parse(
         AnnData(X=np.zeros((3, 1)), obs=obs), region=["a", "b", "c"], region_key="region", instance_key="instance_id"
     )
-    sdata_c_exists_unqueried = SpatialData(shapes={"a": circle(), "b": circle(), "c": circle()}, tables={"table": table})
+    sdata_c_exists_unqueried = SpatialData(
+        shapes={"a": circle(), "b": circle(), "c": circle()}, tables={"table": table}
+    )
     with pytest.warns(UserWarning, match="is annotating 'c'"):
         sdata_c_missing_entirely = sdata_c_exists_unqueried.subset(["a", "b"], filter_tables=False)
 
