@@ -422,8 +422,7 @@ def _left_exclusive_join_spatialelement_table(
                 group_df = groups_df.get_group(name)
                 table_instance_key_column = group_df[instance_key]
                 if element_type in ["points", "shapes"]:
-                    mask = np.full(len(element), True, dtype=bool)
-                    mask[table_instance_key_column.values] = False
+                    mask = ~np.isin(element.index, table_instance_key_column.values)
                     masked_element = element.loc[mask, :] if mask.sum() != 0 else None
                     element_dict[element_type][name] = masked_element
                 else:
