@@ -1065,7 +1065,23 @@ def _make_interleaved_regions_sdata() -> tuple[SpatialData, dict[str, dict[str, 
 
 
 @pytest.mark.parametrize("match_rows", ["no", "left", "right"])
-@pytest.mark.parametrize("how", ["left", "left_exclusive", "inner", "right", "right_exclusive"])
+@pytest.mark.parametrize(
+    "how",
+    [
+        "left",
+        "left_exclusive",
+        "inner",
+        "right",
+        pytest.param(
+            "right_exclusive",
+            marks=pytest.mark.xfail(
+                reason="known bug (see https://github.com/scverse/spatialdata/issues/1162): 'right_exclusive' join "
+                "drops unmatched table rows belonging to a region with no queried spatial element (e.g. 'c7')",
+                strict=True,
+            ),
+        ),
+    ],
+)
 def test_join_preserves_row_order_multiple_interleaved_regions(how, match_rows):
     # generalization to all the join types of the bug reported in https://github.com/scverse/spatialdata/issues/1162
     # covering all `how` values of `join_spatialelement_table`, crossed with all values of `match_rows`, and checking
