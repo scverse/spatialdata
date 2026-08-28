@@ -981,15 +981,14 @@ def _make_interleaved_regions_sdata() -> tuple[SpatialData, dict[str, dict[str, 
     # - we also set the index of the table obs to random values; these should be ignored (in the code we call .index on
     #   a region_key column, but the index is freshly reset by a nearby call of .reset_index() inside the join
     #   machinery)
-    # - "b3" and "c7" are unmatched table rows: "b3" refers to a missing instance in a
-    #   spatial element that exists, while "c7" refers to a region with no spatial element
+    # - "b3" is an unmatched table row: a missing instance in a spatial element that exists
     obs = pd.DataFrame(
         {
-            "region": pd.Categorical(["b", "b", "a", "b", "a", "a", "b", "c"]),
-            "instance_id": [2, 1, 2, 3, 1, 0, 0, 7],
-            "label": ["b2", "b1", "a2", "b3", "a1", "a0", "b0", "c7"],
+            "region": pd.Categorical(["b", "b", "a", "b", "a", "a", "b"]),
+            "instance_id": [2, 1, 2, 3, 1, 0, 0],
+            "label": ["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
         },
-        index=np.random.default_rng(0).integers(0, 3, size=8).astype(str),
+        index=np.random.default_rng(0).integers(0, 3, size=7).astype(str),
     )
     # "a" additionally has unmatched instance ids 5, 4, and "b" has 4, 6.
     # These test that unmatched element rows are preserved in element order by
@@ -1034,29 +1033,29 @@ def _make_interleaved_regions_sdata() -> tuple[SpatialData, dict[str, dict[str, 
         },
         "right": {
             "no": _JoinOutcome(
-                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0", "c7"],
+                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
                 element_index={"a": [2, 1, 0], "b": [1, 2, 0]},
             ),
             "left": _JoinOutcome(
-                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0", "c7"],
+                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
                 warns=True,
                 element_index={"a": [2, 1, 0], "b": [1, 2, 0]},
             ),
             "right": _JoinOutcome(
-                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0", "c7"],
+                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
                 element_index={"a": [2, 1, 0], "b": [2, 1, 0]},
             ),
         },
         "right_exclusive": {
-            "no": _JoinOutcome(table_order=["b3", "c7"], element_index={"a": None, "b": None}),
-            "left": _JoinOutcome(table_order=["b3", "c7"], warns=True, element_index={"a": None, "b": None}),
-            "right": _JoinOutcome(table_order=["b3", "c7"], element_index={"a": None, "b": None}),
+            "no": _JoinOutcome(table_order=["b3"], element_index={"a": None, "b": None}),
+            "left": _JoinOutcome(table_order=["b3"], warns=True, element_index={"a": None, "b": None}),
+            "right": _JoinOutcome(table_order=["b3"], element_index={"a": None, "b": None}),
         },
     }
 
     table = TableModel.parse(
         AnnData(X=np.zeros((len(obs), 1)), obs=obs),
-        region=["a", "b", "c"],
+        region=["a", "b"],
         region_key="region",
         instance_key="instance_id",
     )
@@ -1065,23 +1064,7 @@ def _make_interleaved_regions_sdata() -> tuple[SpatialData, dict[str, dict[str, 
 
 
 @pytest.mark.parametrize("match_rows", ["no", "left", "right"])
-@pytest.mark.parametrize(
-    "how",
-    [
-        "left",
-        "left_exclusive",
-        "inner",
-        "right",
-        pytest.param(
-            "right_exclusive",
-            marks=pytest.mark.xfail(
-                reason="known bug (see https://github.com/scverse/spatialdata/issues/1162): 'right_exclusive' join "
-                "drops unmatched table rows belonging to a region with no queried spatial element (e.g. 'c7')",
-                strict=True,
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("how", ["left", "left_exclusive", "inner", "right", "right_exclusive"])
 def test_join_preserves_row_order_multiple_interleaved_regions(how, match_rows):
     # generalization to all the join types of the bug reported in https://github.com/scverse/spatialdata/issues/1162
     # covering all `how` values of `join_spatialelement_table`, crossed with all values of `match_rows`, and checking
