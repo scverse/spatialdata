@@ -236,6 +236,9 @@ def _get_masked_element(
             mask_values = left_index[mask]
         else:
             mask_values = left_index
+    elif mask_values is not None:
+        order_mask = np.isin(element_indices, mask_values)
+        mask_values = np.asarray(element_indices)[order_mask]
 
     if isinstance(element, DaskDataFrame):
         return element.map_partitions(lambda df: df.loc[mask_values], meta=element)
@@ -383,6 +386,14 @@ def _inner_join_spatialelement_table(
 
     if joined_indices is not None:
         joined_indices = joined_indices.dropna() if any(joined_indices.isna()) else joined_indices
+        # `groupby(region)` above collects the matching table rows grouped by region, which does not
+        # preserve the original `table.obs` row order when a table annotates multiple interleaved
+        # regions. For `match_rows="no"` there is no element-driven ordering to honor, and for
+        # `match_rows="right"` the table's own row order takes priority (only `match_rows="left"` lets the
+        # element's row order override it), so in both cases restore the original table row order, as
+        # would be expected for a semi-join.
+        if match_rows in ("no", "right"):
+            joined_indices = joined_indices.sort_values()
 
     joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
 
