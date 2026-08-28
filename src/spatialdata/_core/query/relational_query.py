@@ -469,6 +469,12 @@ def _left_join_spatialelement_table(
         # if nan were present, the dtype would have been changed to float
         if joined_indices.dtype == float:
             joined_indices = joined_indices.astype(int)
+        # `groupby(region)` above collects the matching table rows grouped by region, which does not
+        # preserve the original `table.obs` row order when a table annotates multiple interleaved
+        # regions. For `match_rows="no"` there is no element-driven ordering to honor, so
+        # restore the original table row order, as would be expected for a semi-join.
+        if match_rows == "no":
+            joined_indices = joined_indices.sort_values()
     joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     if joined_table is not None:
