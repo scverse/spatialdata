@@ -51,6 +51,8 @@ from spatialdata.models._utils import (
 )
 
 if TYPE_CHECKING:
+    from pandas._typing import DtypeObj
+
     from spatialdata._core.query.spatial_query import BaseSpatialRequest
     from spatialdata._io.format import (
         SpatialDataContainerFormatType,
@@ -202,19 +204,24 @@ class SpatialData:
                         UserWarning,
                         stacklevel=2,
                     )
+                elif isinstance(element, AnnData):
+                    raise TypeError(f"The table is annotating {r!r}, which is itself a table.")
                 else:
+                    dtype: DtypeObj
                     if isinstance(element, DataArray):
                         dtype = element.dtype
                     elif isinstance(element, DataTree):
                         dtype = element.scale0.ds.dtypes["image"]
                     else:
                         dtype = element.index.dtype
-                    if dtype != table.obs[instance_key].dtype and (
-                        dtype is str or table.obs[instance_key].dtype is str
+                    instance_dtype = self.get_instance_key_column(table).dtype
+                    # `dtype is str` was always False, so this check never fired.
+                    if dtype != instance_dtype and (
+                        pd.api.types.is_string_dtype(dtype) or pd.api.types.is_string_dtype(instance_dtype)
                     ):
                         raise TypeError(
                             f"Table instance_key column ({instance_key}) has a dtype "
-                            f"({table.obs[instance_key].dtype}) that does not match the dtype of the indices of "
+                            f"({instance_dtype}) that does not match the dtype of the indices of "
                             f"the annotated element ({dtype})."
                         )
 
@@ -257,9 +264,12 @@ class SpatialData:
             If the region key column is not found in table.obs.
         """
         _, region_key, _ = get_table_keys(table)
-        if table.obs.get(region_key) is not None:
-            return table.obs[region_key]
-        raise KeyError(f"{region_key} is set as region key column. However the column is not found in table.obs.")
+        column = table.obs.get(region_key)
+        if column is None:
+            raise KeyError(f"{region_key} is set as region key column. However the column is not found in table.obs.")
+        if not isinstance(column, pd.Series):
+            raise TypeError(f"`table.obs[{region_key!r}]` must be a pandas Series, got {type(column).__name__}.")
+        return column
 
     @staticmethod
     def get_instance_key_column(table: AnnData) -> pd.Series:
@@ -282,9 +292,14 @@ class SpatialData:
 
         """
         _, _, instance_key = get_table_keys(table)
-        if table.obs.get(instance_key) is not None:
-            return table.obs[instance_key]
-        raise KeyError(f"{instance_key} is set as instance key column. However the column is not found in table.obs.")
+        column = table.obs.get(instance_key)
+        if column is None:
+            raise KeyError(
+                f"{instance_key} is set as instance key column. However the column is not found in table.obs."
+            )
+        if not isinstance(column, pd.Series):
+            raise TypeError(f"`table.obs[{instance_key!r}]` must be a pandas Series, got {type(column).__name__}.")
+        return column
 
     def set_channel_names(self, element_name: str, channel_names: str | list[str], write: bool = False) -> None:
         """Set the channel names for an image `SpatialElement` in the `SpatialData` object.
@@ -2149,9 +2164,25 @@ class SpatialData:
             A generator that yields spatial element objects contained in the SpatialData instance.
 
         """
-        for element_type in ["images", "labels", "points", "shapes"]:
-            d = getattr(SpatialData, element_type).fget(self)
-            yield from d.values()
+        for _, _, element in self._gen_spatial_elements():
+            yield element
+
+    def _gen_spatial_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+        """
+        Generate the images, labels, points and shapes contained in the SpatialData instance.
+
+        Returns
+        -------
+        A generator object that returns a tuple containing the type of the element, its name, and the element itself.
+        """
+        for element_type, elements in (
+            ("images", self.images),
+            ("labels", self.labels),
+            ("points", self.points),
+            ("shapes", self.shapes),
+        ):
+            for name, element in elements.items():
+                yield element_type, name, element
 
     def _gen_elements(
         self, include_tables: bool = False
@@ -2169,13 +2200,10 @@ class SpatialData:
         A generator object that returns a tuple containing the type of the element, its name, and the element
         itself.
         """
-        element_types = ["images", "labels", "points", "shapes"]
+        yield from self._gen_spatial_elements()
         if include_tables:
-            element_types.append("tables")
-        for element_type in element_types:
-            d = getattr(SpatialData, element_type).fget(self)
-            for k, v in d.items():
-                yield element_type, k, v
+            for name, table in self.tables.items():
+                yield "tables", name, table
 
     def gen_spatial_elements(
         self,
@@ -2190,7 +2218,7 @@ class SpatialData:
         A generator that yields tuples containing the element_type (string), name, and SpatialElement objects
         themselves.
         """
-        return self._gen_elements()
+        return self._gen_spatial_elements()
 
     def gen_elements(
         self,
