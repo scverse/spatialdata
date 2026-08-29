@@ -153,15 +153,20 @@ def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) ->
     else:
         channel_names = element["scale0"]["image"].coords["c"].data.tolist()
 
-    channel_metadata = [{"label": name} for name in channel_names]
+    attrs = group.attrs.asdict()
+    channel_metadata = [{"label": str(name)} for name in channel_names]
+    spatialdata_attrs = attrs.get("spatialdata_attrs", {})
+    spatialdata_attrs["channel_names"] = channel_names
+    attrs["spatialdata_attrs"] = spatialdata_attrs
     # We don't use the ome-zarr load node API, and ome-zarr-py >= 0.18 emits no `omero` block, so default to empty.
-    omero_meta = group.attrs.get("omero") or group.attrs.get("ome", {}).get("omero") or {}
+    omero_meta = attrs.get("omero") or attrs.get("ome", {}).get("omero") or {}
     omero_meta["channels"] = channel_metadata
-    if ome_meta := group.attrs.get("ome", None):
+    if ome_meta := attrs.get("ome", None):
         ome_meta["omero"] = omero_meta
-        group.attrs["ome"] = ome_meta
+        attrs["ome"] = ome_meta
     else:
-        group.attrs["omero"] = omero_meta
+        attrs["omero"] = omero_meta
+    group.attrs.put(attrs)
 
 
 def _write_metadata(

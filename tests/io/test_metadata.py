@@ -5,6 +5,7 @@ import os
 import tempfile
 
 import pytest
+import zarr
 
 from spatialdata import SpatialData, read_zarr
 from spatialdata._io._utils import _is_element_self_contained
@@ -117,6 +118,24 @@ def test_save_transformations_incremental(element_name, full_sdata, caplog):
 
 
 # test io for channel names
+@pytest.mark.parametrize("expected", [[0, 1, 2], ["0", "1", "2"]], ids=["integers", "numeric-strings"])
+def test_channel_names_store_string_labels_without_changing_coordinates(
+    images: SpatialData, tmp_path, expected: list[int] | list[str]
+) -> None:
+    path = tmp_path / "sdata.zarr"
+    image = images["image2d_xarray"].assign_coords(c=expected)
+    SpatialData(images={"image": image}).write(path)
+    root = zarr.open_group(path, mode="r")
+    attrs = root["images"]["image"].attrs
+    omero = attrs.get("omero") or attrs["ome"]["omero"]
+    labels = [channel["label"] for channel in omero["channels"]]
+    channel_names = attrs["spatialdata_attrs"]["channel_names"]
+    root.store.close()
+    assert labels == [str(value) for value in expected]
+    assert channel_names == expected
+    assert get_channel_names(SpatialData.read(path)["image"]) == expected
+
+
 @pytest.mark.parametrize("write", ["overwrite", "write", "no"])
 def test_save_channel_names_incremental(images: SpatialData, write: str) -> None:
     old_channels2d = get_channel_names(images["image2d"])
