@@ -670,7 +670,7 @@ def _(
     min_coordinate: ListOrNDArrayFloating,
     max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
-) -> DaskDataFrame | list[DaskDataFrame] | None:
+) -> DaskDataFrame | list[DaskDataFrame | None] | None:
     from spatialdata import transform
     from spatialdata.transformations import get_transformation
 
@@ -955,7 +955,18 @@ def _(
     target_coordinate_system: str,
     return_request_only: bool = False,
     **kwargs: Any,
-) -> DataArray | DataTree | Mapping[str, slice] | list[Mapping[str, slice]] | list[DataArray] | list[DataTree] | None:
+) -> (
+    DataArray
+    | DataTree
+    | GeoDataFrame
+    | DaskDataFrame
+    | SpatialData
+    | Mapping[str, slice]
+    | list[Mapping[str, slice]]
+    | list[DataArray]
+    | list[DataTree]
+    | None
+):
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.to_numpy().flatten().tolist()
     return bounding_box_query(

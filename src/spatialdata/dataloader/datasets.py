@@ -14,7 +14,7 @@ from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from pandas import CategoricalDtype
-from scipy.sparse import sparray, spmatrix
+from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 from torch.utils.data import Dataset
 from xarray import DataArray, DataTree
 
@@ -272,7 +272,7 @@ class ImageTilesDataset(Dataset[Any]):
                     return_request_only=True,
                 )
                 assert isinstance(selections, list)
-                tile_coords["selection"] = selections
+                tile_coords["selection"] = pd.Series(selections, index=tile_coords.index, dtype=object)
             tile_coords_df.append(tile_coords)
 
             inst = circles.index.values
@@ -339,7 +339,7 @@ class ImageTilesDataset(Dataset[Any]):
                 return tile, obs[return_annot].iloc[idx].to_numpy().reshape(1, -1)
             if np.all([i in dataset_table.var_names for i in return_annot]):
                 x = dataset_table[idx, return_annot].X
-                if isinstance(x, spmatrix | sparray):
+                if isinstance(x, csr_matrix | csc_matrix | csr_array | csc_array):
                     return tile, np.asarray(x.todense())
                 return tile, x
             raise ValueError(

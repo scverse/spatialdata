@@ -134,11 +134,11 @@ def transform_to_data_extent(
         else:
             sdata_to_return_elements[element_name] = element
     if not maintain_positioning:
-        for el in sdata_to_return_elements.values():
+        for element_value in sdata_to_return_elements.values():
             # tables carry no transformations
-            if isinstance(el, AnnData):
+            if isinstance(element_value, AnnData):
                 continue
-            set_transformation(el, transformation={coordinate_system: Identity()}, set_all=True)
+            set_transformation(element_value, transformation={coordinate_system: Identity()}, set_all=True)
     for k, v in sdata.tables.items():
         sdata_to_return_elements[k] = v.copy()
     return SpatialData.init_from_elements(sdata_to_return_elements, attrs=sdata.attrs)

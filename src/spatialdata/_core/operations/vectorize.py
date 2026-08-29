@@ -10,7 +10,7 @@ from dask.base import compute as dask_compute
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.delayed import delayed
 from geopandas import GeoDataFrame
-from scipy.sparse import sparray, spmatrix
+from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 from shapely import MultiPolygon, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from xarray import DataArray, DataTree
@@ -93,7 +93,7 @@ def _(element: DataArray | DataTree, **kwargs: Any) -> GeoDataFrame:
     aggregated = aggregate(values=ones, by=element_single_scale, agg_func="sum")["table"]
     x = aggregated.X
     assert x is not None
-    areas = np.asarray(x.todense() if isinstance(x, spmatrix | sparray) else x).reshape(-1)
+    areas = np.asarray(x.todense() if isinstance(x, csr_matrix | csc_matrix | csr_array | csc_array) else x).reshape(-1)
     aobs = aggregated.obs
     if not isinstance(aobs, pd.DataFrame):
         raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(aobs).__name__}.")

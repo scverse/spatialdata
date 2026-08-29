@@ -201,6 +201,6 @@ def _write_shapes_v02_v03(
     shapes.to_parquet(path, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 
-    attrs = element_format.attrs_to_dict(dict(shapes.attrs))
+    attrs = element_format.attrs_to_dict({str(k): v for k, v in shapes.attrs.items()})
     attrs["version"] = element_format.spatialdata_format_version
     return attrs

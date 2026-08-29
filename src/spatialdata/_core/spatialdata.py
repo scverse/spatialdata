@@ -1294,9 +1294,16 @@ class SpatialData:
             write_table,
         )
         from spatialdata._io.format import (
+            PointsFormatV01,
+            PointsFormatV02,
             RasterFormatV01,
             RasterFormatV02,
             RasterFormatV03,
+            ShapesFormatV01,
+            ShapesFormatV02,
+            ShapesFormatV03,
+            TablesFormatV01,
+            TablesFormatV02,
             _parse_formats,
         )
 
@@ -1336,28 +1343,34 @@ class SpatialData:
         elif element_type == "points":
             if not isinstance(element, DaskDataFrame):
                 raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a points element.")
+            points_format = parsed_formats["points"]
+            assert isinstance(points_format, PointsFormatV01 | PointsFormatV02)
             write_points(
                 points=element,
                 group=element_group,
-                element_format=parsed_formats["points"],
+                element_format=points_format,
             )
         elif element_type == "shapes":
             if not isinstance(element, GeoDataFrame):
                 raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a shapes element.")
+            shapes_format = parsed_formats["shapes"]
+            assert isinstance(shapes_format, ShapesFormatV01 | ShapesFormatV02 | ShapesFormatV03)
             write_shapes(
                 shapes=element,
                 group=element_group,
-                element_format=parsed_formats["shapes"],
+                element_format=shapes_format,
                 geometry_encoding=shapes_geometry_encoding,
             )
         elif element_type == "tables":
             if not isinstance(element, AnnData):
                 raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a table.")
+            tables_format = parsed_formats["tables"]
+            assert isinstance(tables_format, TablesFormatV01 | TablesFormatV02)
             write_table(
                 table=element,
                 group=element_type_group,
                 name=element_name,
-                element_format=parsed_formats["tables"],
+                element_format=tables_format,
                 convert_strings_to_categoricals=convert_table_strings_to_categoricals,
             )
         else:
