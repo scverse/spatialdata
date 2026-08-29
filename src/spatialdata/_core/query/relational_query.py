@@ -13,9 +13,11 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from anndata import AnnData
+from annsel import AnnselAccessor
 from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from numpy.typing import NDArray
 from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
@@ -95,9 +97,11 @@ def _(
         instances = da.unique(element.data).compute()
     else:
         assert isinstance(element, DataTree)
-        v = element["scale0"].values()
+        scale0 = element["scale0"]
+        assert isinstance(scale0, DataTree)
+        v = list(scale0.values())
         assert len(v) == 1
-        xdata = next(iter(v))
+        xdata = v[0]
         # can be slow
         instances = da.unique(xdata.data).compute()
     index = pd.Index(np.sort(instances))
@@ -110,14 +114,16 @@ def _(
 def _(
     element: GeoDataFrame,
 ) -> pd.Index:
-    return element.index
+    index: pd.Index = element.index
+    return index
 
 
 @get_element_instances.register(DaskDataFrame)
 def _(
     element: DaskDataFrame,
 ) -> pd.Index:
-    return element.index
+    index: pd.Index = element.index
+    return index
 
 
 def _filter_table_by_elements(table: AnnData | None, elements_dict: dict[str, dict[str, Any]]) -> AnnData | None:
@@ -184,7 +190,7 @@ def _get_joined_table_indices(
     -------
         The indices that of the table that match the SpatialElement indices.
     """
-    mask = np.isin(table_instance_key_column.values, element_indices)
+    mask = np.isin(table_instance_key_column.to_numpy(), element_indices)
     if joined_indices is None:
         if match_rows == "left":
             _, joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
@@ -225,9 +231,11 @@ def _get_masked_element(
     -------
     The masked spatial element based on the provided indices and match rows.
     """
-    mask = np.isin(table_instance_key_column.values, element_indices)
+    mask = np.isin(table_instance_key_column.to_numpy(), element_indices)
     masked_table_instance_key_column = table_instance_key_column[mask]
-    mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
+    mask_values: NDArray[Any] | pd.Index | None = (
+        masked_values if len(masked_values := masked_table_instance_key_column.to_numpy()) != 0 else None
+    )
     if match_rows in ["left", "right"]:
         left_index, _ = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
 
@@ -241,7 +249,10 @@ def _get_masked_element(
         mask_values = np.asarray(element_indices)[order_mask]
 
     if isinstance(element, DaskDataFrame):
-        return element.map_partitions(lambda df: df.loc[mask_values], meta=element)
+        masked: SpatialElement = element.map_partitions(lambda df: df.loc[mask_values], meta=element)
+        return masked
+    if not isinstance(element, GeoDataFrame):
+        raise TypeError(f"Only points and shapes elements can be masked, got {type(element).__name__}.")
     return element.loc[mask_values, :]
 
 
@@ -265,8 +276,11 @@ def _right_exclusive_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
+    obs = table.obs
+    if not isinstance(obs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
     # reset_index so group_df.index gives integer positions — safe with duplicate obs names
-    obs = table.obs.reset_index()
+    obs = obs.reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     keep = np.zeros(len(table), dtype=bool)
     has_match = False
@@ -280,7 +294,7 @@ def _right_exclusive_join_spatialelement_table(
                 else:
                     element_indices = get_element_instances(element)
                 submask = ~table_instance_key_column.isin(element_indices)
-                keep[group_df.index[submask.values]] = True
+                keep[group_df.index[submask.to_numpy()]] = True
                 has_match = True
                 element_dict[element_type][name] = None
             else:
@@ -316,7 +330,10 @@ def _right_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    groups_df = table.obs.groupby(by=region_column_name, observed=False)
+    obs = table.obs
+    if not isinstance(obs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+    groups_df = obs.groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
             if name in regions:
@@ -358,7 +375,10 @@ def _inner_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    obs = table.obs.reset_index()
+    obs = table.obs
+    if not isinstance(obs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+    obs = obs.reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
@@ -434,7 +454,10 @@ def _left_exclusive_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    groups_df = table.obs.groupby(by=region_column_name, observed=False)
+    obs = table.obs
+    if not isinstance(obs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+    groups_df = obs.groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
             if name in regions:
@@ -476,7 +499,10 @@ def _left_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    obs = table.obs.reset_index()
+    obs = table.obs
+    if not isinstance(obs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+    obs = obs.reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
@@ -521,12 +547,15 @@ def _left_join_spatialelement_table(
 
 def _match_rows(
     table_instance_key_column: pd.Series,
-    mask: pd.Series,
+    mask: NDArray[np.bool_],
     element_indices: pd.RangeIndex,
-    match_rows: str,
+    match_rows: Literal["left", "right"],
 ) -> tuple[pd.Index, pd.Index]:
     instance_id_df = pd.DataFrame(
-        {"instance_id": table_instance_key_column[mask].values, "index_right": table_instance_key_column[mask].index}
+        {
+            "instance_id": table_instance_key_column[mask].to_numpy(),
+            "index_right": table_instance_key_column[mask].index,
+        }
     )
     element_index_df = pd.DataFrame({"index_left": element_indices})
 
@@ -937,7 +966,8 @@ def filter_by_table_query(
         sdata.subset(element_names=element_names, filter_tables=filter_tables) if element_names else sdata
     )
 
-    filtered_table: AnnData = sdata_subset.tables[table_name].an.filter(
+    # `.an` is registered on AnnData at import time by annsel, so it is reached through the accessor class here.
+    filtered_table: AnnData = AnnselAccessor(sdata_subset.tables[table_name]).filter(
         obs=obs_expr, var=var_expr, x=x_expr, obs_names=obs_names_expr, var_names=var_names_expr, layer=layer
     )
 

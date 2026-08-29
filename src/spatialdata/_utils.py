@@ -206,14 +206,14 @@ def iterate_pyramid_levels(
         yield data[scale][name] if attr is None else getattr(data[scale][name], attr)
 
 
-def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: AnnData) -> None:
+def _inplace_fix_subset_categorical_obs(subset_adata: AnnData | None, original_adata: AnnData) -> None:
     """
     Fix categorical obs columns of subset_adata to match the categories of original_adata.
 
     Parameters
     ----------
     subset_adata
-        The subset AnnData object
+        The subset AnnData object, or None when the subset is empty
     original_adata
         The original AnnData object
 
@@ -221,6 +221,8 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
     -----
     See discussion here: https://github.com/scverse/anndata/issues/997
     """
+    if subset_adata is None:
+        return
     if not hasattr(subset_adata, "obs") or not hasattr(original_adata, "obs"):
         return
     obs = pd.DataFrame(subset_adata.obs)
