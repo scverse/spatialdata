@@ -466,10 +466,13 @@ def _aggregate_shapes(
         vk = value_key[0]
         if fractions_of_values is not None:
             joined[ONES_COLUMN] = fractions_of_values
-        agg_funcs: list[Callable[..., Any] | str | np.ufunc] = (
-            [agg_func] if isinstance(agg_func, str) else list(agg_func)
-        )
-        aggregated = joined.groupby([INDEX, vk], observed=False)[ONES_COLUMN].agg(agg_funcs).reset_index()
+        grouped = joined.groupby([INDEX, vk], observed=False)[ONES_COLUMN]
+        if isinstance(agg_func, str):
+            aggregated = grouped.agg(agg_func).reset_index()
+        else:
+            # pandas is annotated to take a list of callables, strings or ufuncs, and list is invariant.
+            agg_funcs: list[Callable[..., Any] | str | np.ufunc] = list(agg_func)
+            aggregated = grouped.agg(agg_funcs).reset_index()
         aggregated_values = aggregated[ONES_COLUMN].to_numpy()
     else:
         if fractions_of_values is not None:
