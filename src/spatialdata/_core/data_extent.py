@@ -106,7 +106,7 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: list[str] | None = None,  # noqa: UP007 # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
+    elements: list[str] | None = None,  # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.

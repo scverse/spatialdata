@@ -166,7 +166,7 @@ def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> G
     For example, you can set this configuration with:
 
     >>> import dask
-    >>> dask.config.set(scheduler='processes')
+    >>> dask.config.set(scheduler="processes")
 
     Parameters
     ----------

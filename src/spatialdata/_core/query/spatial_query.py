@@ -80,7 +80,7 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
 
     The transformation from the element's intrinsic coordinate system (without c) to the query coordinate system
     (without c and adding missing axes)
-    """  # noqa: E501
+    """
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
 
@@ -284,7 +284,7 @@ def _get_case_of_bounding_box_query(
 
     See https://github.com/scverse/spatialdata/pull/151#issuecomment-1444609101 for a detailed overview of the logic of
     this code, or see the comments below for an overview of the cases we consider.
-    """  # noqa: D401
+    """
     transform_dimension = np.linalg.matrix_rank(m_without_c_linear)
     transform_coordinate_length = len(output_axes_without_c)
     data_dim = len(input_axes_without_c)

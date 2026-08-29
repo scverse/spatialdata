@@ -73,26 +73,26 @@ def _is_regular_dask_chunk_grid(chunk_grid: Sequence[Sequence[int]]) -> bool:
     --------
     Triggers ``continue`` on the first ``if`` (single or empty axis):
 
-    >>> _is_regular_dask_chunk_grid([(4,)])   # single chunk → True
+    >>> _is_regular_dask_chunk_grid([(4,)])  # single chunk → True
     True
-    >>> _is_regular_dask_chunk_grid([()])     # empty axis → True
+    >>> _is_regular_dask_chunk_grid([()])  # empty axis → True
     True
 
     Triggers the first ``return False`` (non-uniform interior chunks):
 
-    >>> _is_regular_dask_chunk_grid([(4, 4, 3, 4)])   # interior sizes differ → False
+    >>> _is_regular_dask_chunk_grid([(4, 4, 3, 4)])  # interior sizes differ → False
     False
 
     Triggers the second ``return False`` (last chunk larger than the first):
 
-    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 5)])   # last > first → False
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 5)])  # last > first → False
     False
 
     Exits with ``return True``:
 
-    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 4)])   # all equal → True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 4)])  # all equal → True
     True
-    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1)])   # last < first → True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1)])  # last < first → True
     True
 
     Empty grid (loop never executes) → True:

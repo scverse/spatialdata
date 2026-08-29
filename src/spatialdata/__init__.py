@@ -4,7 +4,7 @@ import importlib
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Any
 
-import spatialdata.models._accessor  # noqa: F401
+import spatialdata.models._accessor
 
 __version__ = version("spatialdata")
 

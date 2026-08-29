@@ -410,7 +410,7 @@ class Labels2DModel(RasterSchema):
     dims = (Y, X)
 
     @classmethod
-    def parse(  # noqa: D102
+    def parse(
         self,
         *args: Any,
         **kwargs: Any,
@@ -429,7 +429,7 @@ class Labels3DModel(RasterSchema):
     dims = (Z, Y, X)
 
     @classmethod
-    def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
+    def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
         return super().parse(*args, **kwargs)

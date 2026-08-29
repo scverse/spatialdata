@@ -836,7 +836,7 @@ def test_query_points_3d_bounding_box_axes_order_independent(scales):
     # throws a warning to print the path where the file was written.
 
     # import matplotlib.pyplot as plt
-    # import spatialdata_plot  # noqa: F401
+    # import spatialdata_plot
     # from matplotlib.patches import Rectangle
 
     # from spatialdata import SpatialData

@@ -148,7 +148,7 @@ def _set_transformation_for_transformed_elements(
     to_coordinate_system
         The coordinate system to which the data is to be transformed. This value must be None if maintain_positioning
         is True.
-    """  # noqa: D401
+    """
     from spatialdata.transformations import (
         BaseTransformation,
         get_transformation,
