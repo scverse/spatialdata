@@ -18,7 +18,7 @@ from spatialdata import to_polygons
 from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, get_bounding_box_corners
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
-from spatialdata._types import ArrayLike, ListOrNDArrayFloating
+from spatialdata._types import ArrayLike, ListOrNDArrayFloating, Raster_T
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
     PointsModel,
@@ -192,7 +192,8 @@ def _get_polygon_in_intrinsic_coordinates(
     assert isinstance(inverse, Affine)
     set_transformation(polygon_gdf, inverse, "inverse")
 
-    return transform(polygon_gdf, to_coordinate_system="inverse")
+    transformed: GeoDataFrame = transform(polygon_gdf, to_coordinate_system="inverse")
+    return transformed
 
 
 def _get_axes_of_transformation(
@@ -442,11 +443,22 @@ def _bounding_box_mask_points(
 
 
 def _dict_query_dispatcher(
-    elements: dict[str, SpatialElement], query_function: Callable[[SpatialElement], SpatialElement], **kwargs: Any
+    elements: dict[str, SpatialElement],
+    query_function: Callable[
+        ...,
+        SpatialElement
+        | SpatialData
+        | Mapping[str, slice]
+        | list[Mapping[str, slice]]
+        | list[DataArray]
+        | list[DataTree]
+        | None,
+    ],
+    **kwargs: Any,
 ) -> dict[str, SpatialElement]:
     from spatialdata.transformations import get_transformation
 
-    queried_elements = {}
+    queried_elements: dict[str, SpatialElement] = {}
     for key, element in elements.items():
         target_coordinate_system = kwargs["target_coordinate_system"]
         d = get_transformation(element, get_all=True)
@@ -454,7 +466,8 @@ def _dict_query_dispatcher(
         if target_coordinate_system in d:
             result = query_function(element, **kwargs)
             if result is not None:
-                # query returns None if it is empty
+                # query returns None if it is empty; the dispatcher is never used with return_request_only
+                assert isinstance(result, DataArray | DataTree | GeoDataFrame | DaskDataFrame)
                 queried_elements[key] = result
     return queried_elements
 
@@ -470,7 +483,15 @@ def bounding_box_query(
     return_request_only: bool = False,
     filter_table: bool = True,
     **kwargs: Any,
-) -> SpatialElement | SpatialData | None:
+) -> (
+    SpatialElement
+    | SpatialData
+    | Mapping[str, slice]
+    | list[Mapping[str, slice]]
+    | list[DataArray]
+    | list[DataTree]
+    | None
+):
     """
     Query a SpatialData object or SpatialElement within a bounding box.
 
@@ -520,7 +541,8 @@ def _(
 ) -> SpatialData:
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
-    new_elements = {}
+    new_elements: dict[str, dict[str, SpatialElement]] = {}
+    queried_by_type: dict[str, SpatialElement] = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
@@ -532,10 +554,25 @@ def _(
             target_coordinate_system=target_coordinate_system,
         )
         new_elements[element_type] = queried_elements
+        queried_by_type.update(queried_elements)
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
+    images: dict[str, Raster_T] = {}
+    labels: dict[str, Raster_T] = {}
+    points: dict[str, DaskDataFrame] = {}
+    shapes: dict[str, GeoDataFrame] = {}
+    for name, element in queried_by_type.items():
+        if isinstance(element, GeoDataFrame):
+            shapes[name] = element
+        elif isinstance(element, DaskDataFrame):
+            points[name] = element
+        elif name in sdata.images:
+            images[name] = element
+        else:
+            labels[name] = element
+
+    return SpatialData(images=images, labels=labels, points=points, shapes=shapes, tables=tables, attrs=sdata.attrs)
 
 
 @bounding_box_query.register(DataArray)
@@ -547,7 +584,7 @@ def _(
     max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     return_request_only: bool = False,
-) -> DataArray | DataTree | Mapping[str, slice] | list[DataArray] | list[DataTree] | None:
+) -> DataArray | DataTree | Mapping[str, slice] | list[Mapping[str, slice]] | list[DataArray] | list[DataTree] | None:
     """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
@@ -587,7 +624,7 @@ def _(
     slices, translation_vectors = _create_slices_and_translation(min_values_np, max_values_np)
 
     if min_values.ndim == 2:  # Multiple boxes
-        selection: list[dict[str, Any]] | dict[str, Any] = [
+        selection: list[dict[str, slice]] | dict[str, slice] = [
             {
                 axis: slice(slices[box_idx, axis_idx, 0], slices[box_idx, axis_idx, 1])
                 for axis_idx, axis in enumerate(axes)
@@ -600,23 +637,30 @@ def _(
         translation_vectors = translation_vectors[0].tolist()
 
     if return_request_only:
-        return selection
+        if isinstance(selection, dict):
+            selected: Mapping[str, slice] | list[Mapping[str, slice]] = selection
+        else:
+            selected = list(selection)
+        return selected
 
     # query the data
-    query_result: DataArray | DataTree | list[DataArray] | list[DataTree] | None = (
-        image.sel(selection) if isinstance(selection, dict) else [image.sel(sel) for sel in selection]
-    )
+    if isinstance(selection, dict):
+        single = image.sel(selection)
+        assert isinstance(single, DataArray | DataTree)
+        return _process_query_result(single, translation_vectors, axes)
 
-    if isinstance(query_result, list):
-        processed_results = []
-        for result, translation_vector in zip(query_result, translation_vectors, strict=True):
-            processed_result = _process_query_result(result, translation_vector, axes)
-            if processed_result is not None:
-                processed_results.append(processed_result)
-        query_result = processed_results if processed_results else None
-    else:
-        query_result = _process_query_result(query_result, translation_vectors, axes)
-    return query_result
+    processed_results: list[DataArray | DataTree] = []
+    for sel, translation_vector in zip(selection, translation_vectors, strict=True):
+        result = image.sel(sel)
+        assert isinstance(result, DataArray | DataTree)
+        processed_result = _process_query_result(result, translation_vector, axes)
+        if processed_result is not None:
+            processed_results.append(processed_result)
+    if not processed_results:
+        return None
+    if all(isinstance(r, DataArray) for r in processed_results):
+        return [r for r in processed_results if isinstance(r, DataArray)]
+    return [r for r in processed_results if isinstance(r, DataTree)]
 
 
 @bounding_box_query.register(DaskDataFrame)
@@ -766,7 +810,7 @@ def _(
     min_coordinate: ListOrNDArrayFloating,
     max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
-) -> GeoDataFrame | list[GeoDataFrame] | None:
+) -> GeoDataFrame | list[GeoDataFrame | None] | None:
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
@@ -870,7 +914,8 @@ def _(
     filter_table: bool = True,
     clip: bool = False,
 ) -> SpatialData:
-    new_elements = {}
+    new_elements: dict[str, dict[str, SpatialElement]] = {}
+    queried_by_type: dict[str, SpatialElement] = {}
     for element_type in ["points", "images", "labels", "shapes"]:
         elements = getattr(sdata, element_type)
         queried_elements = _dict_query_dispatcher(
@@ -881,10 +926,25 @@ def _(
             clip=clip,
         )
         new_elements[element_type] = queried_elements
+        queried_by_type.update(queried_elements)
 
     tables = _get_filtered_or_unfiltered_tables(filter_table, new_elements, sdata)
 
-    return SpatialData(**new_elements, tables=tables, attrs=sdata.attrs)
+    images: dict[str, Raster_T] = {}
+    labels: dict[str, Raster_T] = {}
+    points: dict[str, DaskDataFrame] = {}
+    shapes: dict[str, GeoDataFrame] = {}
+    for name, element in queried_by_type.items():
+        if isinstance(element, GeoDataFrame):
+            shapes[name] = element
+        elif isinstance(element, DaskDataFrame):
+            points[name] = element
+        elif name in sdata.images:
+            images[name] = element
+        else:
+            labels[name] = element
+
+    return SpatialData(images=images, labels=labels, points=points, shapes=shapes, tables=tables, attrs=sdata.attrs)
 
 
 @polygon_query.register(DataArray)
@@ -895,10 +955,10 @@ def _(
     target_coordinate_system: str,
     return_request_only: bool = False,
     **kwargs: Any,
-) -> DataArray | DataTree | None:
+) -> DataArray | DataTree | Mapping[str, slice] | list[Mapping[str, slice]] | list[DataArray] | list[DataTree] | None:
     gdf = GeoDataFrame(geometry=[polygon])
-    min_x, min_y, max_x, max_y = gdf.bounds.values.flatten().tolist()
-    return bounding_box_query(
+    min_x, min_y, max_x, max_y = gdf.bounds.to_numpy().flatten().tolist()
+    queried = bounding_box_query(
         image,
         min_coordinate=[min_x, min_y],
         max_coordinate=[max_x, max_y],
@@ -906,6 +966,7 @@ def _(
         target_coordinate_system=target_coordinate_system,
         return_request_only=return_request_only,
     )
+    return queried
 
 
 @polygon_query.register(DaskDataFrame)
