@@ -6,13 +6,13 @@ import warnings
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, cast
 
-import dask
 import dask.array as da
 import dask.dataframe as dd
 import dask_image.ndinterp
 import numpy as np
 from dask.array.core import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
+from dask.delayed import delayed
 from geopandas import GeoDataFrame
 from shapely import Point
 from xarray import DataArray, Dataset, DataTree
@@ -22,6 +22,7 @@ from spatialdata._types import ArrayLike
 from spatialdata._utils import disable_dask_tune_optimization
 from spatialdata.models import SpatialElement, get_axes_names, get_model
 from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_names
+from spatialdata.models.models import RasterSchema
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
@@ -314,6 +315,7 @@ def _(
         data, transformation, maintain_positioning, to_coordinate_system
     )
     schema = get_model(data)
+    assert issubclass(schema, RasterSchema)
     from spatialdata.transformations import get_transformation
 
     kwargs = {"prefilter": False, "order": 0}
@@ -335,9 +337,10 @@ def _(
         maintain_positioning=maintain_positioning,
         to_coordinate_system=to_coordinate_system,
     )
-    transformed_data = compute_coordinates(transformed_data)
-    schema.validate(transformed_data)
-    return transformed_data
+    computed = compute_coordinates(transformed_data)
+    assert isinstance(computed, DataArray)
+    schema.validate(computed)
+    return computed
 
 
 @transform.register(DataTree)
@@ -351,6 +354,7 @@ def _(
         data, transformation, maintain_positioning, to_coordinate_system
     )
     schema = get_model(data)
+    assert issubclass(schema, RasterSchema)
     from spatialdata.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
     from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import get_transformation, set_transformation
@@ -371,8 +375,10 @@ def _(
     transformed_dict = {}
     raster_translation: Translation | None = None
     for k, v in data.items():
+        assert isinstance(v, DataTree)
         assert len(v) == 1
-        xdata = v.values().__iter__().__next__()
+        xdata = next(iter(v.values()))
+        assert isinstance(xdata, DataArray)
 
         composed: BaseTransformation
         if k == "scale0":
@@ -382,7 +388,7 @@ def _(
             composed = Sequence([scale, transformation, scale.inverse()])
 
         transformed_dask, raster_translation_single_scale = _transform_raster(
-            data=xdata.data, axes=xdata.dims, transformation=composed, **kwargs
+            data=xdata.data, axes=tuple(str(dim) for dim in xdata.dims), transformation=composed, **kwargs
         )
 
         # if a scale in the transformed data has zero shape, we skip it
@@ -421,9 +427,10 @@ def _(
         maintain_positioning=maintain_positioning,
         to_coordinate_system=to_coordinate_system,
     )
-    transformed_data = compute_coordinates(transformed_data)
-    schema.validate(transformed_data)
-    return transformed_data
+    computed_tree = compute_coordinates(transformed_data)
+    assert isinstance(computed_tree, DataTree)
+    schema.validate(computed_tree)
+    return computed_tree
 
 
 @transform.register(DaskDataFrame)
@@ -478,7 +485,7 @@ def _(
     #     non-monotonic or duplicate indices such as those produced by multi-file parquet reads), and
     # (b) the original index is preserved exactly.
     offsets = np.cumsum([0] + lengths)
-    delayed_parts = [dask.delayed(transformed_pd.iloc[offsets[i] : offsets[i + 1]]) for i in range(len(lengths))]
+    delayed_parts = [delayed(transformed_pd.iloc[offsets[i] : offsets[i + 1]]) for i in range(len(lengths))]
     transformed = dd.from_delayed(delayed_parts, meta=transformed_pd.iloc[:0])
     # Preserve spatialdata_attrs (feature_key, instance_key, …) from the original element;
     # dd.from_delayed starts with empty attrs so we must copy them explicitly.
@@ -500,7 +507,8 @@ def _(
         to_coordinate_system=to_coordinate_system,
     )
     PointsModel.validate(transformed)
-    return transformed
+    validated: DaskDataFrame = transformed
+    return validated
 
 
 @transform.register(GeoDataFrame)
