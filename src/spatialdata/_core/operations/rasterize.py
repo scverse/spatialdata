@@ -17,7 +17,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_polygons
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ListOrNDArrayFloating
+from spatialdata._types import ListOrNDArrayFloating, Raster_T
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
     Image2DModel,
@@ -285,8 +285,8 @@ def rasterize(
             raise ValueError("When data is a SpatialData object, table_name must be None.")
         if agg_func is not None:
             raise ValueError("When data is a SpatialData object, agg_func must be None.")
-        new_images = {}
-        new_labels = {}
+        new_images: dict[str, Raster_T] = {}
+        new_labels: dict[str, Raster_T] = {}
         for element_type in ["points", "images", "labels", "shapes"]:
             elements = getattr(data, element_type)
             for name in elements:
@@ -305,6 +305,7 @@ def rasterize(
                     return_single_channel=return_single_channel if element_type in ("points", "shapes") else None,
                 )
                 new_name = f"{name}_rasterized_{element_type}"
+                assert isinstance(rasterized, DataArray)
                 model = get_model(rasterized)
                 if model in (Image2DModel, Image3DModel):
                     new_images[new_name] = rasterized
@@ -321,6 +322,7 @@ def rasterize(
             raise ValueError("agg_func must be None when data is an image or labels.")
         if return_single_channel is not None:
             raise ValueError("return_single_channel must be None when data is an image or labels.")
+        assert isinstance(parsed_data, DataArray | DataTree)
         rasterized = rasterize_images_labels(
             data=parsed_data,
             axes=axes,
@@ -351,6 +353,7 @@ def rasterize(
             rasterized = model.parse(assigner[rasterized], transformations=transformations)  # type: ignore[call-arg]
         return rasterized
     if model in (PointsModel, ShapesModel):
+        assert isinstance(parsed_data, GeoDataFrame | DaskDataFrame)
         return rasterize_shapes_points(
             data=parsed_data,
             axes=axes,
@@ -411,11 +414,14 @@ def _get_xarray_data_to_rasterize(
         latest_scale: str | None = None
         for scale in reversed(list(data.keys())):
             data_tree = data[scale]
+            assert isinstance(data_tree, DataTree)
             latest_scale = scale
-            v = data_tree.values()
+            v = list(data_tree.values())
             assert len(v) == 1
-            xdata = next(iter(v))
-            assert set(get_spatial_axes(tuple(xdata.sizes.keys()))) == set(axes)
+            scale_variable = v[0]
+            assert isinstance(scale_variable, DataArray)
+            xdata = scale_variable
+            assert set(get_spatial_axes(tuple(str(dim) for dim in xdata.sizes))) == set(axes)
 
             corrected_affine, _ = _get_corrected_affine_matrix(
                 data=xdata,
@@ -450,7 +456,11 @@ def _get_xarray_data_to_rasterize(
                 # when this code is reached, latest_scale is selected
                 break
         assert latest_scale is not None
-        xdata = next(iter(data[latest_scale].values()))
+        latest_scale_tree = data[latest_scale]
+        assert isinstance(latest_scale_tree, DataTree)
+        latest_variable = next(iter(latest_scale_tree.values()))
+        assert isinstance(latest_variable, DataArray)
+        xdata = latest_variable
         if latest_scale != "scale0":
             transformations = xdata.attrs["transform"]
             pyramid_scale = _get_scale(transformations)
@@ -500,7 +510,7 @@ def _get_corrected_affine_matrix(
 # TODO: rename this function to an internatl function and invoke this function from a function that has arguments
 #  values, values_sdata
 def rasterize_images_labels(
-    data: SpatialElement,
+    data: DataArray | DataTree,
     axes: tuple[str, ...],
     min_coordinate: ListOrNDArrayFloating,
     max_coordinate: ListOrNDArrayFloating,
@@ -600,7 +610,8 @@ def rasterize_images_labels(
     )
     assert isinstance(transformed_dask, DaskArray)
     channels = xdata.coords["c"].values if schema in (Image2DModel, Image3DModel) else None
-    transformed_data = schema.parse(transformed_dask, dims=xdata.dims, c_coords=channels)  # type: ignore[call-arg]
+    transformed_dims = tuple(str(dim) for dim in xdata.dims)
+    transformed_data = schema.parse(transformed_dask, dims=transformed_dims, c_coords=channels)  # type: ignore[call-arg]
 
     if target_coordinate_system != "global":
         remove_transformation(transformed_data, "global")
@@ -608,9 +619,10 @@ def rasterize_images_labels(
     sequence = Sequence([half_pixel_offset.inverse(), scale, translation, half_pixel_offset])
     set_transformation(transformed_data, sequence, target_coordinate_system)
 
-    transformed_data = compute_coordinates(transformed_data)
-    schema.validate(transformed_data)
-    return transformed_data
+    computed = compute_coordinates(transformed_data)
+    assert isinstance(computed, DataArray)
+    schema.validate(computed)
+    return computed
 
 
 def rasterize_shapes_points(
