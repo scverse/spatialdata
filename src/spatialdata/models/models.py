@@ -175,42 +175,45 @@ class RasterSchema:
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
         # if dims is specified inside the data, get the value of dims from the data
+        array: DataArray | DaskArray
+        parsed_dims: tuple[str, ...]
         if isinstance(data, DataArray):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
+            data_dims = tuple(str(dim) for dim in data.dims)
             if dims is not None:
-                if set(dims).symmetric_difference(data.dims):
+                if set(dims).symmetric_difference(data_dims):
                     raise ValueError(
-                        f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
+                        f"`dims`: {dims} does not match `data.dims`: {data_dims}, please specify the dims only once."
                     )
+                parsed_dims = tuple(dims)
             else:
-                dims = data.dims
+                parsed_dims = data_dims
             # but if dims don't match the model's dims, throw error
-            if set(dims).symmetric_difference(cls.dims):
-                raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims}.")
+            if set(parsed_dims).symmetric_difference(cls.dims):
+                raise ValueError(f"Wrong `dims`: {parsed_dims}. Expected {cls.dims}.")
             _reindex = lambda d: d
+            array = data
         # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray | DaskArray):
-            if not isinstance(data, DaskArray):  # numpy -> dask
-                data = from_array(data)
+            array = data if isinstance(data, DaskArray) else from_array(data)  # numpy -> dask
             if dims is None:
-                dims = cls.dims
+                parsed_dims = cls.dims
             else:
-                if len(set(dims).symmetric_difference(cls.dims)) > 0:
-                    raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims}.")
-            _reindex = lambda d: dims.index(d)
+                parsed_dims = tuple(dims)
+                if len(set(parsed_dims).symmetric_difference(cls.dims)) > 0:
+                    raise ValueError(f"Wrong `dims`: {parsed_dims}. Expected {cls.dims}.")
+            _reindex = lambda d: parsed_dims.index(d)
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
         # transpose if possible
-        if tuple(dims) != cls.dims:
+        if parsed_dims != cls.dims:
             try:
-                if isinstance(data, DataArray):
-                    data = data.transpose(*list(cls.dims))
-                elif isinstance(data, DaskArray):
-                    data = data.transpose(*[_reindex(d) for d in cls.dims])
+                if isinstance(array, DataArray):
+                    array = array.transpose(*list(cls.dims))
                 else:
-                    raise ValueError(f"Unsupported data type: {type(data)}.")
+                    array = array.transpose(*[_reindex(d) for d in cls.dims])
             except ValueError as e:
                 raise ValueError(
                     f"Cannot transpose arrays to match `dims`: {dims}.",
@@ -219,59 +222,61 @@ class RasterSchema:
 
         # finally convert to spatial image
         if c_coords is not None:
-            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims)
+            c_coords = _check_match_length_channels_c_dim(array, c_coords, cls.dims)
 
-        if c_coords is not None and len(c_coords) != data.shape[cls.dims.index("c")]:
+        if c_coords is not None and len(c_coords) != array.shape[cls.dims.index("c")]:
             raise ValueError(
                 f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
-                f" with length {data.shape[cls.dims.index('c')]}."
+                f" with length {array.shape[cls.dims.index('c')]}."
             )
 
-        data = to_spatial_image(array_like=data, dims=cls.dims, c_coords=c_coords, **kwargs)
+        image: DataArray = to_spatial_image(array_like=array, dims=cls.dims, c_coords=c_coords, **kwargs)
         # parse transformations
-        _parse_transformations(data, transformations)
+        _parse_transformations(image, transformations)
         # convert to multiscale if needed
+        parsed: DataArray | DataTree
         if scale_factors is not None:
-            parsed_transform = _get_transformations(data)
+            parsed_transform = _get_transformations(image)
             # delete transforms
-            del data.attrs["transform"]
+            del image.attrs["transform"]
             if isinstance(chunks, tuple):
-                chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
+                chunks = {dim: chunks[index] for index, dim in enumerate(image.dims)}
             if isinstance(chunks, float):
-                chunks = {dim: chunks for index, dim in data.dims}
+                chunks = {dim: chunks for index, dim in image.dims}
             if method is not None:
-                data = to_multiscale_msi(
-                    data,
+                parsed = to_multiscale_msi(
+                    image,
                     scale_factors=scale_factors,
                     method=method,
                     chunks=chunks,
                 )
             elif C in cls.dims:
                 # Images: multiscale-spatial-image is faster (see https://github.com/scverse/spatialdata/issues/1079)
-                data = to_multiscale_msi(
-                    data,
+                parsed = to_multiscale_msi(
+                    image,
                     scale_factors=scale_factors,
                     method=Methods.XARRAY_COARSEN,
                     chunks=chunks,
                 )
             else:
                 # Labels: ome-zarr-py based implementation uses less memory
-                data = to_multiscale_ozp(
-                    data,
+                parsed = to_multiscale_ozp(
+                    image,
                     scale_factors=scale_factors,
                     chunks=chunks,
                 )
-            _parse_transformations(data, parsed_transform)
+            _parse_transformations(parsed, parsed_transform)
         else:
             # Chunk single scale images
             if chunks is not None:
                 if isinstance(chunks, tuple):
-                    chunks = dict(zip(data.dims, chunks, strict=True))
-                data = data.chunk(chunks=chunks)
+                    chunks = dict(zip(image.dims, chunks, strict=True))
+                image = image.chunk(chunks=chunks)
+            parsed = image
         # recompute coordinates for (multiscale) spatial image
-        data = compute_coordinates(data)
-        cls.validate(data)
-        return data
+        parsed = compute_coordinates(parsed)
+        cls.validate(parsed)
+        return parsed
 
     @classmethod
     def validate(cls, data: Any) -> None:
@@ -398,6 +403,7 @@ class RasterSchema:
             for d in data:
                 cls._check_chunk_size_not_too_large(data[d][name])
 
+    @staticmethod
     def _validate_labels_dtype(data: DataArray | DataTree) -> None:
         dtype = data.dtype if isinstance(data, DataArray) else data["scale0"]["image"].dtype
         if not (np.issubdtype(dtype, np.integer) or np.issubdtype(dtype, np.bool_)):
@@ -411,7 +417,7 @@ class Labels2DModel(RasterSchema):
 
     @classmethod
     def parse(
-        self,
+        cls,
         *args: Any,
         **kwargs: Any,
     ) -> DataArray | DataTree:
@@ -429,7 +435,7 @@ class Labels3DModel(RasterSchema):
     dims = (Z, Y, X)
 
     @classmethod
-    def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:
+    def parse(cls, *args: Any, **kwargs: Any) -> DataArray | DataTree:
         if kwargs.get("c_coords") is not None:
             raise ValueError("`c_coords` is not supported for labels")
         return super().parse(*args, **kwargs)
