@@ -11,8 +11,8 @@ import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import get_coordinate_dimension
-from shapely.geometry.base import BaseGeometry
 from shapely.geometry import MultiPolygon, Point, Polygon
+from shapely.geometry.base import BaseGeometry
 from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger

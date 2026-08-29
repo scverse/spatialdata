@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, TypeGuard, cast
+from typing import Any, Literal, TypeGuard
 
 import dask.array as da
 import numpy as np
@@ -194,7 +194,9 @@ def _read_multiscale(
     node = nodes[0]
     loaded_node = node.load(Multiscales)
     if not isinstance(loaded_node, Multiscales):
-        raise TypeError(f"Expected {image_loc.basename()} to hold a multiscales node, got {type(loaded_node).__name__}.")
+        raise TypeError(
+            f"Expected {image_loc.basename()} to hold a multiscales node, got {type(loaded_node).__name__}."
+        )
     datasets, multiscales = (
         loaded_node.datasets,
         loaded_node.zarr.root_attrs["multiscales"],
