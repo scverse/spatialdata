@@ -466,7 +466,7 @@ def _dict_query_dispatcher(
         if target_coordinate_system in d:
             result = query_function(element, **kwargs)
             if result is not None:
-                # query returns None if it is empty; the dispatcher is never used with return_request_only
+                # query returns None if it is empty
                 assert isinstance(result, DataArray | DataTree | GeoDataFrame | DaskDataFrame)
                 queried_elements[key] = result
     return queried_elements

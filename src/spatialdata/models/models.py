@@ -1332,7 +1332,6 @@ def get_model(
     -------
     The SpatialData model.
     """
-    # Each branch validates after narrowing, because the `validate()` of each schema accepts only its own element type.
     if isinstance(e, DataArray | DataTree):
         axes = get_axes_names(e)
         raster_schema: type[Image2DModel] | type[Image3DModel] | type[Labels2DModel] | type[Labels3DModel]

@@ -470,7 +470,6 @@ def _aggregate_shapes(
         if isinstance(agg_func, str):
             aggregated = grouped.agg(agg_func).reset_index()
         else:
-            # pandas is annotated to take a list of callables, strings or ufuncs, and list is invariant.
             agg_funcs: list[Callable[..., Any] | str | np.ufunc] = list(agg_func)
             aggregated = grouped.agg(agg_funcs).reset_index()
         aggregated_values = aggregated[ONES_COLUMN].to_numpy()

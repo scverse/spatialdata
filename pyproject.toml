@@ -21,9 +21,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
-dynamic = [
-  "version", # allow version to be set by git tags
-]
+dynamic = [ "version" ]
 dependencies = [
   "anndata>=0.9.1",
   "annsel>=0.1.2",
@@ -65,7 +63,6 @@ optional-dependencies.extra = [
 optional-dependencies.torch = [
   "torch",
 ]
-# https://docs.pypi.org/project_metadata/#project-urls
 urls.Documentation = "https://spatialdata.scverse.org/en/latest"
 urls.Homepage = "https://github.com/scverse/spatialdata"
 urls.Source = "https://github.com/scverse/spatialdata"
@@ -135,8 +132,7 @@ envs.hatch-test.matrix = [
   # Test the newest supported Python version also with pre-release deps
   { deps = [ "pre" ], python = [ "3.14" ] },
 ]
-# If the matrix variable `deps` is set to "pre",
-# set the environment variable `UV_PRERELEASE` to "allow".
+# If the matrix variable `deps` is set to "pre", set the environment variable `UV_PRERELEASE` to "allow".
 envs.hatch-test.overrides.matrix.deps.env-vars = [
   { value = "allow", key = "UV_PRERELEASE", if = [ "pre" ] },
 ]
@@ -154,7 +150,6 @@ envs.hatch-check-code.scripts.lint-check = "echo 'try `hatch check code --fix`';
 envs.hatch-check-code.scripts.lint-fix = "prek run -a --no-group=format --no-group=typecheck"
 envs.hatch-check-types.scripts.check = [ "mypy" ]
 envs.hatch-check-types.dependency-groups = [ "typecheck", "test" ]
-# Compatibility matrix across the anndata/pandas versions we support.
 # Not part of the CI matrix; run locally with `hatch run test-anndata-pandas:test`.
 envs.test-anndata-pandas.extra-dependencies = [ "zarr>=3" ]
 envs.test-anndata-pandas.scripts.test = [ "pip list|grep anndata && pip list|grep pandas && pytest {args}" ]

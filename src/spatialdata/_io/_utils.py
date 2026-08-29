@@ -527,7 +527,6 @@ def _resolve_zarr_store(path: str | Path | UPath | zarr.storage.StoreLike | zarr
             return FsspecStore(path.store.path + "/" + path.path, **{**kwargs, "fs": path.store.fs})
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
     if isinstance(path, Store):
-        # if the input is already a store, use it as is
         return path
     if isinstance(path, UPath):
         # if input is a remote UPath, map it to an FSStore

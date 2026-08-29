@@ -16,11 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  # Get the test environment from hatch as defined in pyproject.toml.
-  # This ensures that the pyproject.toml is the single point of truth for test definitions and the same tests are
-  # run locally and on continuous integration.
-  # Check [[tool.hatch.envs.hatch-test.matrix]] in pyproject.toml and https://hatch.pypa.io/latest/environment/ for
-  # more details.
+  # [tool.hatch.envs.hatch-test.matrix] in pyproject.toml is the single source of truth: the same environments run here and locally.
   get-environments:
     runs-on: ubuntu-slim
     outputs:
@@ -48,7 +44,6 @@ jobs:
               )')
           echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
 
-  # Run tests through hatch. Spawns a separate runner for each environment defined in the hatch matrix obtained above.
   test:
     needs: get-environments
     permissions:
@@ -101,8 +96,7 @@ jobs:
       - run: uv tool install hatch
       - run: uvx prek run --all-files --show-diff-on-failure --color=always
 
-  # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
-  # protection instead of having to update it frequently. See https://github.com/re-actors/alls-green#why.
+  # One required check for branch protection, so it does not need updating whenever the matrix changes.
   check:
     name: Tests pass in all hatch environments
     if: always()

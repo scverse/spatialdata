@@ -3,9 +3,7 @@
 This document aims at summarizing the most important information for getting you started on contributing to this project.
 We assume that you are already familiar with git and with making pull requests on GitHub.
 
-For more extensive tutorials, that also cover the absolute basics,
-please refer to other resources such as the [pyopensci tutorials][],
-the [scientific Python tutorials][], or the [scanpy developer guide][].
+For more extensive tutorials, that also cover the absolute basics, please refer to other resources such as the [pyopensci tutorials][], the [scientific Python tutorials][], or the [scanpy developer guide][].
 
 [pyopensci tutorials]: https://www.pyopensci.org/learn.html
 [scientific Python tutorials]: https://learn.scientific-python.org/development/tutorials/
@@ -21,8 +19,7 @@ Hatch is a Python project manager that
 - allows to run tests locally in different environments (e.g. different python versions)
 - allows to run tasks defined in `pyproject.toml`, e.g. to build documentation.
 
-While the project is setup with `hatch` in mind,
-it is still possible to use different tools to manage dependencies, such as `uv` or `pip`.
+While the project is setup with `hatch` in mind, it is still possible to use different tools to manage dependencies, such as `uv` or `pip`.
 
 :::
 
@@ -30,16 +27,14 @@ it is still possible to use different tools to manage dependencies, such as `uv`
 
 ## Installing dev dependencies
 
-In addition to the packages needed to _use_ this package,
-you need additional python packages to [run tests](#writing-tests) and [build the documentation](#docs-building).
+In addition to the packages needed to _use_ this package, you need additional python packages to [run tests](#writing-tests) and [build the documentation](#docs-building).
 
 :::::{tab-set}
 ::::{tab-item} Hatch
 :sync: hatch
 
 On the command line, you typically interact with hatch through its command line interface (CLI).
-Running one of the following commands will automatically resolve the environments for testing and
-building the documentation in the background:
+Running one of the following commands will automatically resolve the environments for testing and building the documentation in the background:
 
 ```bash
 hatch test  # defined in the table [tool.hatch.envs.hatch-test] in pyproject.toml
@@ -49,13 +44,11 @@ hatch run docs:build  # defined in the table [tool.hatch.envs.docs]
 ### VS Code
 
 If you are using VS code, install the [hatch-code][] extension.
-Additionally, make sure that the `vscode-python-environments` extension is installed (should be by default)
-and `"python.useEnvironmentsExtension": true` is activated in your `settings.json`.
+Additionally, make sure that the `vscode-python-environments` extension is installed (should be by default) and `"python.useEnvironmentsExtension": true` is activated in your `settings.json`.
 
 Next, open the "Python Environment Managers" sidebar.
 You can do so by opening the command palette (Ctrl+Shift+P) and searching for `Python: Focus on Environment Managers View`.
-It will show a collapsible list where you can expand "Hatch"
-and activate an environment by clicking on the checkmark next to it.
+It will show a collapsible list where you can expand "Hatch" and activate an environment by clicking on the checkmark next to it.
 As the main development environment, we recommend to use `hatch-test` with the latest supported Python version.
 
 ### Other IDEs
@@ -108,11 +101,8 @@ and manually point it to the python binary.
 :sync: uv
 
 A popular choice for managing virtual environments is [uv][].
-The main disadvantage compared to hatch is that it supports only a single environment per project at a time,
-which requires you to mix the dependencies for running tests and building docs.
-This can have undesired side-effects,
-such as requiring to install a lower version of a library your project depends on,
-only because an outdated sphinx plugin pins an older version.
+The main disadvantage compared to hatch is that it supports only a single environment per project at a time, which requires you to mix the dependencies for running tests and building docs.
+This can have undesired side-effects, such as requiring to install a lower version of a library your project depends on, only because an outdated sphinx plugin pins an older version.
 
 To initialize a virtual environment in the `.venv` directory of your project, simply run
 
@@ -128,8 +118,7 @@ The `.venv` directory is typically automatically discovered by IDEs such as VS C
 :sync: pip
 
 Pip is nowadays mostly superseded by environment manager such as [hatch][].
-However, for the sake of completeness, and since it’s ubiquitously available,
-we describe how you can manage environments manually using `pip`:
+However, for the sake of completeness, and since it’s ubiquitously available, we describe how you can manage environments manually using `pip`:
 
 ```bash
 python3 -m venv .venv
@@ -182,8 +171,7 @@ This package uses [pytest][] for automated testing.
 Please write {doc}`scanpy:dev/testing` for every function added to the package.
 
 Most IDEs integrate with pytest and provide a GUI to run tests.
-If you set up your virtual environments as described in [installing dev dependencies](#installing-dev-dependencies),
-test cases should be automatically discovered by your IDE.
+If you set up your virtual environments as described in [installing dev dependencies](#installing-dev-dependencies), test cases should be automatically discovered by your IDE.
 
 Alternatively, you can run all tests from the command line by executing
 
@@ -225,16 +213,12 @@ in the root of the repository.
 
 ### Continuous integration
 
-Continuous integration via GitHub actions will automatically run the tests on all pull requests and test
-against the minimum and maximum supported Python version.
+Continuous integration via GitHub actions will automatically run the tests on all pull requests and test against the minimum and maximum supported Python version.
 
 Additionally, there’s a CI job that tests against pre-releases of all dependencies (if there are any).
-The purpose of this check is to detect incompatibilities of new package versions early on and
-gives you time to fix the issue or reach out to the developers of the dependency before the package
-is released to a wider audience.
+The purpose of this check is to detect incompatibilities of new package versions early on and gives you time to fix the issue or reach out to the developers of the dependency before the package is released to a wider audience.
 
-The CI job is defined in `.github/workflows/test.yaml`,
-however the single point of truth for CI jobs is the Hatch test matrix defined in `pyproject.toml`.
+The CI job is defined in `.github/workflows/test.yaml`, however the single point of truth for CI jobs is the Hatch test matrix defined in `pyproject.toml`.
 This means that local testing via hatch and remote testing on CI tests against the same python versions and uses the same environments.
 
 ### Integration testing
@@ -343,8 +327,7 @@ The documentation is set-up to render jupyter notebooks stored in the `docs/note
 Currently, only notebooks in `.ipynb` format are supported that will be included with both their input and output cells.
 It is your responsibility to update and re-run the notebook whenever necessary.
 
-If you are interested in automatically running notebooks as part of the continuous integration,
-please check out [this feature request][issue-render-notebooks] in the `cookiecutter-scverse` repository.
+If you are interested in automatically running notebooks as part of the continuous integration, please check out [this feature request][issue-render-notebooks] in the `cookiecutter-scverse` repository.
 
 [issue-render-notebooks]: https://github.com/scverse/cookiecutter-scverse/issues/40
 
@@ -352,8 +335,7 @@ please check out [this feature request][issue-render-notebooks] in the `cookiecu
 
 - If you refer to objects from other packages, please add an entry to `intersphinx_mapping` in `docs/conf.py`.
   Only if you do so can sphinx automatically create a link to the external documentation.
-- If building the documentation fails because of a missing link that is outside your control,
-  you can add an entry to the `nitpick_ignore` list in `docs/conf.py`
+- If building the documentation fails because of a missing link that is outside your control, you can add an entry to the `nitpick_ignore` list in `docs/conf.py`
 
 (docs-building)=
 

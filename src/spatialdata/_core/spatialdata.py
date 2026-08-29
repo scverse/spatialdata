@@ -215,7 +215,6 @@ class SpatialData:
                     else:
                         dtype = element.index.dtype
                     instance_dtype = self.get_instance_key_column(table).dtype
-                    # `dtype is str` was always False, so this check never fired.
                     if dtype != instance_dtype and (
                         pd.api.types.is_string_dtype(dtype) or pd.api.types.is_string_dtype(instance_dtype)
                     ):

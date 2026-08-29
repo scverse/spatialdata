@@ -1,10 +1,3 @@
-# Configuration file for the Sphinx documentation builder.
-
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
-# https://www.sphinx-doc.org/page/usage/configuration.html
-
-# -- Path setup --------------------------------------------------------------
 import shutil
 import sys
 from datetime import datetime
@@ -20,17 +13,14 @@ sys.path.insert(0, str(HERE / "tutorials" / "notebooks" / "extensions"))
 
 # -- Project information -----------------------------------------------------
 
-# NOTE: If you installed your project in editable mode, this might be stale.
-#       If this is the case, reinstall it to refresh the metadata
 info = metadata("spatialdata")
 project = info["Name"]
 author = info["Author"]
-copyright = f"{datetime.now():%Y}, {author}."
+copyright = f"{datetime.now():%Y}, {author}"
 version = info["Version"]
 urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
 repository_url = urls["Source"]
 
-# The full version, including alpha/beta/rc tags
 release = info["Version"]
 
 bibtex_bibfiles = ["references.bib"]
@@ -48,8 +38,6 @@ html_context = {
 
 # -- General configuration ---------------------------------------------------
 
-# Add any Sphinx extension module names here, as strings.
-# They can be extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
     "git_ref",  # needs to be before scanpydoc.rtd_github_links
     "scanpydoc.rtd_github_links",  # needs to be before sphinx.ext.linkcode
@@ -123,9 +111,6 @@ intersphinx_mapping = {
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
 }
 
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = [
     "_build",
     "Thumbs.db",
@@ -143,7 +128,6 @@ exclude_patterns = [
     "tutorials/notebooks/notebooks/examples/stereoseq_data/*",
 ]
 
-# Ignore warnings.
 nitpicky = False  # TODO: solve upstream, then set back to True to warn about broken links.
 # no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
 suppress_warnings = [
@@ -153,9 +137,6 @@ suppress_warnings = [
 
 # -- Options for HTML output -------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
 html_theme = "sphinx_book_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
@@ -175,7 +156,6 @@ pygments_style = "default"
 katex_prerender = shutil.which(katex.NODEJS_BINARY) is not None
 
 nitpick_ignore = [
-    # If building the documentation fails because of a missing link that is outside your control,
-    # you can add an exception to this list.
+    # Add an entry here when a missing link is outside our control.
     ("py:class", "igraph.Graph"),
 ]
