@@ -466,7 +466,7 @@ def _left_exclusive_join_spatialelement_table(
                 group_df = groups_df.get_group(name)
                 table_instance_key_column = group_df[instance_key]
                 if element_type in ["points", "shapes"]:
-                    mask = ~np.isin(element.index, table_instance_key_column.values)
+                    mask = ~np.isin(element.index, table_instance_key_column.to_numpy())
                     masked_element = element.loc[mask, :] if mask.sum() != 0 else None
                     element_dict[element_type][name] = masked_element
                 else:
@@ -734,7 +734,13 @@ def join_spatialelement_table(
     spatial_element_names = (
         spatial_element_names if isinstance(spatial_element_names, list) else [spatial_element_names]
     )
-    spatial_elements_list = spatial_elements if isinstance(spatial_elements, list) else [spatial_elements]
+    spatial_elements_list: list[SpatialElement] | None
+    if spatial_elements is None:
+        spatial_elements_list = None
+    elif isinstance(spatial_elements, list):
+        spatial_elements_list = spatial_elements
+    else:
+        spatial_elements_list = [spatial_elements]
     _validate_element_types_for_join(sdata, spatial_element_names, spatial_elements_list, table)
 
     elements_dict: dict[str, dict[str, Any]]
@@ -748,6 +754,7 @@ def join_spatialelement_table(
             PointsModel: "points",
         }
         elements_dict = defaultdict(lambda: defaultdict(dict))
+        assert spatial_elements_list is not None
         for name, element in zip(spatial_element_names, spatial_elements_list, strict=True):
             element_type = _model_to_type.get(get_model(element))
             if element_type is not None:
@@ -1032,12 +1039,15 @@ def _locate_value(
     table_name: str | None = None,
 ) -> list[_ValueOrigin]:
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
-    origins = []
+    origins: list[_ValueOrigin] = []
     model = get_model(el)
     if model not in [PointsModel, ShapesModel, Labels2DModel, Labels3DModel, TableModel]:
         raise ValueError(f"Cannot get value from {model}")
     # adding from the dataframe columns
-    if model in [PointsModel, ShapesModel] and value_key in el.columns:
+    if model in [PointsModel, ShapesModel]:
+        assert isinstance(el, GeoDataFrame | DaskDataFrame)
+        if value_key not in el.columns:
+            return origins
         value = el[value_key]
         is_categorical = isinstance(value.dtype, pd.CategoricalDtype)
         origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
@@ -1130,9 +1140,11 @@ def get_values(
         )
     origin = origin_values.__iter__().__next__()
     if origin == "df":
+        assert isinstance(el, GeoDataFrame | DaskDataFrame)
         df = el[value_key_values]
-        if isinstance(el, DaskDataFrame):
+        if isinstance(df, DaskDataFrame):
             df = df.compute()
+        assert isinstance(df, pd.DataFrame)
         return df
     if (sdata is not None and table_name is not None) or isinstance(element, AnnData):
         if sdata is not None and table_name is not None:
@@ -1151,11 +1163,13 @@ def get_values(
             if element_name is not None:
                 matched_table = matched_table[matched_table.obs[region_key] == element_name]
             obs = matched_table.obs
+        if not isinstance(obs, pd.DataFrame):
+            raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
 
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
-            matched_table.obs = pd.DataFrame(obs)
+            matched_table.obs = obs
             if table_layer is None:
                 x = matched_table[:, value_key_values].X
             else:
@@ -1166,12 +1180,19 @@ def get_values(
 
             if isinstance(x, scipy.sparse.csr_matrix | scipy.sparse.csc_matrix | scipy.sparse.coo_matrix):
                 x = x.todense()
+            if not isinstance(x, np.ndarray):
+                raise TypeError(f"Expected a dense array of values, got {type(x).__name__}.")
             df = pd.DataFrame(x, columns=value_key_values)
         if origin == "obsm":
             data = {}
             for key in value_key_values:
                 data_values = matched_table.obsm[key]
                 if len(value_key_values) == 1 and return_obsm_as_is:
+                    if not isinstance(data_values, pd.DataFrame | np.ndarray):
+                        raise TypeError(
+                            f"`obsm[{key!r}]` must be a data frame or a dense array to be returned as is, "
+                            f"got {type(data_values).__name__}."
+                        )
                     return data_values
                 if len(value_key_values) > 1 and return_obsm_as_is:
                     warnings.warn(
