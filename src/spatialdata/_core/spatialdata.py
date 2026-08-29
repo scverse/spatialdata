@@ -2322,21 +2322,31 @@ class SpatialData:
         The SpatialData object.
         """
         elements_dict: dict[str, SpatialElement | AnnData] = {}
+        images: dict[str, Raster_T] = {}
+        labels: dict[str, Raster_T] = {}
+        points: dict[str, DaskDataFrame] = {}
+        shapes: dict[str, GeoDataFrame] = {}
+        tables: dict[str, AnnData] = {}
         for name, element in elements.items():
+            # get_model() returns a schema only for the element type it matched, so the element has that type.
             model = get_model(element)
             if model in [Image2DModel, Image3DModel]:
-                element_type = "images"
+                assert isinstance(element, DataArray | DataTree)
+                images[name] = element
             elif model in [Labels2DModel, Labels3DModel]:
-                element_type = "labels"
+                assert isinstance(element, DataArray | DataTree)
+                labels[name] = element
             elif model == PointsModel:
-                element_type = "points"
+                assert isinstance(element, DaskDataFrame)
+                points[name] = element
             elif model == TableModel:
-                element_type = "tables"
+                assert isinstance(element, AnnData)
+                tables[name] = element
             else:
                 assert model == ShapesModel
-                element_type = "shapes"
-            elements_dict.setdefault(element_type, {})[name] = element
-        return cls(**elements_dict, attrs=attrs)
+                assert isinstance(element, GeoDataFrame)
+                shapes[name] = element
+        return cls(images=images, labels=labels, points=points, shapes=shapes, tables=tables, attrs=attrs)
 
     def subset(
         self,
@@ -2363,14 +2373,35 @@ class SpatialData:
         -------
         The subsetted SpatialData object.
         """
-        elements_dict: dict[str, SpatialElement] = {}
+        elements_dict: dict[str, dict[str, SpatialElement]] = {}
+        images: dict[str, Raster_T] = {}
+        labels: dict[str, Raster_T] = {}
+        points: dict[str, DaskDataFrame] = {}
+        shapes: dict[str, GeoDataFrame] = {}
         names_tables_to_keep: set[str] = set()
-        for element_type, element_name, element in self._gen_elements(include_tables=True):
-            if element_name in element_names:
-                if element_type != "tables":
-                    elements_dict.setdefault(element_type, {})[element_name] = element
-                else:
-                    names_tables_to_keep.add(element_name)
+        for name, image in self.images.items():
+            if name in element_names:
+                images[name] = image
+        for name, labels_element in self.labels.items():
+            if name in element_names:
+                labels[name] = labels_element
+        for name, points_element in self.points.items():
+            if name in element_names:
+                points[name] = points_element
+        for name, shapes_element in self.shapes.items():
+            if name in element_names:
+                shapes[name] = shapes_element
+        for name in self.tables:
+            if name in element_names:
+                names_tables_to_keep.add(name)
+        for element_type, kept in (
+            ("images", images),
+            ("labels", labels),
+            ("points", points),
+            ("shapes", shapes),
+        ):
+            if kept:
+                elements_dict[element_type] = dict(kept)
         tables = self._filter_tables(
             names_tables_to_keep,
             filter_tables,
@@ -2378,7 +2409,9 @@ class SpatialData:
             include_orphan_tables,
             elements_dict=elements_dict,
         )
-        return SpatialData(**elements_dict, tables=tables, attrs=self.attrs)
+        return SpatialData(
+            images=images, labels=labels, points=points, shapes=shapes, tables=tables, attrs=self.attrs
+        )
 
     def __getitem__(self, item: str) -> SpatialElement | AnnData:
         """
@@ -2434,16 +2467,22 @@ class SpatialData:
         value
             The element.
         """
+        # get_model() returns a schema only for the element type it matched, so the value has that type.
         schema = get_model(value)
         if schema in (Image2DModel, Image3DModel):
+            assert isinstance(value, DataArray | DataTree)
             self.images[key] = value
         elif schema in (Labels2DModel, Labels3DModel):
+            assert isinstance(value, DataArray | DataTree)
             self.labels[key] = value
         elif schema == PointsModel:
+            assert isinstance(value, DaskDataFrame)
             self.points[key] = value
         elif schema == ShapesModel:
+            assert isinstance(value, GeoDataFrame)
             self.shapes[key] = value
         elif schema == TableModel:
+            assert isinstance(value, AnnData)
             self.tables[key] = value
         else:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
