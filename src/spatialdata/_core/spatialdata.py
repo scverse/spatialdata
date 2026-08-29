@@ -326,7 +326,7 @@ class SpatialData:
     @staticmethod
     def _set_table_annotation_target(
         table: AnnData,
-        region: str | pd.Series,
+        region: str | pd.Series | list[str],
         region_key: str,
         instance_key: str,
     ) -> None:
@@ -373,7 +373,7 @@ class SpatialData:
     @staticmethod
     def _change_table_annotation_target(
         table: AnnData,
-        region: str | pd.Series,
+        region: str | pd.Series | list[str],
         region_key: None | str = None,
         instance_key: None | str = None,
     ) -> None:
@@ -537,6 +537,10 @@ class SpatialData:
         """
         from spatialdata._core.operations.aggregate import aggregate
 
+        if values is None:
+            raise ValueError("`values` must be specified.")
+        if by is None:
+            raise ValueError("`by` must be specified.")
         if isinstance(values, str) and values_sdata is None:
             values_sdata = self
         if isinstance(by, str) and by_sdata is None:
@@ -634,20 +638,21 @@ class SpatialData:
 
         from spatialdata.transformations.operations import get_transformation
 
-        elements: dict[str, dict[str, SpatialElement]] = {}
-        element_names_in_coordinate_system = []
-        if isinstance(coordinate_system, str):
-            coordinate_system = [coordinate_system]
-        for element_type, element_name, element in self._gen_elements():
-            if element_type != "tables":
-                transformations = get_transformation(element, get_all=True)
-                assert isinstance(transformations, dict)
-                for cs in coordinate_system:
-                    if cs in transformations:
-                        if element_type not in elements:
-                            elements[element_type] = {}
-                        elements[element_type][element_name] = element
-                        element_names_in_coordinate_system.append(element_name)
+        coordinate_systems = [coordinate_system] if isinstance(coordinate_system, str) else coordinate_system
+        element_names_in_coordinate_system: list[str] = []
+
+        def _is_in_coordinate_system(element_name: str, element: SpatialElement) -> bool:
+            transformations = get_transformation(element, get_all=True)
+            assert isinstance(transformations, dict)
+            if any(cs in transformations for cs in coordinate_systems):
+                element_names_in_coordinate_system.append(element_name)
+                return True
+            return False
+
+        images = {k: v for k, v in self.images.items() if _is_in_coordinate_system(k, v)}
+        labels = {k: v for k, v in self.labels.items() if _is_in_coordinate_system(k, v)}
+        points = {k: v for k, v in self.points.items() if _is_in_coordinate_system(k, v)}
+        shapes = {k: v for k, v in self.shapes.items() if _is_in_coordinate_system(k, v)}
         tables = self._filter_tables(
             set(),
             filter_tables,
@@ -656,7 +661,9 @@ class SpatialData:
             element_names=element_names_in_coordinate_system,
         )
 
-        return SpatialData(**elements, tables=tables, attrs=self.attrs)
+        return SpatialData(
+            images=images, labels=labels, points=points, shapes=shapes, tables=tables, attrs=self.attrs
+        )
 
     # TODO: move to relational query with refactor
     def _filter_tables(
@@ -894,18 +901,32 @@ class SpatialData:
         The transformed SpatialData.
         """
         sdata = self.filter_by_coordinate_system(target_coordinate_system, filter_tables=False)
-        elements: dict[str, dict[str, SpatialElement]] = {}
-        for element_type, element_name, _ in sdata.gen_elements():
-            if element_type != "tables":
-                transformed = sdata.transform_element_to_coordinate_system(
-                    element_name,
-                    target_coordinate_system,
-                    maintain_positioning=maintain_positioning,
-                )
-                if element_type not in elements:
-                    elements[element_type] = {}
-                elements[element_type][element_name] = transformed
-        return SpatialData(**elements, tables=sdata.tables, attrs=self.attrs)
+        images: dict[str, Raster_T] = {}
+        labels: dict[str, Raster_T] = {}
+        points: dict[str, DaskDataFrame] = {}
+        shapes: dict[str, GeoDataFrame] = {}
+        for element_type, element_name, _ in sdata.gen_spatial_elements():
+            transformed = sdata.transform_element_to_coordinate_system(
+                element_name,
+                target_coordinate_system,
+                maintain_positioning=maintain_positioning,
+            )
+            # Transforming an element does not change which kind of element it is.
+            if element_type == "images":
+                assert isinstance(transformed, DataArray | DataTree)
+                images[element_name] = transformed
+            elif element_type == "labels":
+                assert isinstance(transformed, DataArray | DataTree)
+                labels[element_name] = transformed
+            elif element_type == "points":
+                assert isinstance(transformed, DaskDataFrame)
+                points[element_name] = transformed
+            else:
+                assert isinstance(transformed, GeoDataFrame)
+                shapes[element_name] = transformed
+        return SpatialData(
+            images=images, labels=labels, points=points, shapes=shapes, tables=sdata.tables, attrs=self.attrs
+        )
 
     def elements_are_self_contained(self) -> dict[str, bool]:
         """
