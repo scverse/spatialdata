@@ -316,8 +316,8 @@ no_implicit_reexport = true
 no_warn_no_return = true
 show_error_codes = true
 
-# Dependencies that ship neither inline types nor stubs. Listed explicitly rather than
-# globally, so that a newly added untyped dependency is still reported.
+# Dependencies that ship neither inline types nor stubs.
+# Listed explicitly rather than globally, so that a newly added untyped dependency is still reported.
 [[tool.mypy.overrides]]
 module = [
   "annsel.core.typing.*",
@@ -333,47 +333,6 @@ module = [
   "spatialdata_io.*",
 ]
 ignore_missing_imports = true
-
-# Modules that predate a type check that can actually see the types of our dependencies:
-# the mypy pre-commit hook used to run in an isolated environment with `--ignore-missing-imports`,
-# so everything coming from pandas, xarray, anndata, dask and geopandas was silently `Any`.
-# TODO: shrink this list; do not add to it — new and refactored modules are expected to type-check.
-[[tool.mypy.overrides]]
-module = [
-  "spatialdata._core._deepcopy",
-  "spatialdata._core._elements",
-  "spatialdata._core.centroids",
-  "spatialdata._core.concatenate",
-  "spatialdata._core.data_extent",
-  "spatialdata._core.operations._utils",
-  "spatialdata._core.operations.aggregate",
-  "spatialdata._core.operations.map",
-  "spatialdata._core.operations.rasterize",
-  "spatialdata._core.operations.rasterize_bins",
-  "spatialdata._core.operations.transform",
-  "spatialdata._core.operations.vectorize",
-  "spatialdata._core.query._utils",
-  "spatialdata._core.query.relational_query",
-  "spatialdata._core.query.spatial_query",
-  "spatialdata._core.spatialdata",
-  "spatialdata._io._utils",
-  "spatialdata._io.format",
-  "spatialdata._io.io_points",
-  "spatialdata._io.io_raster",
-  "spatialdata._io.io_shapes",
-  "spatialdata._io.io_table",
-  "spatialdata._io.io_zarr",
-  "spatialdata._utils",
-  "spatialdata.dataloader.datasets",
-  "spatialdata.datasets",
-  "spatialdata.models._accessor",
-  "spatialdata.models._utils",
-  "spatialdata.models.models",
-  "spatialdata.testing",
-  "spatialdata.transformations._utils",
-  "spatialdata.transformations.operations",
-]
-ignore_errors = true
 
 [tool.pytest]
 addopts = [

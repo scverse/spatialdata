@@ -1285,7 +1285,7 @@ type Schema_t = (
 
 
 def get_model(
-    e: SpatialElement,
+    e: SpatialElement | AnnData,
     validate: bool = True,
 ) -> Schema_t:
     """
@@ -1302,30 +1302,29 @@ def get_model(
     -------
     The SpatialData model.
     """
-
-    def _validate_and_return(
-        schema: Schema_t,
-        e: SpatialElement,
-    ) -> Schema_t:
-        if validate:
-            schema.validate(e)
-        return schema
-
+    # Each branch validates after narrowing, because the `validate()` of each schema accepts only its own element type.
     if isinstance(e, DataArray | DataTree):
         axes = get_axes_names(e)
+        raster_schema: type[Image2DModel] | type[Image3DModel] | type[Labels2DModel] | type[Labels3DModel]
         if "c" in axes:
-            if "z" in axes:
-                return _validate_and_return(Image3DModel, e)
-            return _validate_and_return(Image2DModel, e)
-        if "z" in axes:
-            return _validate_and_return(Labels3DModel, e)
-        return _validate_and_return(Labels2DModel, e)
+            raster_schema = Image3DModel if "z" in axes else Image2DModel
+        else:
+            raster_schema = Labels3DModel if "z" in axes else Labels2DModel
+        if validate:
+            raster_schema.validate(e)
+        return raster_schema
     if isinstance(e, GeoDataFrame):
-        return _validate_and_return(ShapesModel, e)
+        if validate:
+            ShapesModel.validate(e)
+        return ShapesModel
     if isinstance(e, DaskDataFrame):
-        return _validate_and_return(PointsModel, e)
+        if validate:
+            PointsModel.validate(e)
+        return PointsModel
     if isinstance(e, AnnData):
-        return _validate_and_return(TableModel, e)
+        if validate:
+            TableModel.validate(e)
+        return TableModel
     raise TypeError(f"Unsupported type {type(e)}")
 
 

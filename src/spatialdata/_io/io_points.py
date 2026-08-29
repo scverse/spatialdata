@@ -27,6 +27,8 @@ def _read_points(
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    if not isinstance(f, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding the points element at {store}, got {type(f)!r}.")
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None

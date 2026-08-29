@@ -114,8 +114,7 @@ class BaseTransformation(ABC):
 
         Returns
         -------
-        A new transformation that is the inverse of this one, such that applying both in sequence yields the identity
-        transformation.
+        A new transformation that is the inverse of this one, such that applying both in sequence yields the identity transformation.
         """
         pass
 

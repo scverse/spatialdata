@@ -28,6 +28,8 @@ def _read_table(store: str | Path) -> AnnData:
     table = read_anndata_zarr(str(store))
 
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    if not isinstance(f, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding the table element at {store}, got {type(f)!r}.")
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]

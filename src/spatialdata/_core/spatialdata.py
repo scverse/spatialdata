@@ -145,30 +145,30 @@ class SpatialData:
             exc_type=(ValueError, KeyError),
         ) as collect_error:
             if images is not None:
-                for k, v in images.items():
+                for k, image in images.items():
                     with collect_error(location=("images", k)):
-                        self.images[k] = v
+                        self.images[k] = image
 
             if labels is not None:
-                for k, v in labels.items():
+                for k, labels_element in labels.items():
                     with collect_error(location=("labels", k)):
-                        self.labels[k] = v
+                        self.labels[k] = labels_element
 
             if shapes is not None:
-                for k, v in shapes.items():
+                for k, shapes_element in shapes.items():
                     with collect_error(location=("shapes", k)):
-                        self.shapes[k] = v
+                        self.shapes[k] = shapes_element
 
             if points is not None:
-                for k, v in points.items():
+                for k, points_element in points.items():
                     with collect_error(location=("points", k)):
-                        self.points[k] = v
+                        self.points[k] = points_element
 
             if tables is not None:
-                for k, v in tables.items():
+                for k, table in tables.items():
                     with collect_error(location=("tables", k)):
-                        self.validate_table_in_spatialdata(v)
-                        self.tables[k] = v
+                        self.validate_table_in_spatialdata(table)
+                        self.tables[k] = table
 
     def validate_table_in_spatialdata(self, table: AnnData) -> None:
         """
@@ -1251,6 +1251,8 @@ class SpatialData:
             validate_element(element)
 
         if element_type == "images":
+            if not isinstance(element, DataArray | DataTree):
+                raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a raster element.")
             write_image(
                 image=element,
                 group=element_group,
@@ -1259,6 +1261,8 @@ class SpatialData:
                 raster_compressor=raster_compressor,
             )
         elif element_type == "labels":
+            if not isinstance(element, DataArray | DataTree):
+                raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a raster element.")
             write_labels(
                 labels=element,
                 group=root_group,
@@ -1267,12 +1271,16 @@ class SpatialData:
                 raster_compressor=raster_compressor,
             )
         elif element_type == "points":
+            if not isinstance(element, DaskDataFrame):
+                raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a points element.")
             write_points(
                 points=element,
                 group=element_group,
                 element_format=parsed_formats["points"],
             )
         elif element_type == "shapes":
+            if not isinstance(element, GeoDataFrame):
+                raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a shapes element.")
             write_shapes(
                 shapes=element,
                 group=element_group,
@@ -1280,6 +1288,8 @@ class SpatialData:
                 geometry_encoding=shapes_geometry_encoding,
             )
         elif element_type == "tables":
+            if not isinstance(element, AnnData):
+                raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a table.")
             write_table(
                 table=element,
                 group=element_type_group,
