@@ -164,7 +164,7 @@ if TYPE_CHECKING:
     from spatialdata._core.centroids import get_centroids
 
     # _core.concatenate
-    from spatialdata._core.concatenate import concatenate
+    from spatialdata._core.concatenate import concatenate, deconcatenate
 
     # _core.data_extent
     from spatialdata._core.data_extent import are_extents_equal, get_extent
