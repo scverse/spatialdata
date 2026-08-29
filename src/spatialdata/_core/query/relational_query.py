@@ -249,6 +249,18 @@ def _region_as_str_if_list_of_len_one(region: list[str]) -> str | list[str]:
     return region if len(region) > 1 else region[0]
 
 
+def _obs_as_dataframe(table: AnnData) -> pd.DataFrame:
+    """Return ``table.obs`` as a pandas DataFrame.
+
+    Tables read with ``anndata.experimental.read_lazy`` expose ``obs`` as an xarray
+    ``Dataset2D``, which does not implement the pandas methods (``reset_index``,
+    ``groupby``) the join helpers rely on. Materialize it in that case; ``obs`` is the
+    small axis of the table, so this does not pull in ``X``, which stays lazy.
+    """
+    obs = table.obs
+    return obs if isinstance(obs, pd.DataFrame) else obs.to_memory()
+
+
 def _right_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]],
     table: AnnData,
@@ -266,7 +278,7 @@ def _right_exclusive_join_spatialelement_table(
     if isinstance(regions, str):
         regions = [regions]
     # reset_index so group_df.index gives integer positions — safe with duplicate obs names
-    obs = table.obs.reset_index()
+    obs = _obs_as_dataframe(table).reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     keep = np.zeros(len(table), dtype=bool)
     has_match = False
@@ -316,7 +328,7 @@ def _right_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    groups_df = table.obs.groupby(by=region_column_name, observed=False)
+    groups_df = _obs_as_dataframe(table).groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
             if name in regions:
@@ -358,7 +370,7 @@ def _inner_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    obs = table.obs.reset_index()
+    obs = _obs_as_dataframe(table).reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
@@ -434,7 +446,7 @@ def _left_exclusive_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    groups_df = table.obs.groupby(by=region_column_name, observed=False)
+    groups_df = _obs_as_dataframe(table).groupby(by=region_column_name, observed=False)
     for element_type, name_element in element_dict.items():
         for name, element in name_element.items():
             if name in regions:
@@ -476,7 +488,7 @@ def _left_join_spatialelement_table(
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
-    obs = table.obs.reset_index()
+    obs = _obs_as_dataframe(table).reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
     for element_type, name_element in element_dict.items():
@@ -1116,7 +1128,12 @@ def get_values(
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
-            matched_table.obs = pd.DataFrame(obs)
+            # When the table came from anndata.experimental.read_lazy, obs is a Dataset2D, not a
+            # DataFrame, and pd.DataFrame(obs) returns a malformed frame. Materialize via to_memory().
+            if isinstance(obs, pd.DataFrame):
+                matched_table.obs = pd.DataFrame(obs)
+            else:
+                matched_table.obs = obs.to_memory()
             if table_layer is None:
                 x = matched_table[:, value_key_values].X
             else:
@@ -1125,6 +1142,11 @@ def get_values(
                 x = matched_table[:, value_key_values].layers[table_layer]
             import scipy
 
+            if isinstance(x, da.Array):
+                # A lazy table backs X with dask, and pd.DataFrame() cannot consume that.
+                # get_values returns in-memory values by contract, and this is a selection of
+                # the requested columns only, so the materialization is bounded by those.
+                x = x.compute()
             if isinstance(x, scipy.sparse.csr_matrix | scipy.sparse.csc_matrix | scipy.sparse.coo_matrix):
                 x = x.todense()
             df = pd.DataFrame(x, columns=value_key_values)

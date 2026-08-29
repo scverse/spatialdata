@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from collections.abc import Callable
+from functools import partial
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Literal
@@ -126,6 +127,7 @@ def read_zarr(
     store: str | Path | UPath | zarr.Group,
     selection: None | tuple[str] = None,
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
+    lazy: bool = False,
 ) -> SpatialData:
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
@@ -148,6 +150,28 @@ def read_zarr(
         - 'warn', raise a warning when a bad file is encountered and skip that file. A SpatialData
           object is returned containing only elements that could be read. Failures can only be
           determined from the warnings.
+
+    lazy
+        If True, read tables lazily using anndata.experimental.read_lazy.
+        This keeps large tables out of memory until needed. Requires anndata >= 0.12.
+        Note: Images, labels, and points are always read lazily (using Dask).
+        This parameter only affects tables, which are normally loaded into memory.
+
+        When the stored ``X`` is sparse, the lazy table's ``X`` is a Dask array whose
+        blocks are ``scipy.sparse`` matrices, and Dask's array reductions
+        (``X.sum()``, ``X.mean()``, ``X.max()``, ``X.std()``, ...) are **not supported**.
+        They raise a ``TypeError`` or ``IndexError`` while the graph is being built --
+        before ``.compute()`` is ever reached -- because Dask derives the result metadata
+        by calling the corresponding NumPy reduction on a ``scipy.sparse`` block, and
+        ``scipy.sparse`` does not accept the ``keepdims``/``ndmin`` arguments NumPy passes
+        down. This is a Dask/``scipy.sparse`` interoperability limitation, not something
+        this reader introduces. Slicing and ``.compute()`` work normally, so reduce a
+        materialized block instead::
+
+            table.X[:1000].compute().sum()      # works
+            table.X.sum()                        # raises
+
+        or use ``dask.array.map_blocks`` with a function that handles sparse blocks.
 
     Returns
     -------
@@ -195,7 +219,7 @@ def read_zarr(
         "labels": (_read_multiscale, "labels", labels),
         "points": (_read_points, "points", points),
         "shapes": (_read_shapes, "shapes", shapes),
-        "tables": (_read_table, "tables", tables),
+        "tables": (partial(_read_table, lazy=lazy), "tables", tables),
     }
     for group_name, (
         read_func,

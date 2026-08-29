@@ -24,8 +24,34 @@ from spatialdata._io.format import (
 from spatialdata.models import TableModel, get_table_keys
 
 
-def _read_table(store: str | Path) -> AnnData:
-    table = read_anndata_zarr(str(store))
+def _read_table(store: str | Path, lazy: bool = False) -> AnnData:
+    """
+    Read a table from a zarr store.
+
+    Parameters
+    ----------
+    store
+        Path to the zarr store containing the table.
+    lazy
+        If True, read the table lazily using ``anndata.experimental.read_lazy``.
+        This keeps large matrices (X, layers) as dask arrays backed by zarr,
+        so they are only loaded into memory on demand. Requires anndata >= 0.12.
+
+    Returns
+    -------
+    The AnnData table, either lazily loaded or in-memory.
+
+    Raises
+    ------
+    ImportError
+        If ``lazy=True`` but anndata >= 0.12 is not installed.
+    """
+    if lazy:
+        from anndata.experimental import read_lazy
+
+        table = read_lazy(str(store))
+    else:
+        table = read_anndata_zarr(str(store))
 
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     version = _parse_version(f, expect_attrs_key=False)
