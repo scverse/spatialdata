@@ -104,9 +104,10 @@ def _(
         xdata = v[0]
         # can be slow
         instances = da.unique(xdata.data).compute()
-    index = pd.Index(np.sort(instances))
+    index: pd.Index = pd.Index(np.sort(instances))
     if not return_background and 0 in index:
-        return index.drop(0)  # drop the background label
+        without_background: pd.Index = index.drop([0])  # drop the background label
+        return without_background
     return index
 
 
@@ -167,7 +168,7 @@ def _filter_table_by_elements(table: AnnData | None, elements_dict: dict[str, di
 
 def _get_joined_table_indices(
     joined_indices: pd.Index | None,
-    element_indices: pd.RangeIndex,
+    element_indices: pd.Index,
     table_instance_key_column: pd.Series,
     match_rows: Literal["left", "no", "right"],
 ) -> pd.Index:
@@ -207,7 +208,7 @@ def _get_joined_table_indices(
 
 
 def _get_masked_element(
-    element_indices: pd.RangeIndex,
+    element_indices: pd.Index,
     element: SpatialElement,
     table_instance_key_column: pd.Series,
     match_rows: Literal["left", "no", "right"],
@@ -253,7 +254,8 @@ def _get_masked_element(
         return masked
     if not isinstance(element, GeoDataFrame):
         raise TypeError(f"Only points and shapes elements can be masked, got {type(element).__name__}.")
-    return element.loc[mask_values, :]
+    masked_shapes: GeoDataFrame = element.loc[mask_values if mask_values is not None else [], :]
+    return masked_shapes
 
 
 def _region_as_str_if_list_of_len_one(region: list[str]) -> str | list[str]:
@@ -319,7 +321,7 @@ def _right_join_spatialelement_table(
     table: AnnData,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData]:
+) -> tuple[dict[str, Any], AnnData | None]:
     if match_rows == "left":
         warnings.warn(
             "Matching rows 'left' is not supported for 'right' join; it will be treated as 'no'.",
@@ -371,7 +373,7 @@ def _inner_join_spatialelement_table(
     table: AnnData,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData]:
+) -> tuple[dict[str, Any], AnnData | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
@@ -488,7 +490,7 @@ def _left_join_spatialelement_table(
     table: AnnData,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData]:
+) -> tuple[dict[str, Any], AnnData | None]:
     if match_rows == "right":
         warnings.warn(
             "Matching rows 'right' is not supported for 'left' join; it will be treated as 'no'.",
@@ -548,7 +550,7 @@ def _left_join_spatialelement_table(
 def _match_rows(
     table_instance_key_column: pd.Series,
     mask: NDArray[np.bool_],
-    element_indices: pd.RangeIndex,
+    element_indices: pd.Index,
     match_rows: Literal["left", "right"],
 ) -> tuple[pd.Index, pd.Index]:
     instance_id_df = pd.DataFrame(
@@ -582,7 +584,7 @@ class JoinTypes(Enum):
     right = member(partial(_right_join_spatialelement_table))
     right_exclusive = member(partial(_right_exclusive_join_spatialelement_table))
 
-    def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData]:
+    def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData | None]:
         return self.value(*args)
 
 
@@ -610,13 +612,13 @@ def _validate_element_types_for_join(
     spatial_elements: list[SpatialElement] | None,
     table: AnnData | None,
 ) -> None:
+    elements_to_check: list[SpatialElement | AnnData] = []
     if sdata is not None:
-        elements_to_check = []
         for name in spatial_element_names:
             elements_to_check.append(sdata[name])
     else:
         assert spatial_elements is not None
-        elements_to_check = spatial_elements
+        elements_to_check.extend(spatial_elements)
 
     for element in elements_to_check:
         model = get_model(element)
@@ -633,7 +635,7 @@ def join_spatialelement_table(
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "left",
     match_rows: Literal["no", "left", "right"] = "no",
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData]:
+) -> tuple[dict[str, Any], AnnData | None]:
     """
     Join SpatialElement(s) and table together in SQL like manner.
 
@@ -728,12 +730,12 @@ def join_spatialelement_table(
     if sdata is not None and table_name is not None:
         if table_name not in sdata.tables:
             raise ValueError(f"No table with name `{table_name}` found in the SpatialData object.")
-        table = sdata[table_name]
+        table = sdata.tables[table_name]
     spatial_element_names = (
         spatial_element_names if isinstance(spatial_element_names, list) else [spatial_element_names]
     )
-    spatial_elements = spatial_elements if isinstance(spatial_elements, list) else [spatial_elements]
-    _validate_element_types_for_join(sdata, spatial_element_names, spatial_elements, table)
+    spatial_elements_list = spatial_elements if isinstance(spatial_elements, list) else [spatial_elements]
+    _validate_element_types_for_join(sdata, spatial_element_names, spatial_elements_list, table)
 
     elements_dict: dict[str, dict[str, Any]]
     if sdata is not None:
@@ -746,11 +748,12 @@ def join_spatialelement_table(
             PointsModel: "points",
         }
         elements_dict = defaultdict(lambda: defaultdict(dict))
-        for name, element in zip(spatial_element_names, spatial_elements, strict=True):
+        for name, element in zip(spatial_element_names, spatial_elements_list, strict=True):
             element_type = _model_to_type.get(get_model(element))
             if element_type is not None:
                 elements_dict[element_type][name] = element
 
+    assert table is not None
     elements_dict_joined, table = _call_join(elements_dict, table, how, match_rows, filter_label_pixels)
     return elements_dict_joined, table
 
@@ -761,7 +764,7 @@ def _call_join(
     how: str,
     match_rows: Literal["no", "left", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData]:
+) -> tuple[dict[str, Any], AnnData | None]:
     assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
         "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
         "`shapes`."
@@ -812,15 +815,17 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
     match_element_to_table : Function to match a spatial element to a table.
     join_spatialelement_table : General function, to join spatial elements with a table with more control.
     """
-    _, table = join_spatialelement_table(
+    _, matched_table = join_spatialelement_table(
         sdata=sdata, spatial_element_names=element_name, table_name=table_name, how="left", match_rows="left"
     )
-    return table
+    if matched_table is None:
+        raise ValueError(f"No rows of table {table_name!r} match element {element_name!r}.")
+    return matched_table
 
 
 def match_element_to_table(
     sdata: SpatialData, element_name: str | list[str], table_name: str
-) -> tuple[dict[str, Any], AnnData]:
+) -> tuple[dict[str, Any], AnnData | None]:
     """
     Filter the elements and make the indices match those in the table.
 
@@ -885,12 +890,16 @@ def match_sdata_to_table(
     `Tables tutorial <https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html>`_.
     """
     if table is None:
-        table = sdata[table_name]
+        if table_name is None:
+            raise ValueError("Exactly one of `table_name` and `table` must be provided.")
+        table = sdata.tables[table_name]
     _, region_key, instance_key = get_table_keys(table)
     annotated_regions = SpatialData.get_annotated_regions(table)
     filtered_elements, filtered_table = join_spatialelement_table(
         sdata, spatial_element_names=annotated_regions, table=table, how=how, filter_label_pixels=filter_label_pixels
     )
+    if filtered_table is None:
+        raise ValueError(f"No rows of the table match the elements {annotated_regions}.")
     filtered_table = TableModel.parse(
         filtered_table,
         region=annotated_regions,
