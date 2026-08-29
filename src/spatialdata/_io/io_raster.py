@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, TypeGuard, cast
 
@@ -328,13 +328,23 @@ def _write_raster(
     else:
         raise ValueError("Not a valid labels object")
 
-    group = group["labels"][name] if raster_type == "labels" else group
+    if raster_type == "labels":
+        labels_group = group["labels"]
+        if not isinstance(labels_group, zarr.Group):
+            raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
+        label_group = labels_group[name]
+        if not isinstance(label_group, zarr.Group):
+            raise TypeError(f"Expected a zarr group holding the label {name!r}, got {type(label_group).__name__}.")
+        group = label_group
     if raster_type == "image":
         # ome-zarr-py >= 0.18 no longer writes the omero channel metadata, so we write it ourselves.
         overwrite_channel_names(group, raster_data)
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
-    attrs = group.attrs[ATTRS_KEY]
+    stored_attrs = group.attrs[ATTRS_KEY]
+    if not isinstance(stored_attrs, Mapping):
+        raise TypeError(f"Expected {ATTRS_KEY} to be a JSON object, got {type(stored_attrs).__name__}.")
+    attrs = dict(stored_attrs)
     attrs["version"] = raster_format.spatialdata_format_version
     # triggers the write operation
     group.attrs[ATTRS_KEY] = attrs
@@ -455,7 +465,7 @@ def _write_raster_dataarray(
     data = raster_data.data
     transformations = _get_transformations(raster_data)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
-    input_axes: tuple[str, ...] = tuple(raster_data.dims)
+    input_axes: tuple[str, ...] = tuple(str(dim) for dim in raster_data.dims)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_storage_options(storage_options)
     # Apply compression if specified
@@ -481,7 +491,17 @@ def _write_raster_dataarray(
         **metadata,
     )
 
-    trans_group = group["labels"][element_name] if raster_type == "labels" else group
+    if raster_type == "labels":
+        labels_group = group["labels"]
+        if not isinstance(labels_group, zarr.Group):
+            raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
+        trans_group = labels_group[element_name]
+        if not isinstance(trans_group, zarr.Group):
+            raise TypeError(
+                f"Expected a zarr group holding the label {element_name!r}, got {type(trans_group).__name__}."
+            )
+    else:
+        trans_group = group
     overwrite_coordinate_transformations_raster(
         group=trans_group,
         transformations=transformations,
@@ -529,7 +549,9 @@ def _write_raster_datatree(
     # saving only the transformations of the first scale
     d = dict(raster_data["scale0"])
     assert len(d) == 1
-    xdata = d.values().__iter__().__next__()
+    xdata = next(iter(d.values()))
+    if not isinstance(xdata, DataArray):
+        raise TypeError(f"Expected the first scale to hold a DataArray, got {type(xdata).__name__}.")
     transformations = _get_transformations_xarray(xdata)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
@@ -564,7 +586,17 @@ def _write_raster_datatree(
     # This workaround should not be needed once https://github.com/ome/ome-zarr-py/issues/580 is fixed.
     group = zarr.open_group(store=group.store, path=group.path, mode="r+", use_consolidated=False)
 
-    trans_group = group["labels"][element_name] if raster_type == "labels" else group
+    if raster_type == "labels":
+        labels_group = group["labels"]
+        if not isinstance(labels_group, zarr.Group):
+            raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
+        trans_group = labels_group[element_name]
+        if not isinstance(trans_group, zarr.Group):
+            raise TypeError(
+                f"Expected a zarr group holding the label {element_name!r}, got {type(trans_group).__name__}."
+            )
+    else:
+        trans_group = group
     overwrite_coordinate_transformations_raster(
         group=trans_group,
         transformations=transformations,

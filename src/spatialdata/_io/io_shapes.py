@@ -10,6 +10,7 @@ from geopandas import GeoDataFrame, read_parquet
 from natsort import natsorted
 from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
+from zarr.storage import LocalStore
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -37,6 +38,8 @@ def _read_shapes(
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    if not isinstance(f, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding a shapes element, got {type(f).__name__}.")
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]
@@ -56,7 +59,12 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = f.store_path.store.root
+        element_store = f.store_path.store
+        if not isinstance(element_store, LocalStore):
+            raise TypeError(
+                f"Reading a shapes element requires a local zarr store, got {type(element_store).__name__}."
+            )
+        store_root = element_store.root
         path = Path(store_root) / f.path / "shapes.parquet"
         geo_df = read_parquet(path)
     else:
@@ -64,7 +72,10 @@ def _read_shapes(
             f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."
         )
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    ngff_transformations = f.attrs.asdict()["coordinateTransformations"]
+    if not isinstance(ngff_transformations, list):
+        raise TypeError(f"Expected coordinateTransformations to be a list, got {type(ngff_transformations).__name__}.")
+    transformations = _get_transformations_from_ngff_dict(ngff_transformations)
     _set_transformations(geo_df, transformations)
     return geo_df
 
@@ -175,7 +186,10 @@ def _write_shapes_v02_v03(
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    store_root = group.store_path.store.root
+    element_store = group.store_path.store
+    if not isinstance(element_store, LocalStore):
+        raise TypeError(f"Writing a shapes element requires a local zarr store, got {type(element_store).__name__}.")
+    store_root = element_store.root
     path = store_root / group.path / "shapes.parquet"
 
     # Temporarily remove transformations from attrs to avoid serialization issues

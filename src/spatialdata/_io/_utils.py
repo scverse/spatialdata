@@ -23,6 +23,7 @@ from geopandas import GeoDataFrame
 from upath import UPath
 from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
+from zarr.abc.store import Store
 from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
@@ -457,9 +458,7 @@ def _is_element_self_contained(
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
-def _resolve_zarr_store(
-    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any
-) -> zarr.storage.StoreLike:
+def _resolve_zarr_store(path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any) -> Store:
     """
     Normalize different Zarr store inputs into a usable store instance.
 

@@ -316,20 +316,27 @@ no_implicit_reexport = true
 no_warn_no_return = true
 show_error_codes = true
 
-# Dependencies that ship neither inline types nor stubs.
-# Listed explicitly rather than globally, so that a newly added untyped dependency is still reported.
+# Installed, but shipping no `py.typed` marker.
+# Infer types from their source instead of falling back to `Any`.
 [[tool.mypy.overrides]]
 module = [
-  "annsel.core.typing.*",
+  "annsel.*",
   "dask_image.*",
   "datashader.*",
-  "matplotlib.*",
   "multiscale_spatial_image.*",
   "numcodecs.*",
   "ome_zarr.*",
   "pooch.*",
   "pyarrow.*",
   "spatial_image.*",
+  "xrspatial.*",
+]
+follow_untyped_imports = true
+
+# Optional dependencies that are not installed when the type check runs.
+[[tool.mypy.overrides]]
+module = [
+  "matplotlib.*",
   "spatialdata_io.*",
 ]
 ignore_missing_imports = true

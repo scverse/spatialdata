@@ -29,7 +29,7 @@ def _read_table(store: str | Path) -> AnnData:
 
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     if not isinstance(f, zarr.Group):
-        raise TypeError(f"Expected a zarr group holding the table element at {store}, got {type(f)!r}.")
+        raise TypeError(f"Expected a zarr group holding a table element, got {type(f).__name__}.")
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]
@@ -125,7 +125,10 @@ def write_table(
     # was still empty, and zarr writes attributes as a whole document based on the handle's cached view, so writing
     # through the stale handle would erase the `encoding-type`/`encoding-version` metadata that anndata just wrote
     # (https://github.com/scverse/spatialdata/issues/1183).
-    table_group = group[name]
+    written_table_group = group[name]
+    if not isinstance(written_table_group, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding the table {name!r}, got {type(written_table_group).__name__}.")
+    table_group = written_table_group
 
     table_group.attrs["spatialdata-encoding-type"] = group_type
     table_group.attrs["region"] = region

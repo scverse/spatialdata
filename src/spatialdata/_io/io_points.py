@@ -7,6 +7,7 @@ import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
 from ome_zarr.format import Format
+from zarr.storage import LocalStore
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -28,20 +29,26 @@ def _read_points(
     """Read points from a zarr store."""
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     if not isinstance(f, zarr.Group):
-        raise TypeError(f"Expected a zarr group holding the points element at {store}, got {type(f)!r}.")
+        raise TypeError(f"Expected a zarr group holding a points element, got {type(f).__name__}.")
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    store_root = f.store_path.store.root
+    element_store = f.store_path.store
+    if not isinstance(element_store, LocalStore):
+        raise TypeError(f"Reading a points element requires a local zarr store, got {type(element_store).__name__}.")
+    store_root = element_store.root
     path = store_root / f.path / "points.parquet"
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
     points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
     assert isinstance(points, DaskDataFrame)
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    ngff_transformations = f.attrs.asdict()["coordinateTransformations"]
+    if not isinstance(ngff_transformations, list):
+        raise TypeError(f"Expected coordinateTransformations to be a list, got {type(ngff_transformations).__name__}.")
+    transformations = _get_transformations_from_ngff_dict(ngff_transformations)
     _set_transformations(points, transformations)
 
     attrs = points_format.attrs_from_dict(f.attrs.asdict())
@@ -77,7 +84,10 @@ def write_points(
     transformations = _get_transformations(points)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
-    store_root = group.store_path.store.root
+    element_store = group.store_path.store
+    if not isinstance(element_store, LocalStore):
+        raise TypeError(f"Writing a points element requires a local zarr store, got {type(element_store).__name__}.")
+    store_root = element_store.root
     path = store_root / group.path / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
