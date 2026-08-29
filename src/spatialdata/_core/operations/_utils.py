@@ -135,7 +135,9 @@ def transform_to_data_extent(
             sdata_to_return_elements[element_name] = element
     if not maintain_positioning:
         for el in sdata_to_return_elements.values():
-            assert not isinstance(el, AnnData)
+            # tables carry no transformations
+            if isinstance(el, AnnData):
+                continue
             set_transformation(el, transformation={coordinate_system: Identity()}, set_all=True)
     for k, v in sdata.tables.items():
         sdata_to_return_elements[k] = v.copy()

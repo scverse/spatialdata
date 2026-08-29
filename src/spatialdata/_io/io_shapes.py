@@ -8,7 +8,6 @@ import numpy as np
 import zarr
 from geopandas import GeoDataFrame, read_parquet
 from natsort import natsorted
-from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
 from zarr.storage import LocalStore
 
@@ -21,6 +20,7 @@ from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import (
     CurrentShapesFormat,
     ShapesFormats,
+    ShapesFormatType,
     ShapesFormatV01,
     ShapesFormatV02,
     ShapesFormatV03,
@@ -84,7 +84,7 @@ def write_shapes(
     shapes: GeoDataFrame,
     group: zarr.Group,
     group_type: str = "ngff:shapes",
-    element_format: Format = CurrentShapesFormat(),
+    element_format: ShapesFormatType = CurrentShapesFormat(),
     geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
 ) -> None:
     """Write shapes to spatialdata zarr store.
@@ -135,7 +135,7 @@ def write_shapes(
     overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
 
 
-def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: Format) -> Any:
+def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: ShapesFormatV01) -> Any:
     """Write shapes to spatialdata zarr store using format ShapesFormatV01.
 
     Parameters
@@ -147,20 +147,20 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
     element_format
         The format of the shapes element used to store it.
     """
-    import numcodecs
-
     # np.array() creates a writable copy, needed for pandas 3.0 CoW compatibility
     # https://github.com/geopandas/geopandas/issues/3697
     geometry, coords, offsets = to_ragged_array(np.array(shapes.geometry))
     group.create_array(name="coords", data=coords)
     for i, o in enumerate(offsets):
         group.create_array(name=f"offset{i}", data=o)
+    index_values = shapes.index.to_numpy()
     if shapes.index.dtype.kind == "U" or shapes.index.dtype.kind == "O":
-        group.create_array(name="Index", data=shapes.index.values, dtype=object, object_codec=numcodecs.VLenUTF8())
+        index_array = group.create_array(name="Index", shape=index_values.shape, dtype="string")
+        index_array[:] = index_values
     else:
-        group.create_array(name="Index", data=shapes.index.values)
+        group.create_array(name="Index", data=index_values)
     if geometry.name == "POINT":
-        group.create_array(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
+        group.create_array(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].to_numpy())
 
     attrs = element_format.attrs_to_dict(geometry)
     attrs["version"] = element_format.spatialdata_format_version
@@ -168,7 +168,10 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
 
 
 def _write_shapes_v02_v03(
-    shapes: GeoDataFrame, group: zarr.Group, element_format: Format, geometry_encoding: Literal["WKB", "geoarrow"]
+    shapes: GeoDataFrame,
+    group: zarr.Group,
+    element_format: ShapesFormatV02 | ShapesFormatV03,
+    geometry_encoding: Literal["WKB", "geoarrow"],
 ) -> Any:
     """Write shapes to spatialdata zarr store using format ShapesFormatV02 or ShapesFormatV03.
 
@@ -198,6 +201,6 @@ def _write_shapes_v02_v03(
     shapes.to_parquet(path, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 
-    attrs = element_format.attrs_to_dict(shapes.attrs)
+    attrs = element_format.attrs_to_dict(dict(shapes.attrs))
     attrs["version"] = element_format.spatialdata_format_version
     return attrs

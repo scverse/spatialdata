@@ -958,7 +958,7 @@ def _(
 ) -> DataArray | DataTree | Mapping[str, slice] | list[Mapping[str, slice]] | list[DataArray] | list[DataTree] | None:
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.to_numpy().flatten().tolist()
-    queried = bounding_box_query(
+    return bounding_box_query(
         image,
         min_coordinate=[min_x, min_y],
         max_coordinate=[max_x, max_y],
@@ -966,7 +966,6 @@ def _(
         target_coordinate_system=target_coordinate_system,
         return_request_only=return_request_only,
     )
-    return queried
 
 
 @polygon_query.register(DaskDataFrame)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
+from typing import Any
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -104,7 +105,7 @@ def write_points(
     del points_without_transform.attrs["transform"]
     points_without_transform.to_parquet(path)
 
-    attrs = element_format.attrs_to_dict(points.attrs)
+    attrs: dict[str, Any] = dict(element_format.attrs_to_dict(points.attrs))
     attrs["version"] = element_format.spatialdata_format_version
 
     _write_metadata(

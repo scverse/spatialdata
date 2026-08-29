@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import dask.dataframe as dd
 import numpy as np
@@ -50,6 +50,9 @@ from spatialdata.transformations._utils import (
     compute_coordinates,
 )
 from spatialdata.transformations.transformations import Identity
+
+if TYPE_CHECKING:
+    from pandas._typing import DtypeObj
 
 __all__ = ["Chunks_t", "ScaleFactors_t"]
 
@@ -805,8 +808,7 @@ class PointsModel:
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
         index = annotation.index if annotation is not None else None
-        df_dict = {ax: data[:, i] for i, ax in enumerate(axes)}
-        df_kwargs = {"data": df_dict, "index": index}
+        df_dict: dict[str, Any] = {ax: data[:, i] for i, ax in enumerate(axes)}
 
         if annotation is not None:
             if feature_key is not None:
@@ -820,7 +822,7 @@ class PointsModel:
                 if c not in handled_columns:
                     df_dict[c] = annotation[c]
 
-        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(**df_kwargs), **kwargs)
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data=df_dict, index=index), **kwargs)
         return cls._add_metadata_and_validate(
             table,
             feature_key=feature_key,
@@ -1119,7 +1121,7 @@ class TableModel:
 
         _INT_TYPES = [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64]
 
-        def _is_int_or_str_dtype(d: np.dtype) -> bool:
+        def _is_int_or_str_dtype(d: DtypeObj) -> bool:
             return d in _INT_TYPES or isinstance(d, pd.StringDtype)
 
         # First, check the top-level dtype (covers plain int and StringDtype cases)
@@ -1278,7 +1280,10 @@ class TableModel:
 
         # note! this is an expensive check and therefore we skip it during validation
         # https://github.com/scverse/spatialdata/issues/715
-        grouped = adata.obs.groupby(region_key, observed=True)
+        obs = adata.obs
+        if not isinstance(obs, pd.DataFrame):
+            raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+        grouped = obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
         grouped_nunique = grouped.nunique()
         not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
