@@ -2362,7 +2362,6 @@ class SpatialData:
         -------
         The SpatialData object.
         """
-        elements_dict: dict[str, SpatialElement | AnnData] = {}
         images: dict[str, Raster_T] = {}
         labels: dict[str, Raster_T] = {}
         points: dict[str, DaskDataFrame] = {}

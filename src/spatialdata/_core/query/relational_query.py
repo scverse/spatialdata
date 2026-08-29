@@ -1046,11 +1046,10 @@ def _locate_value(
     # adding from the dataframe columns
     if model in [PointsModel, ShapesModel]:
         assert isinstance(el, GeoDataFrame | DaskDataFrame)
-        if value_key not in el.columns:
-            return origins
-        value = el[value_key]
-        is_categorical = isinstance(value.dtype, pd.CategoricalDtype)
-        origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
+        if value_key in el.columns:
+            value = el[value_key]
+            is_categorical = isinstance(value.dtype, pd.CategoricalDtype)
+            origins.append(_ValueOrigin(origin="df", is_categorical=is_categorical, value_key=value_key))
     if model == TableModel:
         origins = _get_table_origins(element=el, value_key=value_key, origins=origins)
 
@@ -1169,7 +1168,7 @@ def get_values(
         if origin == "obs":
             df = obs[value_key_values].copy()
         if origin == "var":
-            matched_table.obs = obs
+            matched_table.obs = pd.DataFrame(obs)
             if table_layer is None:
                 x = matched_table[:, value_key_values].X
             else:
