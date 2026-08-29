@@ -632,6 +632,8 @@ def rasterize_shapes_points(
     return_single_channel: bool | None = None,
 ) -> DataArray:
     import datashader as ds
+    from datashader.reductions import count_cat as datashader_count_cat
+    from datashader.reductions import first as datashader_first
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -709,14 +711,14 @@ def rasterize_shapes_points(
     else:
         agg = cnv.points(data, x="x", y="y", agg=agg_func)
 
-    if label_index_to_category is not None and isinstance(agg_func, ds.first):
+    if label_index_to_category is not None and isinstance(agg_func, datashader_first):
         agg.attrs["label_index_to_category"] = label_index_to_category
 
     scale = Scale([(y_range[1] - y_range[0]) / plot_height, (x_range[1] - x_range[0]) / plot_width], axes=("y", "x"))
     translation = Translation([y_range[0], x_range[0]], axes=("y", "x"))
     transformations: dict[str, BaseTransformation] = {target_coordinate_system: Sequence([scale, translation])}
 
-    if isinstance(agg_func, ds.count_cat):
+    if isinstance(agg_func, datashader_count_cat):
         if return_single_channel:
             raise ValueError("Cannot return single channel when using count_cat aggregation")
         if return_regions_as_labels:
@@ -746,16 +748,17 @@ def rasterize_shapes_points(
 def _default_agg_func(
     data: DaskDataFrame | GeoDataFrame, value_key: str | None, return_single_channel: bool
 ) -> ds.reductions.Reduction:
-    import datashader as ds
+    from datashader.reductions import count, count_cat, first
+    from datashader.reductions import sum as ds_sum
 
     if value_key is None:
-        return ds.count()
+        return count()
 
     if data[VALUES_COLUMN].dtype != "category":
-        return ds.sum(VALUES_COLUMN)
+        return ds_sum(VALUES_COLUMN)
 
     if return_single_channel:
         data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.codes + 1
-        return ds.first(VALUES_COLUMN)
+        return first(VALUES_COLUMN)
 
-    return ds.count_cat(VALUES_COLUMN)
+    return count_cat(VALUES_COLUMN)

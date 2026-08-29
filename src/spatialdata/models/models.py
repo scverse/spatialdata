@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, overload
 
 import dask.dataframe as dd
 import numpy as np
@@ -85,6 +85,35 @@ class RasterSchema:
     # TODO add DataTree validation, validate has scale0... etc and each scale contains 1 image in .variables.
     ATTRS_KEY = ATTRS_KEY
     dims: tuple[str, ...]
+
+    @overload
+    @classmethod
+    def parse(
+        cls,
+        data: ArrayLike | DataArray | DaskArray,
+        dims: Sequence[str] | None = ...,
+        c_coords: str | list[str] | None = ...,
+        transformations: MappingToCoordinateSystem_t | None = ...,
+        scale_factors: None = ...,
+        method: Methods | None = ...,
+        chunks: Chunks_t | None = ...,
+        **kwargs: Any,
+    ) -> DataArray: ...
+
+    @overload
+    @classmethod
+    def parse(
+        cls,
+        data: ArrayLike | DataArray | DaskArray,
+        dims: Sequence[str] | None = ...,
+        c_coords: str | list[str] | None = ...,
+        transformations: MappingToCoordinateSystem_t | None = ...,
+        *,
+        scale_factors: ScaleFactors_t,
+        method: Methods | None = ...,
+        chunks: Chunks_t | None = ...,
+        **kwargs: Any,
+    ) -> DataTree: ...
 
     @classmethod
     def parse(
@@ -175,6 +204,8 @@ class RasterSchema:
             transformations = transformations.copy()
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
+        if c_coords is not None and C not in cls.dims:
+            raise ValueError("`c_coords` is not supported for labels")
         # if dims is specified inside the data, get the value of dims from the data
         array: DataArray | DaskArray
         parsed_dims: tuple[str, ...]
@@ -420,16 +451,6 @@ class Labels2DModel(RasterSchema):
     dims = (Y, X)
 
     @classmethod
-    def parse(
-        cls,
-        *args: Any,
-        **kwargs: Any,
-    ) -> DataArray | DataTree:
-        if kwargs.get("c_coords") is not None:
-            raise ValueError("`c_coords` is not supported for labels")
-        return super().parse(*args, **kwargs)
-
-    @classmethod
     def validate(cls, data: Any) -> None:
         super().validate(data)
         cls._validate_labels_dtype(data)
@@ -437,12 +458,6 @@ class Labels2DModel(RasterSchema):
 
 class Labels3DModel(RasterSchema):
     dims = (Z, Y, X)
-
-    @classmethod
-    def parse(cls, *args: Any, **kwargs: Any) -> DataArray | DataTree:
-        if kwargs.get("c_coords") is not None:
-            raise ValueError("`c_coords` is not supported for labels")
-        return super().parse(*args, **kwargs)
 
     @classmethod
     def validate(cls, data: Any) -> None:
