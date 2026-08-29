@@ -9,7 +9,6 @@ import zarr
 from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
-from ome_zarr.format import Format
 from packaging.version import Version
 
 from spatialdata._io._utils import _resolve_zarr_store
@@ -17,6 +16,7 @@ from spatialdata._io.exceptions import FormatVersionUnknownError, WritingToZarrV
 from spatialdata._io.format import (
     CurrentTablesFormat,
     TablesFormats,
+    TablesFormatType,
     TablesFormatV01,
     TablesFormatV02,
     _parse_version,
@@ -61,7 +61,7 @@ def write_table(
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:regions_table",
-    element_format: Format = CurrentTablesFormat(),
+    element_format: TablesFormatType = CurrentTablesFormat(),
     convert_strings_to_categoricals: bool = False,
 ) -> None:
     """

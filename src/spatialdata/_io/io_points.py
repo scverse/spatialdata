@@ -6,7 +6,6 @@ from pathlib import Path
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
-from ome_zarr.format import Format
 from zarr.storage import LocalStore
 
 from spatialdata._io._utils import (
@@ -15,7 +14,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
-from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
+from spatialdata._io.format import CurrentPointsFormat, PointsFormats, PointsFormatType, _parse_version
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -61,7 +60,7 @@ def write_points(
     points: DaskDataFrame,
     group: zarr.Group,
     group_type: str = "ngff:points",
-    element_format: Format = CurrentPointsFormat(),
+    element_format: PointsFormatType = CurrentPointsFormat(),
 ) -> None:
     """Write a points element to a zarr store.
 

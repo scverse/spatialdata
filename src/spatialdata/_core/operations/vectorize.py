@@ -3,7 +3,6 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
-import dask
 import numpy as np
 import pandas as pd
 import shapely
