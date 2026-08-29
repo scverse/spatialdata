@@ -7,7 +7,9 @@ end_of_line = lf
 charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
-line_length = 120
+
+[{*.{yml,yaml,toml},.cruft.json}]
+indent_size = 2
 
 [Makefile]
 indent_style = tab

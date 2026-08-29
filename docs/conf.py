@@ -1,16 +1,17 @@
 # Configuration file for the Sphinx documentation builder.
-#
+
 # This file only contains a selection of the most common options. For a full
 # list see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
-
-from __future__ import annotations
+# https://www.sphinx-doc.org/page/usage/configuration.html
 
 # -- Path setup --------------------------------------------------------------
+import shutil
 import sys
 from datetime import datetime
 from importlib.metadata import metadata
 from pathlib import Path, PurePosixPath
+
+from sphinxcontrib import katex
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / "extensions"))
@@ -19,12 +20,15 @@ sys.path.insert(0, str(HERE / "tutorials" / "notebooks" / "extensions"))
 
 # -- Project information -----------------------------------------------------
 
+# NOTE: If you installed your project in editable mode, this might be stale.
+#       If this is the case, reinstall it to refresh the metadata
 info = metadata("spatialdata")
-project_name = info["Name"]
+project = info["Name"]
 author = info["Author"]
-copyright = f"{datetime.now():%Y}, {author}"
+copyright = f"{datetime.now():%Y}, {author}."
 version = info["Version"]
-# repository_url = f"https://github.com/scverse/{project_name}"
+urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
+repository_url = urls["Source"]
 
 # The full version, including alpha/beta/rc tags
 release = info["Version"]
@@ -32,15 +36,14 @@ release = info["Version"]
 bibtex_bibfiles = ["references.bib"]
 bibtex_reference_style = "author_year"
 templates_path = ["_templates"]
-nitpicky = True  # Warn about broken links
 needs_sphinx = "4.0"
 
 html_context = {
     "display_github": True,  # Integrate GitHub
-    "github_user": "scverse",  # Username
-    "github_repo": project_name,  # Repo name
-    "github_version": "main",  # Version
-    "conf_py_path": "/docs/",  # Path in the checkout to the docs root
+    "github_user": "scverse",
+    "github_repo": project,
+    "github_version": "main",
+    "conf_py_path": "/docs/",
 }
 
 # -- General configuration ---------------------------------------------------
@@ -55,13 +58,15 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
+    "sphinx.ext.linkcode",
     "sphinx.ext.napoleon",
     "sphinxcontrib.bibtex",
+    "sphinxcontrib.katex",
     "sphinx_autodoc_typehints",
-    "sphinx.ext.mathjax",
-    "sphinx.ext.linkcode",
-    "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_design",
+    "IPython.sphinxext.ipython_console_highlighting",
+    "sphinxext.opengraph",
+    "scverse_misc.sphinx_ext",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
     *[p.stem for p in (HERE / "tutorials" / "notebooks" / "extensions").glob("*.py")],
 ]
@@ -83,7 +88,7 @@ napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
 napoleon_use_rtype = True  # having a separate entry generally helps readability
 napoleon_use_param = True
-myst_heading_anchors = 3  # create anchors for h1-h3
+myst_heading_anchors = 6  # create anchors for h1-h6
 myst_enable_extensions = [
     "amsmath",
     "colon_fence",
@@ -97,6 +102,7 @@ nb_output_stderr = "remove"
 nb_execution_mode = "off"
 nb_merge_streams = True
 typehints_defaults = "braces"
+always_use_bars_union = True  # use `|` instead of `Union` in types even when building with Python ≤3.14
 
 source_suffix = {
     ".rst": "restructuredtext",
@@ -105,16 +111,17 @@ source_suffix = {
 }
 
 intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
     "anndata": ("https://anndata.readthedocs.io/en/stable/", None),
-    "numpy": ("https://numpy.org/doc/stable/", None),
-    "geopandas": ("https://geopandas.org/en/stable/", None),
-    "xarray": ("https://docs.xarray.dev/en/stable/", None),
-    "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
-    "dask": ("https://docs.dask.org/en/latest/", None),
-    "shapely": ("https://shapely.readthedocs.io/en/stable", None),
     "annsel": ("https://annsel.readthedocs.io/en/latest/", None),
+    "dask": ("https://docs.dask.org/en/latest/", None),
+    "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
+    "geopandas": ("https://geopandas.org/en/stable/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "scanpy": ("https://scanpy.readthedocs.io/en/stable/", None),
+    "shapely": ("https://shapely.readthedocs.io/en/stable", None),
+    "xarray": ("https://docs.xarray.dev/en/stable/", None),
 }
-
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -122,11 +129,11 @@ intersphinx_mapping = {
 exclude_patterns = [
     "_build",
     "Thumbs.db",
+    ".DS_Store",
     "**.ipynb_checkpoints",
     "tutorials/notebooks/index.md",
     "tutorials/notebooks/README.md",
     "tutorials/notebooks/references.md",
-    "tutorials/notebooks/notebooks/paper_reproducibility/*",
     "tutorials/notebooks/notebooks/paper_reproducibility/*",
     "tutorials/notebooks/notebooks/developers_resources/storage_format/*.ipynb",
     "tutorials/notebooks/notebooks/developers_resources/storage_format/Readme.md",
@@ -135,12 +142,9 @@ exclude_patterns = [
     "tutorials/notebooks/notebooks/examples/technology_cosmx.ipynb",
     "tutorials/notebooks/notebooks/examples/stereoseq_data/*",
 ]
+
 # Ignore warnings.
-nitpicky = False  # TODO: solve upstream.
-# nitpick_ignore = [
-#     ("py:class", "spatial_image.SpatialImage"),
-#     ("py:class", "multiscale_spatial_image.multiscale_spatial_image.MultiscaleSpatialImage"),
-# ]
+nitpicky = False  # TODO: solve upstream, then set back to True to warn about broken links.
 # no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
 suppress_warnings = [
     "autosummary.import_cycle",
@@ -153,38 +157,25 @@ suppress_warnings = [
 # a list of builtin themes.
 #
 html_theme = "sphinx_book_theme"
-# html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
-html_title = project_name
+html_css_files = ["css/custom.css"]
+
+html_title = project
 html_logo = "_static/img/spatialdata_horizontal.png"
 
 html_theme_options = {
-    "navigation_with_keys": True,
+    "repository_url": repository_url,
+    "use_repository_button": True,
+    "path_to_docs": "docs/",
+    "navigation_with_keys": False,
     "show_toc_level": 4,
-    # "repository_url": repository_url,
-    # "use_repository_button": True,
 }
 
 pygments_style = "default"
+katex_prerender = shutil.which(katex.NODEJS_BINARY) is not None
 
 nitpick_ignore = [
     # If building the documentation fails because of a missing link that is outside your control,
     # you can add an exception to this list.
     ("py:class", "igraph.Graph"),
 ]
-
-
-def setup(app):
-    """App setup hook."""
-    app.add_config_value(
-        "recommonmark_config",
-        {
-            "auto_toc_tree_section": "Contents",
-            "enable_auto_toc_tree": True,
-            "enable_math": True,
-            "enable_inline_math": False,
-            "enable_eval_rst": True,
-        },
-        True,
-    )
-    app.add_css_file("css/custom.css")

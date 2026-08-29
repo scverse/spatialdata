@@ -1,284 +1,422 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling", "hatch-vcs"]
-
+requires = [ "hatch-vcs", "hatchling" ]
 
 [project]
 name = "spatialdata"
 description = "Spatial data format."
-authors = [
-    {name = "scverse"},
-]
-maintainers = [
-    {name = "scverse", email = "giov.pll@gmail.com"},
-]
-urls.Documentation = "https://spatialdata.scverse.org/en/latest"
-urls.Source = "https://github.com/scverse/spatialdata.git"
-urls.Home-page = "https://github.com/scverse/spatialdata.git"
-requires-python = ">=3.12"
-dynamic= [
-  "version" # allow version to be set by git tags
-]
-license = {file = "LICENSE"}
 readme = "README.md"
+license = { file = "LICENSE" }
+maintainers = [
+  { name = "scverse", email = "giov.pll@gmail.com" },
+]
+authors = [
+  { name = "scverse" },
+]
+requires-python = ">=3.12"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+dynamic = [
+  "version", # allow version to be set by git tags
+]
 dependencies = [
-    "anndata>=0.9.1",
-    "annsel>=0.1.2",
-    "click",
-    "dask-image",
-    "dask>=2026.3.0",
-    "distributed>=2026.3.0",
-    "datashader",
-    "fsspec[s3,http]",
-    "geopandas>=0.14",
-    "multiscale_spatial_image==2.0.3",
-    "networkx",
-    "numba>=0.55.0",
-    "numpy",
-    "ome_zarr>=0.16.0",
-    "pandas",
-    "pooch",
-    "pyarrow",
-    "rich",
-    "setuptools",
-    "shapely>=2.0.1",
-    "spatial_image>=1.2.3",
-    "scikit-image",
-    "scipy!=1.17.0",
-    "scverse-misc[datasets]>=0.1.0",
-    "typing_extensions>=4.8.0",
-    "universal_pathlib>=0.2.6",
-    "xarray>=2024.10.0",
-    "xarray-spatial>=0.3.5",
-    "zarr>=3.0.0",
+  "anndata>=0.9.1",
+  "annsel>=0.1.2",
+  "click",
+  "dask>=2026.3",
+  "dask-image",
+  "datashader",
+  "distributed>=2026.3",
+  "fsspec[http,s3]",
+  "geopandas>=0.14",
+  "multiscale-spatial-image==2.0.3",
+  "networkx",
+  "numba>=0.55",
+  "numpy",
+  "ome-zarr>=0.16",
+  "pandas",
+  "pooch",
+  "pyarrow",
+  "rich",
+  "scikit-image",
+  "scipy!=1.17",
+  "scverse-misc[datasets]>=0.1",
+  # for debug logging (referenced from the issue template)
+  "session-info2",
+  "setuptools",
+  "shapely>=2.0.1",
+  "spatial-image>=1.2.3",
+  "typing-extensions>=4.8",
+  "universal-pathlib>=0.2.6",
+  "xarray>=2024.10",
+  "xarray-spatial>=0.3.5",
+  "zarr>=3",
 ]
-[project.optional-dependencies]
-torch = [
-    "torch"
+optional-dependencies.extra = [
+  "napari-spatialdata[all]",
+  "spatialdata-io",
+  "spatialdata-plot",
 ]
-extra  = [
-    "napari-spatialdata[all]",
-    "spatialdata-plot",
-    "spatialdata-io",
+optional-dependencies.torch = [
+  "torch",
 ]
+# https://docs.pypi.org/project_metadata/#project-urls
+urls.Documentation = "https://spatialdata.scverse.org/en/latest"
+urls.Homepage = "https://github.com/scverse/spatialdata"
+urls.Source = "https://github.com/scverse/spatialdata"
 
 [dependency-groups]
 dev = [
-    "bump2version",
+  "twine>=4.0.2",
 ]
 test = [
-    "pytest",
-    "pytest-cov",
-    "pytest-mock",
-    "pytest-xdist",
-    "torch",
-]
-docs = [
-    "sphinx>=4.5",
-	"sphinx-autobuild",
-    "sphinx-book-theme>=1.0.0",
-    "myst-nb",
-    "sphinxcontrib-bibtex>=1.0.0",
-    "sphinx-autodoc-typehints",
-    "sphinx-design",
-    "scanpydoc",
-    # For notebooks
-    "ipython>=8.6.0",
-    "sphinx-copybutton",
-    "sphinx-pytest",
+  "coverage>=7.10",
+  "pytest",
+  "pytest-cov",     # For VS Code’s coverage functionality
+  "pytest-mock",
+  "pytest-xdist",
+  "torch",
 ]
 benchmark = [
-    "asv",
-    "memray",
-    "profimp",
+  "asv",
+  "memray",
+  "profimp",
+]
+doc = [
+  "ipykernel",
+  "ipython>=8.6",
+  "myst-nb>=1.1",
+  "pandas",
+  "scanpydoc",
+  "scverse-misc[sphinx]>=0.1.2",
+  "sphinx>=8.1",
+  "sphinx-autobuild",
+  "sphinx-autodoc-typehints",
+  "sphinx-book-theme>=1",
+  "sphinx-copybutton",
+  "sphinx-design",
+  "sphinx-pytest",
+  "sphinxcontrib-bibtex>=1",
+  "sphinxcontrib-katex",
+  "sphinxext-opengraph",
+]
+typecheck = [
+  "mypy",
+  "pandas-stubs",
+  "scipy-stubs",
+  "types-geopandas",
+  "types-networkx",
+  "types-requests",
+  "types-shapely",
 ]
 
-[tool.coverage.run]
-source = ["spatialdata"]
-omit = [
-    "**/test_*.py",
+[tool.hatch]
+version.source = "vcs"
+metadata.allow-direct-references = true
+build.hooks.vcs.version-file = "_version.py"
+build.targets.wheel.packages = [ "src/spatialdata" ]
+envs.default.installer = "uv"
+envs.default.dependency-groups = [ "dev" ]
+envs.docs.features = [ "torch" ]
+envs.docs.scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
+envs.docs.scripts.clean = "git clean -fdX -- {args:docs}"
+envs.docs.scripts.open = "python -m webbrowser -t docs/_build/html/index.html"
+envs.docs.dependency-groups = [ "doc" ]
+envs.hatch-test.matrix = [
+  # Test the lowest and highest supported Python versions with normal deps
+  { deps = [ "stable" ], python = [ "3.12", "3.14" ] },
+  # Test the lowest supported versions of the dependencies we pin a floor for
+  { deps = [ "min" ], python = [ "3.12" ] },
+  # Test the newest supported Python version also with pre-release deps
+  { deps = [ "pre" ], python = [ "3.14" ] },
 ]
+# If the matrix variable `deps` is set to "pre",
+# set the environment variable `UV_PRERELEASE` to "allow".
+envs.hatch-test.overrides.matrix.deps.env-vars = [
+  { value = "allow", key = "UV_PRERELEASE", if = [ "pre" ] },
+]
+# If the matrix variable `deps` is set to "min", pin the dependencies to their declared floor.
+envs.hatch-test.overrides.matrix.deps.extra-dependencies = [
+  { value = "dask==2026.3.0", if = [ "min" ] },
+  { value = "distributed==2026.3.0", if = [ "min" ] },
+]
+envs.hatch-test.dependency-groups = [ "dev", "test" ]
+envs.hatch-check-fmt.dependencies = [ "prek" ]
+envs.hatch-check-fmt.scripts.format-check = "echo 'try `hatch check fmt --fix`'; false"
+envs.hatch-check-fmt.scripts.format-fix = "prek run -a --group=format --no-group=typecheck"
+envs.hatch-check-code.dependencies = [ "prek" ]
+envs.hatch-check-code.scripts.lint-check = "echo 'try `hatch check code --fix`'; false"
+envs.hatch-check-code.scripts.lint-fix = "prek run -a --no-group=format --no-group=typecheck"
+envs.hatch-check-types.scripts.check = [ "mypy" ]
+envs.hatch-check-types.dependency-groups = [ "typecheck", "test" ]
+# Compatibility matrix across the anndata/pandas versions we support.
+# Not part of the CI matrix; run locally with `hatch run test-anndata-pandas:test`.
+envs.test-anndata-pandas.extra-dependencies = [ "zarr>=3" ]
+envs.test-anndata-pandas.scripts.test = [ "pip list|grep anndata && pip list|grep pandas && pytest {args}" ]
+envs.test-anndata-pandas.scripts.test-all = [ "pip list|grep anndata && pip list|grep pandas && pytest ." ]
+envs.test-anndata-pandas.scripts.test-readwrite = [
+  "pip list|grep anndata && pip list|grep pandas && pytest tests/io/test_readwrite.py"
+]
+envs.test-anndata-pandas.matrix = [
+  { anndata-pandas = [
+    "0.13-2",
+    "0.13-3",
+    "0.12-2",
+    # no "0.12-3": support for pandas>=3 is available only in anndata>=0.13
+  ] },
+]
+# every option where the if-condition is True gets included
+envs.test-anndata-pandas.overrides.matrix.anndata-pandas.extra-dependencies = [
+  # anndata 0.13
+  { value = "anndata~=0.13", if = [ "0.13-2", "0.13-3" ] },
+  # anndata 0.12
+  { value = "anndata>=0.12,<0.13", if = [ "0.12-2" ] },
+  # pandas 2
+  { value = "pandas>=2.3,<3", if = [ "0.13-2", "0.12-2" ] },
+  # pandas 3
+  { value = "pandas~=3.0", if = [ "0.13-3" ] },
+]
+envs.test-anndata-pandas.dependency-groups = [ "dev", "test" ]
+
+[tool.pixi]
+workspace.channels = [ "conda-forge" ]
+workspace.platforms = [ "linux-64", "osx-arm64" ]
+dependencies.proj = "*"
+tasks.pre-commit = "prek run"
+tasks.pre-commit-all = "prek run --all-files"
+tasks.test = "pytest"
+tasks.test-parallel = "pytest -n auto --dist worksteal"
+feature.profiling.dependencies.py-spy = "*"
+feature.profiling.pypi-dependencies.memray = "*"
+feature.profiling.pypi-dependencies.profimp = "*"
+feature.profiling.pypi-dependencies.spatialdata = { path = ".", editable = true }
+# Usage: pixi run -e profiling memray-flame memray-script.py.<pid>.bin
+feature.profiling.tasks.memray-flame = "memray flamegraph --temporal"
+# Usage: pixi run -e profiling memray-run script.py
+feature.profiling.tasks.memray-run = "memray run"
+# Usage: pixi run -e profiling pyspy script.py  (prefix with sudo on macOS)
+feature.profiling.tasks.pyspy = "py-spy record --gil -o profile.speedscope.json --format speedscope -- python"
+# Usage: pixi run -e profiling speedscope
+feature.profiling.tasks.speedscope = "npx --yes speedscope profile.speedscope.json"
+environments.profiling = { features = [ "profiling" ], solve-group = "default" }
+
+[tool.ruff]
+line-length = 120
+src = [ "src" ]
+extend-include = [ "*.ipynb" ]
+format.docstring-code-format = true
+lint.select = [
+  "B",      # flake8-bugbear
+  "BLE",    # flake8-blind-except
+  "C4",     # flake8-comprehensions
+  "D",      # pydocstyle
+  "E",      # Error detected by Pycodestyle
+  "F",      # Errors detected by Pyflakes
+  "I",      # isort
+  "NPY",    # NumPy-specific rules
+  "PGH",    # pygrep-hooks
+  "PT",     # flake8-pytest-style
+  "Q",      # flake8-quotes
+  "RET",    # flake8-return
+  "RUF100", # Report unused noqa directives
+  "SIM",    # flake8-simplify
+  "T20",    # flake8-print
+  "TID",    # flake8-tidy-imports
+  "UP",     # pyupgrade
+  "W",      # Warning detected by Pycodestyle
+]
+lint.ignore = [
+  "B008", # Errors from function calls in argument defaults. These are fine when the result is immutable.
+  "D100", # Missing docstring in public module
+  "D104", # Missing docstring in public package
+  "D105", # __magic__ methods are often self-explanatory, allow missing docstrings
+  "D107", # Missing docstring in __init__
+  # Disable one in each pair of mutually incompatible rules
+  "D203", # We don’t want a blank line before a class docstring
+  "D213", # <> We want docstrings to start immediately after the opening triple quote
+  "D400", # first line should end with a period [Bug: doesn’t work with single-line docstrings]
+  "D401", # First line should be in imperative mood; try rephrasing
+  "E501", # line too long -> we accept long comment lines; formatter gets rid of long code lines
+  "E731", # Do not assign a lambda expression, use a def -> lambda expression assignments are convenient
+  "E741", # allow I, O, l as variable names -> I is the identity matrix
+]
+lint.per-file-ignores."*/__init__.py" = [ "D104", "D107", "E402", "F401" ]
+lint.per-file-ignores."benchmarks/*" = [ "ALL" ]
+lint.per-file-ignores."docs/*" = [ "A", "B", "D", "E", "I" ]
+lint.per-file-ignores."src/spatialdata/dataloader/datasets.py" = [ "D101" ]
+lint.per-file-ignores."src/spatialdata/models/models.py" = [ "B026", "D101" ]
+lint.per-file-ignores."src/spatialdata/transformations/*" = [ "D", "RET", "UP006", "UP007" ]
+lint.per-file-ignores."src/spatialdata/transformations/ngff/*.py" = [
+  "D101",
+  "D102",
+  "D106",
+  "RET504",
+  "RET505",
+  "RET506",
+  "UP006",
+  "UP007"
+]
+lint.per-file-ignores."src/spatialdata/transformations/operations.py" = [
+  "B024",
+  "D101",
+  "D102",
+  "D106",
+  "RET504",
+  "RET505",
+  "RET506",
+  "T201",
+  "UP006",
+  "UP007"
+]
+lint.per-file-ignores."src/spatialdata/transformations/transformations.py" = [
+  "B024",
+  "D101",
+  "D102",
+  "D106",
+  "RET504",
+  "T201",
+  "UP006",
+  "UP007"
+]
+lint.per-file-ignores."tests/*" = [ "B024", "D", "PT" ]
+lint.per-file-ignores."tests/conftest.py" = [ "E402" ]
+lint.per-file-ignores."tests/test_models/test_models.py" = [ "NPY002" ]
+lint.unfixable = [ "B", "BLE", "C4", "RET", "T20", "UP" ]
+lint.isort.required-imports = [ "from __future__ import annotations" ]
+lint.pydocstyle.convention = "numpy"
+
+[tool.mypy]
+# TODO: extend to "tests" once the test suite carries type annotations.
+files = [ "src" ]
+python_version = "3.12"
+disallow_any_generics = true
+disallow_untyped_calls = false
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_return_any = true
+warn_unreachable = false
+ignore_errors = false
+strict_equality = true
+show_column_numbers = true
+error_summary = true
+warn_unused_configs = true
+# because of docrep
+allow_untyped_decorators = true
+no_implicit_optional = true
+no_implicit_reexport = true
+no_warn_no_return = true
+show_error_codes = true
+
+# Dependencies that ship neither inline types nor stubs. Listed explicitly rather than
+# globally, so that a newly added untyped dependency is still reported.
+[[tool.mypy.overrides]]
+module = [
+  "annsel.core.typing.*",
+  "dask_image.*",
+  "datashader.*",
+  "matplotlib.*",
+  "multiscale_spatial_image.*",
+  "numcodecs.*",
+  "ome_zarr.*",
+  "pooch.*",
+  "pyarrow.*",
+  "spatial_image.*",
+  "spatialdata_io.*",
+]
+ignore_missing_imports = true
+
+# Modules that predate a type check that can actually see the types of our dependencies:
+# the mypy pre-commit hook used to run in an isolated environment with `--ignore-missing-imports`,
+# so everything coming from pandas, xarray, anndata, dask and geopandas was silently `Any`.
+# TODO: shrink this list; do not add to it — new and refactored modules are expected to type-check.
+[[tool.mypy.overrides]]
+module = [
+  "spatialdata._core._deepcopy",
+  "spatialdata._core._elements",
+  "spatialdata._core.centroids",
+  "spatialdata._core.concatenate",
+  "spatialdata._core.data_extent",
+  "spatialdata._core.operations._utils",
+  "spatialdata._core.operations.aggregate",
+  "spatialdata._core.operations.map",
+  "spatialdata._core.operations.rasterize",
+  "spatialdata._core.operations.rasterize_bins",
+  "spatialdata._core.operations.transform",
+  "spatialdata._core.operations.vectorize",
+  "spatialdata._core.query._utils",
+  "spatialdata._core.query.relational_query",
+  "spatialdata._core.query.spatial_query",
+  "spatialdata._core.spatialdata",
+  "spatialdata._io._utils",
+  "spatialdata._io.format",
+  "spatialdata._io.io_points",
+  "spatialdata._io.io_raster",
+  "spatialdata._io.io_shapes",
+  "spatialdata._io.io_table",
+  "spatialdata._io.io_zarr",
+  "spatialdata._utils",
+  "spatialdata.dataloader.datasets",
+  "spatialdata.datasets",
+  "spatialdata.models._accessor",
+  "spatialdata.models._utils",
+  "spatialdata.models.models",
+  "spatialdata.testing",
+  "spatialdata.transformations._utils",
+  "spatialdata.transformations.operations",
+]
+ignore_errors = true
 
 [tool.pytest]
-testpaths = ["tests"]
-strict = true
 addopts = [
-    "--import-mode=importlib",  # allow using test files with same name
-    "-s",  # print output from tests
-    "-p no:napari",  # napari registers a pytest plugin via its entry point; disable it here since spatialdata tests don't need it
-]
-# These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "network: marks tests that require network access; skipped by default, run with '--run-network'",
-    "gpu: run test on GPU using CuPY.",
-    "array_api: used by anndata.tests.helpers, not us",
-    "skip_with_pyarrow_strings: skipwhen pyarrow string conversion is turned on",
+  "--import-mode=importlib", # allow using test files with same name
+  "-s",                      # print output from tests
+  # napari registers a pytest plugin via its entry point; disable it here since spatialdata tests don't need it
+  "-p no:napari",
 ]
 # info on how to use this https://stackoverflow.com/questions/57925071/how-do-i-avoid-getting-deprecationwarning-from-inside-dependencies-with-pytest
 filterwarnings = [
-    # "error",  # if 3rd party libs raise DeprecationWarnings, TODO: filter them individually below
-    # "ignore:.*U.*mode is deprecated:DeprecationWarning",
+  # "error",  # if 3rd party libs raise DeprecationWarnings, TODO: filter them individually below
+  # "ignore:.*U.*mode is deprecated:DeprecationWarning",
+]
+# These are all markers coming from xarray, dask or anndata. Added here to silence warnings.
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "network: marks tests that require network access; skipped by default, run with '--run-network'",
+  "gpu: run test on GPU using CuPY.",
+  "array_api: used by anndata.tests.helpers, not us",
+  "skip_with_pyarrow_strings: skipwhen pyarrow string conversion is turned on",
+]
+strict = true
+testpaths = [ "tests" ]
+
+[tool.coverage]
+run.source = [ "spatialdata" ]
+run.omit = [
+  "**/test_*.py",
+]
+run.patch = [ "subprocess" ]
+
+[tool.cruft]
+skip = [
+  ".git",
+  "tests",
+  "src/**/__init__.py",
+  "src/**/basic.py",
+  "docs/api.md",
+  "docs/changelog.md",
+  "docs/references.bib",
+  "docs/references.md",
+  "docs/notebooks/example.ipynb",
 ]
 
 [tool.jupytext]
 formats = "ipynb,md"
-
-[tool.hatch.build.targets.wheel]
-packages = ['src/spatialdata']
-
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "_version.py"
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.ruff]
-exclude = [
-    ".git",
-    ".tox",
-    "__pycache__",
-    "build",
-    "docs/_build",
-    "dist",
-    "setup.py",
-
-]
-line-length = 120
-target-version = "py312"
-
-[tool.ruff.lint]
-ignore = [
-    # Do not assign a lambda expression, use a def -> lambda expression assignments are convenient
-    "E731",
-    # allow I, O, l as variable names -> I is the identity matrix, i, j, k, l is reasonable indexing notation
-    "E741",
-    # Missing docstring in public package
-    "D104",
-    # Missing docstring in public module
-    "D100",
-    # Missing docstring in __init__
-    "D107",
-    # Missing docstring in magic method
-    "D105",
-    # Do not perform function calls in argument defaults.
-    "B008",
-    # Missing docstring in magic method
-    "D105",
-]
-select = [
-    "D", # flake8-docstrings
-    "I", # isort
-    "E", # pycodestyle
-    "F", # pyflakes
-    "W", # pycodestyle
-    "Q", # flake8-quotes
-    "SIM", # flake8-simplify
-    "TID",  # flake-8-tidy-imports
-    "NPY",  # NumPy-specific rules
-    "PT",  # flake8-pytest-style
-    "B", # flake8-bugbear
-    "UP", # pyupgrade
-    "C4", # flake8-comprehensions
-    "BLE", # flake8-blind-except
-    "T20",  # flake8-print
-    "RET", # flake8-raise
-    "PGH", # pygrep-hooks
-]
-unfixable = ["B", "C4", "UP", "BLE", "T20", "RET"]
-
-[tool.ruff.lint.isort]
-required-imports = ["from __future__ import annotations"]
-
-[tool.ruff.lint.pydocstyle]
-convention = "numpy"
-
-[tool.ruff.lint.per-file-ignores]
-    "tests/*" = ["D", "PT", "B024"]
-    "*/__init__.py" = ["F401", "D104", "D107", "E402"]
-    "docs/*" = ["D","B","E","A"]
-    "src/spatialdata/transformations/transformations.py" = ["D101","D102", "D106", "B024", "T201", "RET504", "UP006", "UP007"]
-    "src/spatialdata/transformations/operations.py" = ["D101","D102", "D106", "B024","D401", "T201", "RET504", "RET506", "RET505", "RET504", "UP006", "UP007"]
-    "src/spatialdata/transformations/ngff/*.py" = ["D101","D102", "D106", "D401", "E501","RET506", "RET505", "RET504", "UP006", "UP007"]
-    "src/spatialdata/transformations/*" = ["RET", "D", "UP006", "UP007"]
-    "src/spatialdata/models/models.py" = ["D101", "B026"]
-    "src/spatialdata/dataloader/datasets.py" = ["D101"]
-    "tests/test_models/test_models.py" = ["NPY002"]
-    "tests/conftest.py"= ["E402"]
-    "benchmarks/*" = ["ALL"]
-
-
-# pyupgrade typing rewrite TODO: remove at some point from per-file ignore
-# "UP006", "UP007"
-
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["osx-arm64", "linux-64"]
-
-[tool.pixi.dependencies]
-proj = "*"
-
-[tool.pixi.tasks]
-test = "pytest"
-test-parallel = "pytest -n auto --dist worksteal"
-pre-commit = "pre-commit run"
-pre-commit-all = "pre-commit run --all-files"
-
-[tool.pixi.feature.profiling.dependencies]
-py-spy = "*"
-
-[tool.pixi.feature.profiling.pypi-dependencies]
-spatialdata = { path = ".", editable = true }
-profimp = "*"
-memray = "*"
-
-[tool.pixi.feature.profiling.tasks]
-# Usage: pixi run -e profiling pyspy script.py  (prefix with sudo on macOS)
-pyspy = "py-spy record --gil -o profile.speedscope.json --format speedscope -- python"
-# Usage: pixi run -e profiling speedscope
-speedscope = "npx --yes speedscope profile.speedscope.json"
-# Usage: pixi run -e profiling memray-run script.py
-memray-run = "memray run"
-# Usage: pixi run -e profiling memray-flame memray-script.py.<pid>.bin
-memray-flame = "memray flamegraph --temporal"
-
-[tool.pixi.environments]
-profiling = { features = ["profiling"], solve-group = "default" }
-
-[tool.hatch.envs.test]
-dependency-groups = ["test"]
-
-[tool.hatch.envs.test-anndata-pandas]
-template = "test"
-extra-dependencies = ["zarr>=3"]
-scripts.test = ["pip list|grep anndata && pip list|grep pandas && pytest {args}"]
-scripts.test-readwrite = ["pip list|grep anndata && pip list|grep pandas && pytest tests/io/test_readwrite.py"]
-scripts.test-all = ["pip list|grep anndata && pip list|grep pandas && pytest ."]
-
-[[tool.hatch.envs.test-anndata-pandas.matrix]]
-anndata-pandas = [
-    "0.13-2",
-    "0.13-3",
-    "0.12-2"
-    # no "0.12-3": support for pandas>=3 is available only in anndata>=0.13
-]
-
-[tool.hatch.envs.test-anndata-pandas.overrides]
-matrix.anndata-pandas.extra-dependencies = [
-    # every option where the if-condition is True gets included
-
-    # anndata 0.13
-    {value="anndata~=0.13", if = ["0.13-2", "0.13-3"]},
-
-    # anndata 0.12
-    {value="anndata>=0.12,<0.13", if = ["0.12-2"]},
-
-    # pandas 2
-    {value="pandas>=2.3,<3", if = ["0.13-2", "0.12-2"]},
-
-    # pandas 3
-    {value="pandas~=3.0", if = ["0.13-3"]},
-]
