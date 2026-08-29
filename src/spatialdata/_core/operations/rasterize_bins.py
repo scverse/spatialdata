@@ -113,8 +113,8 @@ def rasterize_bins(
 
     min_row, min_col = table.obs[row_key].min(), table.obs[col_key].min()
     n_rows, n_cols = table.obs[row_key].max() - min_row + 1, table.obs[col_key].max() - min_col + 1
-    y = (table.obs[row_key] - min_row).values
-    x = (table.obs[col_key] - min_col).values
+    y = (table.obs[row_key] - min_row).to_numpy()
+    x = (table.obs[col_key] - min_col).to_numpy()
 
     if isinstance(element, DataArray):
         transformations = get_transformation(element, get_all=True)
@@ -127,23 +127,23 @@ def rasterize_bins(
             raise ValueError("At least 6 bins are needed to estimate the transformation.")
 
         random_indices = RNG.choice(table.n_obs, min(20, table.n_obs), replace=True)
-        location_ids = table.obs[instance_key].iloc[random_indices].values
+        location_ids = table.obs[instance_key].iloc[random_indices].to_numpy()
         sub_df = element.loc[location_ids]
         sub_table = table[random_indices]
 
         src = np.stack([sub_table.obs[col_key] - min_col, sub_table.obs[row_key] - min_row], axis=1)
         if isinstance(sub_df, GeoDataFrame):
             if isinstance(sub_df.iloc[0].geometry, Point):
-                sub_x = sub_df.geometry.x.values
-                sub_y = sub_df.geometry.y.values
+                sub_x = sub_df.geometry.x.to_numpy()
+                sub_y = sub_df.geometry.y.to_numpy()
             else:
                 assert isinstance(sub_df.iloc[0].geometry, Polygon | MultiPolygon)
-                sub_x = sub_df.centroid.x
-                sub_y = sub_df.centroid.y
+                sub_x = sub_df.centroid.x.to_numpy()
+                sub_y = sub_df.centroid.y.to_numpy()
         else:
             assert isinstance(sub_df, DaskDataFrame)
-            sub_x = sub_df.x.compute().values
-            sub_y = sub_df.y.compute().values
+            sub_x = sub_df.x.compute().to_numpy()
+            sub_y = sub_df.y.compute().to_numpy()
         dst = np.stack([sub_x, sub_y], axis=1)
 
         to_bins = Sequence(
@@ -164,10 +164,10 @@ def rasterize_bins(
     if return_region_as_labels:
         new_instance_key = _get_relabeled_column_name(instance_key)
         table.obs[new_instance_key] = _relabel_labels(table=table, instance_key=instance_key)
-        dtype = table.obs[new_instance_key].dtype
-        labels_element = np.zeros((n_rows, n_cols), dtype=dtype)
+        relabeled = table.obs[new_instance_key].to_numpy()
+        labels_element = np.zeros((n_rows, n_cols), dtype=relabeled.dtype)
         # make labels layer that can visualy represent the cells
-        labels_element[y, x] = table.obs[new_instance_key].values.T
+        labels_element[y, x] = relabeled.T
 
         return Labels2DModel.parse(data=labels_element, dims=("y", "x"), transformations=transformations)
 
@@ -175,23 +175,25 @@ def rasterize_bins(
 
     from scipy.sparse import csc_matrix
 
+    x_matrix = table.X
     if (value_key is None or any(key in table.var_names for key in keys)) and not isinstance(
-        table.X, csc_matrix | np.ndarray
+        x_matrix, csc_matrix | np.ndarray
     ):
         raise ValueError(
             "To speed up bins rasterization, the X matrix in the table, when sparse, should be a csc_matrix matrix. "
             "This can be done by calling `table.X = table.X.tocsc()`.",
         )
-    sparse_matrix = isinstance(table.X, csc_matrix)
     if isinstance(value_key, str):
         value_key = [value_key]
 
     if value_key is None:
-        dtype = table.X.dtype
+        # Guaranteed by the check above, which always runs when `value_key` is None.
+        assert isinstance(x_matrix, csc_matrix | np.ndarray)
+        dtype = x_matrix.dtype
     else:
         values = get_values(value_key=value_key, element=table)
         assert isinstance(values, pd.DataFrame)
-        dtype = values[value_key[0]].dtype
+        dtype = values[value_key[0]].to_numpy().dtype
 
     if value_key is None:
         shape = (n_rows, n_cols)
@@ -202,8 +204,8 @@ def rasterize_bins(
             if block_id is None:
                 return image
 
-            col = table.X[:, block_id[0]]
-            if sparse_matrix:
+            col = x_matrix[:, block_id[0]]
+            if isinstance(col, csc_matrix):
                 bins_indices, data = col.indices, col.data
                 image[0, y[bins_indices], x[bins_indices]] = data
             else:
@@ -219,15 +221,18 @@ def rasterize_bins(
         image = np.zeros((len(value_key), n_rows, n_cols))
 
         if keys[0] in table.obs:
-            image[:, y, x] = table.obs[keys].values.T
+            image[:, y, x] = table.obs[keys].to_numpy().T
         else:
+            # Guaranteed by the check above, which runs when a key refers to a variable.
+            assert isinstance(x_matrix, csc_matrix | np.ndarray)
             for i, key in enumerate(keys):
                 key_index = table.var_names.get_loc(key)
-                if sparse_matrix:
-                    bins_indices = table.X[:, key_index].indices
-                    image[i, y[bins_indices], x[bins_indices]] = table.X[:, key_index].data
+                column = x_matrix[:, key_index]
+                if isinstance(column, csc_matrix):
+                    bins_indices = column.indices
+                    image[i, y[bins_indices], x[bins_indices]] = column.data
                 else:
-                    image[i, y, x] = table.X[:, key_index]
+                    image[i, y, x] = column
 
     return Image2DModel.parse(
         data=image,

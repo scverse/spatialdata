@@ -332,6 +332,9 @@ module = [
   "xrspatial.*",
 ]
 follow_untyped_imports = true
+# `no_implicit_reexport` is meant to discipline our own public API.
+# Third-party packages re-export freely, so applying it to them only produces false positives.
+implicit_reexport = true
 
 # Optional dependencies that are not installed when the type check runs.
 [[tool.mypy.overrides]]

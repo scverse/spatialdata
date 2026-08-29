@@ -193,6 +193,8 @@ def _read_multiscale(
 
     node = nodes[0]
     loaded_node = node.load(Multiscales)
+    if not isinstance(loaded_node, Multiscales):
+        raise TypeError(f"Expected {image_loc.basename()} to hold a multiscales node, got {type(loaded_node).__name__}.")
     datasets, multiscales = (
         loaded_node.datasets,
         loaded_node.zarr.root_attrs["multiscales"],
@@ -200,7 +202,7 @@ def _read_multiscale(
     # This works for all versions as in zarr v3 the level of the 'ome' key is taken as root_attrs.
     omero_metadata = loaded_node.zarr.root_attrs.get("omero")
     # TODO: check if below is still valid
-    legacy_channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
+    legacy_channels_metadata = loaded_node.zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
     assert len(multiscales) == 1
     # checking for multiscales[0]["coordinateTransformations"] would make fail
     # something that doesn't have coordinateTransformations in top level
@@ -217,12 +219,12 @@ def _read_multiscale(
             channels = [d["label"] for d in omero_metadata["channels"]]
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
-        arrays = [node.load(Multiscales).array(resolution=d) for d in datasets]
+        arrays = [loaded_node.array(resolution=d) for d in datasets]
         msi = dask_arrays_to_datatree(arrays, dims=axes, channels=channels)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
 
-    data = node.load(Multiscales).array(resolution=datasets[0])
+    data = loaded_node.array(resolution=datasets[0])
     si = DataArray(
         data,
         name="image",
@@ -269,7 +271,7 @@ def _write_raster(
     storage_options: JSONDict | list[JSONDict] | None = None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     label_metadata: JSONDict | None = None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> None:
     """Write raster data to disk.
 
@@ -366,10 +368,10 @@ def _build_v3_codec(
 
 
 def _apply_compression(
-    storage_options: JSONDict | list[JSONDict],
+    storage_options: JSONDict | list[JSONDict] | None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
-    zarr_format: Literal[2, 3] = 3,
-) -> JSONDict | list[JSONDict]:
+    zarr_format: int = 3,
+) -> JSONDict | list[JSONDict] | None:
     """Apply compression settings to storage options.
 
     Parameters
@@ -387,6 +389,8 @@ def _apply_compression(
     """
     if not raster_compressor:
         return storage_options
+    if zarr_format not in (2, 3):
+        raise ValueError(f"Unsupported zarr format {zarr_format}; expected 2 or 3.")
 
     ((compression, compression_level),) = raster_compressor.items()
 
@@ -437,7 +441,7 @@ def _write_raster_dataarray(
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> None:
     """Write raster data of type DataArray to disk.
 
@@ -469,9 +473,7 @@ def _write_raster_dataarray(
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_storage_options(storage_options)
     # Apply compression if specified
-    storage_options = _apply_compression(
-        storage_options, raster_compressor, zarr_format=cast(Literal[2, 3], raster_format.zarr_format)
-    )
+    storage_options = _apply_compression(storage_options, raster_compressor, zarr_format=raster_format.zarr_format)
 
     # Explicitly disable pyramid generation for single-scale rasters. Recent ome-zarr versions default
     # write_image()/write_labels() to scale_factors=(2, 4, 8, 16), which would otherwise write s0, s1, ...
@@ -518,7 +520,7 @@ def _write_raster_datatree(
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> zarr.Group:
     """Write raster data of type DataTree to disk.
 
@@ -613,7 +615,7 @@ def write_image(
     element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> None:
     if element_format.zarr_format == 2:
         warnings.warn(
