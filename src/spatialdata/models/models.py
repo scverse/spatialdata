@@ -19,6 +19,7 @@ from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale as to_multiscale_msi
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
+from shapely import get_coordinate_dimension
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
@@ -315,7 +316,10 @@ class RasterSchema:
             raise ValueError(f"Expected exactly one data variable for the datatree: found `{name}`.")
         name = list(name)[0]
         for d in data:
-            cls._validate_dataarray(data[d][name])
+            scale = data[d][name]
+            if not isinstance(scale, DataArray):
+                raise TypeError(f"Expected scale `{d}` to hold a DataArray, got {type(scale).__name__}.")
+            cls._validate_dataarray(scale)
 
     @classmethod
     def _validate_dataarray(cls, data: DataArray) -> None:
@@ -493,7 +497,7 @@ class ShapesModel:
         if isinstance(geom_, Point):
             if cls.RADIUS_KEY not in data.columns:
                 raise ValueError(f"Column `{cls.RADIUS_KEY}` not found." + SUGGESTION)
-            radii = data[cls.RADIUS_KEY].values
+            radii = data[cls.RADIUS_KEY].to_numpy()
             if np.any(radii <= 0):
                 raise ValueError("Radii of circles must be positive.")
             if np.any(np.isnan(radii)) or np.any(np.isinf(radii)):
@@ -513,7 +517,7 @@ class ShapesModel:
                 f"At least one transformation is required." + SUGGESTION
             )
         if len(data) > 0:
-            n = data.geometry.iloc[0]._ndim
+            n = get_coordinate_dimension(data.geometry.iloc[0])
             if n != 2:
                 warnings.warn(
                     f"The geometry column of the GeoDataFrame has {n} dimensions, while 2 is expected. Please consider "
@@ -614,10 +618,10 @@ class ShapesModel:
         index: ArrayLike | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> GeoDataFrame:
-        geometry = GeometryType(geometry)
-        data = from_ragged_array(geometry_type=geometry, coords=data, offsets=offsets)
-        geo_df = GeoDataFrame({"geometry": data})
-        if GeometryType(geometry).name == "POINT":
+        geometry_type = GeometryType(geometry)
+        geometries = from_ragged_array(geometry_type=geometry_type, coords=data, offsets=offsets)
+        geo_df = GeoDataFrame({"geometry": geometries})
+        if geometry_type.name == "POINT":
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
@@ -1181,7 +1185,7 @@ class TableModel:
                     f"Instance key `{instance_key}` not in `adata.obs`. Please create the column and parse"
                     f" using TableModel.parse(adata)."
                 )
-            if data.obs[instance_key].isnull().values.any():
+            if bool(data.obs[instance_key].isnull().to_numpy().any()):
                 raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
         cls._validate_table_annotation_metadata(data)
