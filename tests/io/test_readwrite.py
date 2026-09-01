@@ -58,6 +58,17 @@ from tests.conftest import (
 
 RNG = default_rng(0)
 SDATA_FORMATS = list(SpatialDataContainerFormats.values())
+SHARD_BUDGET_SMALL = 512 * 1024
+SHARD_BUDGET_LARGE = 2 * 1024 * 1024
+SDATA_FORMATS_ZARR_V3 = [f for f in SDATA_FORMATS if f.zarr_format == 3]
+SDATA_FORMATS_ZARR_V2 = [f for f in SDATA_FORMATS if f.zarr_format == 2]
+requires_shard_budget_support = pytest.mark.skipif(
+    Version(version("zarr")) < Version("3.1.6") or not hasattr(getattr(ad, "settings", None), "auto_shard_zarr_v3"),
+    reason=(
+        "a shard budget needs zarr >= 3.1.6, which is the first release to size the inner chunk correctly, and an "
+        "anndata that supports zarr v3 auto-sharding"
+    ),
+)
 
 
 @pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
@@ -694,13 +705,7 @@ def test_incremental_io_in_memory(
     "table_shard_size_bytes",
     [
         None,
-        pytest.param(
-            2 * 1024 * 1024,
-            marks=pytest.mark.skipif(
-                Version(version("zarr")) < Version("3.1.6"),
-                reason="`array.target_shard_size_bytes` only sizes the inner chunk correctly from zarr 3.1.6 on",
-            ),
-        ),
+        pytest.param(SHARD_BUDGET_LARGE, marks=requires_shard_budget_support),
     ],
 )
 def test_table_group_keeps_anndata_encoding_metadata(
@@ -1388,16 +1393,6 @@ def test_sdata_with_nan_in_obs(tmp_path: Path, convert_strings_to_categoricals: 
             assert r1.iloc[1] == "nan"
 
 
-SHARD_BUDGET_SMALL = 512 * 1024
-SHARD_BUDGET_LARGE = 2 * 1024 * 1024
-SDATA_FORMATS_ZARR_V3 = [f for f in SDATA_FORMATS if f.zarr_format == 3]
-SDATA_FORMATS_ZARR_V2 = [f for f in SDATA_FORMATS if f.zarr_format == 2]
-requires_shard_budget_support = pytest.mark.skipif(
-    Version(version("zarr")) < Version("3.1.6"),
-    reason="`array.target_shard_size_bytes` only sizes the inner chunk correctly from zarr 3.1.6 on",
-)
-
-
 def _shard_table(region: str | list[str] = "labels2d") -> AnnData:
     """Build a table large enough that the shard budget measurably changes the on-disk geometry."""
     n_obs, n_var = 4000, 2000
@@ -1506,6 +1501,7 @@ def test_table_scalars_are_never_sharded(
     assert [(name, shards) for name, shards in scalars if shards is not None] == []
 
 
+@requires_shard_budget_support
 @pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS_ZARR_V3)
 def test_no_shards_key_reaches_anndata(
@@ -1577,6 +1573,7 @@ def test_table_shard_budget_restores_global_state(
     assert _global_shard_state() == before
 
 
+@requires_shard_budget_support
 @pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS_ZARR_V2)
 def test_table_shard_size_bytes_rejected_on_zarr_v2(
