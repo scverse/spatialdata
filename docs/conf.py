@@ -100,6 +100,7 @@ typehints_defaults = "braces"
 
 source_suffix = {
     ".rst": "restructuredtext",
+    ".md": "myst-nb",
     ".ipynb": "myst-nb",
     ".myst": "myst-nb",
 }
