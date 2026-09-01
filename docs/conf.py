@@ -43,15 +43,6 @@ html_context = {
     "conf_py_path": "/docs/",  # Path in the checkout to the docs root
 }
 
-html_theme_options = {
-    "navigation_with_keys": True,
-    "show_toc_level": 4,
-    "repository_url": repository_url,
-    "repository_branch": "main",
-    "path_to_docs": "docs",
-    "use_repository_button": True,
-    "use_edit_page_button": True,
-}
 
 # -- General configuration ---------------------------------------------------
 
@@ -172,8 +163,11 @@ html_logo = "_static/img/spatialdata_horizontal.png"
 html_theme_options = {
     "navigation_with_keys": True,
     "show_toc_level": 4,
-    # "repository_url": repository_url,
-    # "use_repository_button": True,
+    "repository_url": repository_url,
+    "repository_branch": "main",
+    "path_to_docs": "docs",
+    "use_repository_button": True,
+    "use_edit_page_button": True,
 }
 
 pygments_style = "default"
