@@ -12,7 +12,7 @@ from anndata._io.specs import write_elem as write_adata
 from ome_zarr.format import Format
 from packaging.version import Version
 
-from spatialdata._io._utils import _resolve_zarr_store
+from spatialdata._io._utils import _resolve_zarr_store, _table_shard_budget, _validate_table_shard_size_bytes
 from spatialdata._io.exceptions import FormatVersionUnknownError, WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import (
     CurrentTablesFormat,
@@ -61,6 +61,8 @@ def write_table(
     group_type: str = "ngff:regions_table",
     element_format: Format = CurrentTablesFormat(),
     convert_strings_to_categoricals: bool = False,
+    *,
+    shard_size_bytes: int | None = None,
 ) -> None:
     """
     Write a table to a Zarr store.
@@ -80,7 +82,18 @@ def write_table(
     convert_strings_to_categoricals
         If True, convert string columns to categoricals before writing.
         Note that this will have a side effect of modifying dtypes of the input table in place.
+    shard_size_bytes
+        The target size in bytes of uncompressed data for a single zarr shard of every array of the table. If `None`
+        (default), no shard budget is requested and the write is left entirely to the backend defaults. Requires a
+        zarr v3 table format, zarr >= 3.1.6 and an anndata that supports zarr v3 auto-sharding.
+
+    Raises
+    ------
+    TableWriteOptionsError
+        If `shard_size_bytes` is not a positive `int`, or if the active backend cannot honour a shard budget.
     """
+    _validate_table_shard_size_bytes(shard_size_bytes, tables_zarr_format=element_format.zarr_format)
+
     if element_format.zarr_format == 2:
         warnings.warn(
             message=WritingToZarrV2DeprecationWarning.message, category=WritingToZarrV2DeprecationWarning, stacklevel=2
@@ -98,26 +111,27 @@ def write_table(
     if element_format not in TablesFormats.values():
         raise FormatVersionUnknownError(element_type="table", version_encountered=element_format)
 
-    if element_format.zarr_format == 3 and Version(version("anndata")) >= Version("0.13"):
-        # `write_zarr` in anndata v0.13 and above can only write to zarr v3
-        # solution of passing resolved store directly roughly based on:
-        # https://github.com/scverse/anndata/issues/1548#issuecomment-2199801855
+    with _table_shard_budget(shard_size_bytes):
+        if element_format.zarr_format == 3 and Version(version("anndata")) >= Version("0.13"):
+            # `write_zarr` in anndata v0.13 and above can only write to zarr v3
+            # solution of passing resolved store directly roughly based on:
+            # https://github.com/scverse/anndata/issues/1548#issuecomment-2199801855
 
-        # resolve the store from the group
-        resolved_store = _resolve_zarr_store(table_group)
+            # resolve the store from the group
+            resolved_store = _resolve_zarr_store(table_group)
 
-        # Write the table to the path of the table group
-        table.write_zarr(
-            store=resolved_store,
-            consolidate_metadata=False,
-            convert_strings_to_categoricals=convert_strings_to_categoricals,
-        )
+            # Write the table to the path of the table group
+            table.write_zarr(
+                store=resolved_store,
+                consolidate_metadata=False,
+                convert_strings_to_categoricals=convert_strings_to_categoricals,
+            )
 
-    else:
-        if convert_strings_to_categoricals:
-            table.strings_to_categoricals()
+        else:
+            if convert_strings_to_categoricals:
+                table.strings_to_categoricals()
 
-        write_adata(group, name, table)
+            write_adata(group, name, table)
 
     # Re-fetch the group before setting the attributes below: the handle obtained above was cached while the group
     # was still empty, and zarr writes attributes as a whole document based on the handle's cached view, so writing
