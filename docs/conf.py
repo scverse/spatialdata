@@ -24,7 +24,7 @@ project_name = info["Name"]
 author = info["Author"]
 copyright = f"{datetime.now():%Y}, {author}"
 version = info["Version"]
-# repository_url = f"https://github.com/scverse/{project_name}"
+repository_url = f"https://github.com/scverse/{project_name}"
 
 # The full version, including alpha/beta/rc tags
 release = info["Version"]
@@ -41,6 +41,16 @@ html_context = {
     "github_repo": project_name,  # Repo name
     "github_version": "main",  # Version
     "conf_py_path": "/docs/",  # Path in the checkout to the docs root
+}
+
+html_theme_options = {
+    "navigation_with_keys": True,
+    "show_toc_level": 4,
+    "repository_url": repository_url,
+    "repository_branch": "main",
+    "path_to_docs": "docs",
+    "use_repository_button": True,
+    "use_edit_page_button": True,
 }
 
 # -- General configuration ---------------------------------------------------
