@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Final, Literal
 
 import ome_zarr.classes.image as ozi
-import pydantic as pyd
+import ome_zarr_models.v06.coordinate_transforms as ozm06ct
 
 
 class AxisParsingException(Exception):
@@ -31,10 +31,6 @@ class Axis:
     type: Final[Literal["space", "channel"]]
     unit: Final[str | None]
     long_name: Final[str | None]
-
-    class LegacyModel(pyd.BaseModel):
-        name: Literal["x", "y", "z", "c"]
-        type: Literal["space", "channel"]
 
     def __init__(
         self, *, name: str, type: Literal["space", "channel"], unit: str | None = None, long_name: str | None = None
@@ -64,13 +60,13 @@ class Axis:
         )
 
     @classmethod
-    def try_from_model(cls, model: ozi.Axis) -> Axis:
+    def try_from_model(cls, model: ozm06ct.Axis) -> Axis:
         name = model.name
         if name is None:
             raise AxisParsingException("Axis doesn't have a name")
         if model.type != "channel" and model.type != "space":
             raise AxisParsingException(f"Can't handle axis of type {model.type}")
-        if not isinstance(model.unit, str):
+        if not isinstance(model.unit, (str, type(None))):
             raise AxisParsingException("Can't handle axis unit")
         return Axis(
             name=name,
@@ -79,13 +75,8 @@ class Axis:
             long_name=model.longName,
         )
 
-    @classmethod
-    def try_from_dict(cls, d: pyd.JsonValue) -> Axis:
-        model = ozi.Axis.model_validate(d)
-        return Axis.try_from_model(model)
-
-    def to_model(self) -> ozi.Axis:
-        return ozi.Axis(
+    def to_model(self) -> ozm06ct.Axis:
+        return ozm06ct.Axis(
             discrete=False,
             longName=self.long_name,
             name=self.name,
