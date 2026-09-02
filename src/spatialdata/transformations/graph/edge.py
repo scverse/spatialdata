@@ -9,7 +9,6 @@ from typing import Final
 import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 import pydantic as pyd
-import xarray as xr
 
 from spatialdata._types import ArrayLike
 from spatialdata.transformations.graph.vert import Axis, CoordSystem
@@ -48,7 +47,7 @@ class BaseTransfEdge(ABC):
         return f"{type(self).__name__} ({domain} -> {codomain})"
 
     @abstractmethod
-    def inverse(self) -> BaseTransfEdge:
+    def inverse(self, name: str | None = None) -> BaseTransfEdge:
         """Return the inverse of the transformation."""
 
     @abstractmethod
@@ -63,23 +62,23 @@ class BaseTransfEdge(ABC):
         """
 
     @abstractmethod
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         """Convert the transformation to an affine transformation, whenever the conversion can be made."""
 
-    def _validate_transform_points_shapes(self, points: xr.DataArray | xr.DataTree | ArrayLike) -> None:
+    def _validate_transform_points_shapes(self, points: ArrayLike) -> None:
         """
-        Validate if the shape of the points (coordinats to be transformed) are consistent with the input size of the
+        Validate if the shape of the points (coordinates to be transformed) are consistent with the input size of the
         transformation.
         """
         input_size = len(self.input.axes)
         if len(points.shape) != 2 or points.shape[1] != input_size:
             raise ValueError(
                 f"points must be a tensor of shape (n, d), where n is the number of points and d is the "
-                f"the number of spatial dimensions. Points shape: {points.shape}, input size: {input_size}"
+                f"the number of dimensions. Points shape: {points.shape}, input size: {input_size}"
             )
 
     # order of the composition: self is applied first, then the transformation passed as argument
-    def compose_with(self, transformation: BaseTransfEdge) -> BaseTransfEdge:
+    def compose_with(self, transformation: BaseTransfEdge, name: str | None) -> BaseTransfEdge:
         """
         Compose the transfomation object with another transformation
 
@@ -96,7 +95,7 @@ class BaseTransfEdge(ABC):
         -------
         Self is applied first, then the transformation passed as argument.
         """
-        return SequenceEdge([self, transformation], name=None)  # FIXME: no name?
+        return SequenceEdge([self, transformation], name=name)
 
     @abstractmethod
     def to_model(self) -> ozm06trans.AnyTransform:
@@ -112,8 +111,8 @@ class AffineEdge(BaseTransfEdge):
 
     def __init__(
         self,
-        name: str | None,
         *,
+        name: str | None = None,
         linear: ArrayLike,
         translation: ArrayLike | None = None,
         input: CoordSystem,
@@ -169,7 +168,7 @@ class AffineEdge(BaseTransfEdge):
         input: CoordSystem,
         output: CoordSystem,
     ) -> AffineEdge:
-        """Creates an AffineEdge from a raw affine matrix
+        """Creates an AffineEdge from a raw affine matrix in homogenous coordinates
 
         Parameters
         ----------
@@ -193,14 +192,14 @@ class AffineEdge(BaseTransfEdge):
             name=name,
         )
 
-    def inverse(self) -> BaseTransfEdge:
+    def inverse(self, name: str | None = None) -> BaseTransfEdge:
         inv = np.linalg.inv(self.affine)
         return AffineEdge(
             linear=inv[:-1, :-1],
             translation=inv[-1, :-1],
             input=self.output,
             output=self.input,
-            name=self.name and f"{self.name}__affine",
+            name=name,
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -211,8 +210,10 @@ class AffineEdge(BaseTransfEdge):
         assert isinstance(res, np.ndarray)
         return res
 
-    def to_affine(self) -> AffineEdge:
-        return self
+    def to_affine(self, name: str | None = None) -> AffineEdge:
+        return AffineEdge(
+            input=self.input, output=self.output, linear=self.linear, translation=self.translation, name=name
+        )
 
     def to_model(self) -> ozm06trans.Affine:
         return ozm06trans.Affine(
@@ -247,19 +248,19 @@ class IdentityEdge(BaseTransfEdge):
             raise ValueError("Input and output must have the same number of dimensions")
         super().__init__(input=input, output=output, name=name)
 
-    def inverse(self) -> BaseTransfEdge:
-        return IdentityEdge(input=self.output, output=self.input, name=self.name and f"{self.name}__inverse")
+    def inverse(self, name: str | None = None) -> BaseTransfEdge:
+        return IdentityEdge(input=self.output, output=self.input, name=name)
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         self._validate_transform_points_shapes(points)
         return points
 
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         return AffineEdge(
             linear=np.eye(self.input.num_axes),
             input=self.input,
             output=self.output,
-            name=self.name and f"{self.name}__affine",
+            name=name,
         )
 
     def to_model(self) -> ozm06trans.Identity:
@@ -270,6 +271,13 @@ class IdentityEdge(BaseTransfEdge):
         )
 
 
+class UnmappableCoordSystemsError(Exception):
+    def __init__(self, input: CoordSystem, output: CoordSystem) -> None:
+        self.input = input
+        self.output = output
+        super().__init__("Output axes can't be mapped to input axes")
+
+
 class MapAxisEdge(BaseTransfEdge):
     """The MapAxis transformation from the NGFF specification."""
 
@@ -277,7 +285,6 @@ class MapAxisEdge(BaseTransfEdge):
         self,
         name: str | None,
         *,
-        output_to_input: dict[str, str],
         input: CoordSystem,
         output: CoordSystem,
     ) -> None:
@@ -287,67 +294,56 @@ class MapAxisEdge(BaseTransfEdge):
         ----------
         name
             A human readable name for this transformation
-        output_to_input
-            A dictionary mapping the output axes (keys) to the input axes (values).
         input
             Input coordinate system of the transformation.
         output
-            Output coordinate system of the transformation.
+            Output coordinate system of the transformation, whose axes
+            must be a shuffling of `input`
         """
-        for out_ax, inp_ax in output_to_input.items():
-            if not input.has_axis(inp_ax):
-                raise ValueError(f"input has no axis named {inp_ax}")
-            if not output.has_axis(out_ax):
-                raise ValueError(f"output has no axis named {out_ax}")
-        if not (len(output_to_input) == output.num_axes == input.num_axes):
-            raise ValueError("input_to_output, input and output must have the same number of axes entries")
-        if len(set(output_to_input.values())) != len(output_to_input):
-            raise ValueError("input_to_output must map unique inputs to unique outputs")
 
-        self.output_to_input = output_to_input
+        if set(input.axes) != set(output.axes):
+            raise UnmappableCoordSystemsError(input=input, output=output)
         super().__init__(input=input, output=output, name=name)
 
     def __repr__(self) -> str:
         s = super().__repr__() + "\n"
-        s += "\n".join(f"    {out} <- {inp}\n" for out, inp in self.output_to_input.items())
+        s += "\n".join(
+            f"    {out.name} <- {inp.name}\n" for out, inp in zip(self.output.axes, self.input.axes, strict=True)
+        )
         return s
 
-    def inverse(self) -> BaseTransfEdge:
+    def inverse(self, name: str | None = None) -> BaseTransfEdge:
         return MapAxisEdge(
-            output_to_input={v: k for k, v in self.output_to_input.items()},
             input=self.output,
             output=self.input,
-            name=self.name and f"{self.name}__inverse",
+            name=name,
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
-        input_axes = self.input.axes_names
-        output_axes = self.output.axes_names
         self._validate_transform_points_shapes(points)
-        new_indices = [input_axes.index(self.output_to_input[ax]) for ax in output_axes]
+        new_indices = [self.input.axes.index(out_ax.name) for out_ax in self.output.axes]
         mapped = points[:, new_indices]
         assert isinstance(mapped, np.ndarray)
         return mapped
 
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         input_axes = self.input.axes_names
         output_axes = self.output.axes_names
         linear: ArrayLike = np.zeros((len(output_axes), len(input_axes)), dtype=float)
         for i, des_axis in enumerate(output_axes):
             for j, src_axis in enumerate(input_axes):
-                if src_axis == self.output_to_input[des_axis]:
+                if src_axis == des_axis:
                     linear[i, j] = 1
         affine = AffineEdge(
-            linear=linear, input=self.input, output=self.output, name=self.name and f"{self.name}__affine"
+            linear=linear,
+            input=self.input,
+            output=self.output,
+            name=name,
         )
         return affine
 
     def to_model(self) -> ozm06trans.MapAxis:
-        mapAxis: list[int] = []
-        for out_ax in self.output.axes_names:
-            in_ax = self.output_to_input[out_ax]
-            in_idx = self.input.axes_names.index(in_ax)
-            mapAxis.append(in_idx)
+        mapAxis: list[int] = [self.input.axes.index(out_ax) for out_ax in self.output.axes]
         return ozm06trans.MapAxis(
             name=self.name,
             mapAxis=tuple(mapAxis),
@@ -388,25 +384,25 @@ class TranslationEdge(BaseTransfEdge):
     def __repr__(self) -> str:
         return super().__repr__() + str(self.translation)
 
-    def inverse(self) -> BaseTransfEdge:
+    def inverse(self, name: str | None = None) -> BaseTransfEdge:
         return TranslationEdge(
             translation=-self.translation,
             input=self.output,
             output=self.input,
-            name=self.name and f"{self.name}__inverse",
+            name=name,
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         self._validate_transform_points_shapes(points)
         return points + self.translation
 
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         return AffineEdge(
             linear=np.identity(self.input.num_axes),
             translation=self.translation,
             input=self.input,
             output=self.output,
-            name=self.name and f"{self.name}__affine",
+            name=name,
         )
 
     def to_model(self) -> ozm06trans.Translation:
@@ -450,21 +446,27 @@ class ScaleEdge(BaseTransfEdge):
     def __repr__(self) -> str:
         return super().__repr__() + str(self.scale)
 
-    def inverse(self) -> ScaleEdge:
+    def inverse(self, name: str | None = None) -> ScaleEdge:
         if any(s == 0 for s in self.scale):
             raise ValueError(f"Scaling {self} is not invertible")
         new_scale = 1 / self.scale
         return ScaleEdge(
-            scale=new_scale, input=self.output, output=self.input, name=self.name and f"{self.name}__inverse"
+            scale=new_scale,
+            input=self.output,
+            output=self.input,
+            name=name,
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         self._validate_transform_points_shapes(points)
         return points * self.scale
 
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         return AffineEdge(
-            linear=np.diag(self.scale), input=self.input, output=self.output, name=self.name and f"{self.name}__affine"
+            linear=np.diag(self.scale),
+            input=self.input,
+            output=self.output,
+            name=name,
         )
 
     def to_model(self) -> ozm06trans.Scale:
@@ -516,12 +518,12 @@ class RotationEdge(BaseTransfEdge):
         s += "\n".join(str(row) for row in self.rotation)
         return s
 
-    def inverse(self) -> BaseTransfEdge:
+    def inverse(self, name: str | None = None) -> BaseTransfEdge:
         return RotationEdge(
             linear_matrix=self.rotation.T,
             input=self.output,
             output=self.input,
-            name=self.name and f"{self.name}__inverse",
+            name=name,
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -530,9 +532,12 @@ class RotationEdge(BaseTransfEdge):
         assert isinstance(res, np.ndarray)
         return res
 
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         return AffineEdge(
-            linear=self.rotation, input=self.input, output=self.output, name=self.name and f"{self.name}__affine"
+            linear=self.rotation,
+            input=self.input,
+            output=self.output,
+            name=name,
         )
 
     def to_model(self) -> ozm06trans.Rotation:
@@ -583,18 +588,22 @@ class SequenceEdge(BaseTransfEdge):
         out += "]"
         return out
 
-    def inverse(self) -> SequenceEdge:
+    def inverse(self, name: str | None = None) -> SequenceEdge:
         return SequenceEdge(
-            [t.inverse() for t in reversed(self.transformations)], name=self.name and f"{self.name}__inverse"
+            [t.inverse() for t in reversed(self.transformations)],
+            name=name,
         )
 
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         composed = self.transformations[0].to_affine().affine
         for t in self.transformations[1:]:
             a = t.to_affine()
             composed = a.affine @ composed
         return AffineEdge.from_affine_matrix(
-            affine_matrix=composed, input=self.input, output=self.output, name=self.name and f"{self.name}__affine"
+            affine_matrix=composed,
+            input=self.input,
+            output=self.output,
+            name=name,
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -667,13 +676,13 @@ class ByDimensionEdge(BaseTransfEdge):
         out += "]"
         return out
 
-    def inverse(self) -> BaseTransfEdge:
+    def inverse(self, name: str | None = None) -> BaseTransfEdge:
         inverse_transformations = [t.inverse() for t in self.transformations]
         return ByDimensionEdge(
             transformations=inverse_transformations,
             input=self.output,
             output=self.input,
-            name=self.name and f"{self.name}__inverse",
+            name=name,
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -690,7 +699,7 @@ class ByDimensionEdge(BaseTransfEdge):
         output: ArrayLike = np.stack([output_columns[ax] for ax in output_axes], axis=1)
         return output
 
-    def to_affine(self) -> AffineEdge:
+    def to_affine(self, name: str | None = None) -> AffineEdge:
         input_axes = self.input.axes_names
         output_axes = self.output.axes_names
         m = np.zeros((len(output_axes) + 1, len(input_axes) + 1))
@@ -702,7 +711,10 @@ class ByDimensionEdge(BaseTransfEdge):
             target_input_indices = [input_axes.index(ax) for ax in t.input.axes_names] + [-1]
             m[np.ix_(target_output_indices, target_input_indices)] = t_affine.affine[source_output_indices, :]
         return AffineEdge.from_affine_matrix(
-            affine_matrix=m, input=self.input, output=self.output, name=self.name and f"{self.name}__affine"
+            affine_matrix=m,
+            input=self.input,
+            output=self.output,
+            name=name,
         )
 
     def to_model(self) -> ozm06trans.ByDimension:
@@ -816,15 +828,19 @@ def parse_map_axis(
     input: CoordSystem,
     out: CoordSystem | CsGen,
 ) -> MapAxisEdge:
-    output = out.generate(num_axes=len(model.mapAxis)) if isinstance(out, CsGen) else out
+    if isinstance(out, CoordSystem):
+        output = out
+    else:
+        dummy_cs = out.generate(num_axes=len(model.mapAxis))
+        output = CoordSystem(
+            name=dummy_cs.name,
+            axes=[input.axes[i] for i in model.mapAxis],
+            virtual=True,
+        )
     return MapAxisEdge(
         input=input,
         output=output,
         name=model.name,
-        output_to_input={  # FIXME: double check this. Feels like we depend a lot on order
-            output.axes[output_axis].name: input.axes[input_axis].name
-            for output_axis, input_axis in enumerate(model.mapAxis)
-        },
     )
 
 
