@@ -1470,6 +1470,21 @@ def test_table_shard_size_bytes_bounds_shard_size(
 
 @requires_shard_budget_support
 @pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+def test_table_shard_size_bytes_accepts_an_equivalent_float(tmp_path: Path, shard_table: AnnData) -> None:
+    # anndata only honours the budget when it reads back as an `int`, so an un-normalized float would be dropped in
+    # favour of anndata's own 1 GB default with no error and no warning; `1e8` is a natural way to write a budget
+    geometries = []
+    for label, budget in (("int", SHARD_BUDGET_LARGE), ("float", float(SHARD_BUDGET_LARGE))):
+        path = tmp_path / f"{label}.zarr"
+        _write_shard_table(path, shard_table, CurrentSpatialDataContainerFormat(), table_shard_size_bytes=budget)
+        array = _x_data_array(path)
+        geometries.append((array.chunks, array.shards))
+
+    assert geometries[0] == geometries[1]
+
+
+@requires_shard_budget_support
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
 @pytest.mark.parametrize("region", ["labels2d", ["labels2d", "labels3d"]])
 @pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS_ZARR_V3)
 def test_table_scalars_are_never_sharded(

@@ -678,10 +678,14 @@ def _table_shard_budget(shard_size_bytes: int | None) -> Generator[None, None, N
         yield
         return
 
+    # anndata only honours the budget when it reads back as an `int` (its `isinstance` check); a float would be
+    # dropped in favour of anndata's own 1 GB default, silently, so normalize instead of leaving that to chance.
+    budget = int(shard_size_bytes)
+
     # `override` is order-preserving in both anndata implementations, so the zarr write format is set before the
     # sharding setting, which is required because sharding cannot be enabled while the write format is 2.
     with (
-        zarr.config.set({"array.target_shard_size_bytes": shard_size_bytes}),
+        zarr.config.set({"array.target_shard_size_bytes": budget}),
         ad.settings.override(zarr_write_format=3, auto_shard_zarr_v3=True),
     ):
         yield
