@@ -627,10 +627,6 @@ def _validate_table_shard_size_bytes(table_shard_size_bytes: int | None, tables_
 
     from spatialdata._io.exceptions import TableWriteOptionsError
 
-    if isinstance(table_shard_size_bytes, bool) or not isinstance(table_shard_size_bytes, int):
-        raise TableWriteOptionsError(
-            f"`table_shard_size_bytes` must be a positive int, got {table_shard_size_bytes!r}."
-        )
     if table_shard_size_bytes <= 0:
         raise TableWriteOptionsError(
             f"`table_shard_size_bytes` must be a positive int, got {table_shard_size_bytes!r}."
@@ -665,32 +661,18 @@ def _validate_table_shard_size_bytes(table_shard_size_bytes: int | None, tables_
 def _table_shard_budget(shard_size_bytes: int | None) -> Generator[None, None, None]:
     """Scope a zarr shard budget and anndata's zarr v3 auto-sharding around a single table write.
 
-    Nothing is passed into anndata's `dataset_kwargs`. Instead two process globals are set for the duration of one
-    table write: zarr's `array.target_shard_size_bytes`, and anndata's `zarr_write_format` and `auto_shard_zarr_v3`
-    settings. anndata then injects `shards="auto"` itself, at the writers where that is safe, and yields to the budget
-    set here instead of installing its own 1 GB default. zarr derives the shard shape from the chunk shape, so
-    `shard % chunk == 0` and `shard <= array` hold by construction at every rank, length and dtype.
+    Sets zarr's `array.target_shard_size_bytes` and overrides anndata's `zarr_write_format=3` and
+    `auto_shard_zarr_v3=True` for the duration of the block, restoring all three on exit. anndata then injects
+    `shards="auto"` itself where that is safe and uses this budget instead of its own 1 GB default. `zarr_write_format`
+    is overridden too because `AnnData.write_zarr` recreates the group with that setting, and at 2 no sharding happens.
 
-    `shards` deliberately never reaches `dataset_kwargs`. A `shards` entry there would be forwarded to the rank-0
-    string scalars every SpatialData table carries in `uns/spatialdata_attrs`, and zarr's
-    `_guess_num_chunks_per_axis_shard` does not terminate on a rank-0 array while `array.target_shard_size_bytes` is
-    set (zarr-developers/zarr-python#4304). Today the rank-0 arrays are kept away from that code path by two
-    independent anndata mechanisms: `write_scalar_zarr`/`write_null_zarr` never call `zarr_v3_sharding` at all, and
-    `@zero_dim_array_as_scalar` re-dispatches 0-d ndarrays before `write_basic`'s sharding is reached.
-
-    `zarr_write_format` is overridden alongside the sharding setting because `AnnData.write_zarr` opens the group with
-    `mode="w"` and `zarr_format=settings.zarr_write_format`, i.e. it destroys and recreates the group spatialdata just
-    made; leaving that setting at 2 would silently produce a zarr v2 table group and no sharding at all.
+    `shards` is deliberately never put into `dataset_kwargs`: it would reach the rank-0 scalars in `uns` and hang zarr
+    (https://github.com/zarr-developers/zarr-python/issues/4304).
 
     Parameters
     ----------
     shard_size_bytes
-        The target size in bytes of uncompressed data for a single zarr shard. If `None`, nothing is set and this
-        context manager is a no-op.
-
-    Yields
-    ------
-    None
+        The target size in bytes of uncompressed data for a single zarr shard. If `None`, nothing is set.
     """
     if shard_size_bytes is None:
         yield

@@ -1592,8 +1592,8 @@ def test_table_shard_size_bytes_rejected_on_zarr_v2(
 
 
 @pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
-@pytest.mark.parametrize("invalid", [0, -1, 1.5, True])
-def test_table_shard_size_bytes_validation(tmp_path: Path, invalid: Any) -> None:
+@pytest.mark.parametrize("invalid", [0, -1])
+def test_table_shard_size_bytes_validation(tmp_path: Path, invalid: int) -> None:
     sdata = _table_only_sdata()
     path = tmp_path / "invalid.zarr"
     with pytest.raises(TableWriteOptionsError, match="must be a positive int"):
