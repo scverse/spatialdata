@@ -27,7 +27,7 @@ def test_to_multiscale_via_ome_zarr_scaler(model, length, ndim, n_channels, scal
     else:
         array = blob_gen._labels_blobs(length=length, ndim=ndim).data
 
-    dims = model.dims
+    dims = model.get_expected_dims()
     dask_data = array.rechunk(CHUNK_SIZE)
 
     # multiscale-spatial-image (method is not None)

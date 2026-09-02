@@ -155,7 +155,7 @@ class TestModels:
         permute: bool,
         kwargs: dict[str, str] | None,
     ) -> None:
-        dims = np.array(model.dims).tolist()
+        dims = np.array(model.get_expected_dims()).tolist()
         if permute:
             RNG.shuffle(dims)
         n_dims = len(dims)
@@ -163,7 +163,7 @@ class TestModels:
         if converter is DataArray:
             converter = partial(converter, dims=dims)
         elif converter is to_spatial_image:
-            converter = partial(converter, dims=model.dims)
+            converter = partial(converter, dims=model.get_expected_dims())
         # labels must be integer-valued, images can be float
         shape = {2: (10, 10), 3: (3, 10, 10), 4: (2, 3, 10, 10)}[n_dims]
         if model in [Labels2DModel, Labels3DModel]:
@@ -245,7 +245,7 @@ class TestModels:
         assert y_ms["scale0"]["image"].data.chunksize == expected
 
         # parse as DataArray
-        data_array = DataArray(image, dims=model.dims)
+        data_array = DataArray(image, dims=model.get_expected_dims())
         # single scale
         z_ss = model.parse(data_array, chunks=chunks)
         assert z_ss.data.chunksize == expected
@@ -256,7 +256,7 @@ class TestModels:
     @pytest.mark.parametrize("model", [Labels2DModel, Labels3DModel])
     def test_labels_model_with_multiscales(self, model):
         # Passing "scale_factors" should generate multiscales with a "method" appropriate for labels
-        dims = np.array(model.dims).tolist()
+        dims = np.array(model.get_expected_dims()).tolist()
         n_dims = len(dims)
 
         # A labels image with one label value 4, that partially covers 2×2 blocks.
