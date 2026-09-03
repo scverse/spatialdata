@@ -31,8 +31,8 @@ class BaseTransfEdge(ABC):
 
     def __init__(
         self,
-        name: str | None,
         *,
+        name: str | None = None,
         input: CoordSystem,
         output: CoordSystem,
     ) -> None:
@@ -47,8 +47,8 @@ class BaseTransfEdge(ABC):
         return f"{type(self).__name__} ({domain} -> {codomain})"
 
     @abstractmethod
-    def inverse(self, name: str | None = None) -> BaseTransfEdge:
-        """Return the inverse of the transformation."""
+    def inverse(self, name: str | None = None) -> BaseTransfEdge | None:
+        """Return the inverse of the transformation if it exists"""
 
     @abstractmethod
     def transform_points(self, points: ArrayLike) -> ArrayLike:
@@ -192,8 +192,26 @@ class AffineEdge(BaseTransfEdge):
             name=name,
         )
 
-    def inverse(self, name: str | None = None) -> BaseTransfEdge:
-        inv = np.linalg.inv(self.affine)
+    @classmethod
+    def mapping(cls, input: CoordSystem, output: CoordSystem, name: str | None = None) -> AffineEdge:
+        linear: ArrayLike = np.zeros((output.num_axes, input.num_axes), dtype=float)
+        for i, des_axis in enumerate(output.axes):
+            for j, src_axis in enumerate(input.axes):
+                if src_axis.name == des_axis.name:  # FIXME: compare the entire axis?
+                    linear[i, j] = 1
+        return AffineEdge(
+            linear=linear,
+            input=input,
+            output=output,
+            name=name,
+        )
+
+    def inverse(self, name: str | None = None) -> BaseTransfEdge | None:
+        try:
+            # FIXME: I think there are more efficient/precise ways to invert a matrix
+            inv = np.linalg.inv(self.affine)
+        except np.linalg.LinAlgError:
+            return None
         return AffineEdge(
             linear=inv[:-1, :-1],
             translation=inv[-1, :-1],
@@ -327,20 +345,7 @@ class MapAxisEdge(BaseTransfEdge):
         return mapped
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
-        input_axes = self.input.axes_names
-        output_axes = self.output.axes_names
-        linear: ArrayLike = np.zeros((len(output_axes), len(input_axes)), dtype=float)
-        for i, des_axis in enumerate(output_axes):
-            for j, src_axis in enumerate(input_axes):
-                if src_axis == des_axis:
-                    linear[i, j] = 1
-        affine = AffineEdge(
-            linear=linear,
-            input=self.input,
-            output=self.output,
-            name=name,
-        )
-        return affine
+        return AffineEdge.mapping(input=self.input, output=self.output, name=name)
 
     def to_model(self) -> ozm06trans.MapAxis:
         mapAxis: list[int] = [self.input.axes.index(out_ax) for out_ax in self.output.axes]
@@ -350,6 +355,97 @@ class MapAxisEdge(BaseTransfEdge):
             input=self.input.to_model_cs_ident(),
             output=self.output.to_model_cs_ident(),
         )
+
+
+class AxisNotInCoordSystemError(Exception):
+    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
+        self.axis = axis
+        self.cs = cs
+        super().__init__(f"Axis {axis.name} is not in coordinate system {cs.name}")
+
+
+class ProjectAxisEdge(BaseTransfEdge):
+    dropped_inputs: Final[set[Axis]]
+    created_outputs: Final[set[Axis]]
+
+    def __init__(
+        self,
+        *,
+        name: str | None = None,
+        input: CoordSystem,
+        output: CoordSystem,
+        dropped_inputs: set[Axis],
+        created_outputs: set[Axis],
+    ) -> None:
+        for axis in dropped_inputs:
+            if axis not in input.axes:
+                raise AxisNotInCoordSystemError(axis=axis, cs=input)
+        for axis in dropped_inputs:
+            if axis not in output.axes:
+                raise AxisNotInCoordSystemError(axis=axis, cs=output)
+        self.dropped_inputs = set(dropped_inputs)
+        self.created_outputs = set(created_outputs)
+        super().__init__(name=name, input=input, output=output)
+
+    def to_affine(self, name: str | None = None) -> AffineEdge:
+        linear = np.zeros((self.output.num_axes, self.input.num_axes), dtype=float)
+
+        for out_idx, out_ax in enumerate(self.output.axes):
+            if out_ax in self.created_outputs:
+                continue
+            for in_idx, in_ax in enumerate(self.input.axes):
+                if in_ax not in self.dropped_inputs:
+                    linear[out_idx, in_idx] = 1
+
+        return AffineEdge(name=name, input=self.input, output=self.output, linear=linear)
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        return self.to_affine().transform_points(points)
+
+    def inverse(self, name: str | None = None) -> BaseTransfEdge | None:
+        # FIXME: there may be other cases where this is invertible
+        if self.input.num_axes != self.output.num_axes:
+            return None
+        if len(self.dropped_inputs) > 0:
+            return None
+        if len(self.created_outputs) > 0:
+            return None
+        return ProjectAxisEdge(
+            input=self.output,
+            output=self.input,
+            dropped_inputs=set(),
+            created_outputs=set(),
+            name=name,
+        )
+
+    def to_model(self) -> ozm06trans.ProjectAxis:
+        return ozm06trans.ProjectAxis(
+            createdOutputs=tuple(self.output.axes.index(co) for co in self.created_outputs) or None,
+            droppedInputs=tuple(self.input.axes.index(di) for di in self.dropped_inputs) or None,
+        )
+
+
+def parse_project_axis(
+    model: ozm06trans.ProjectAxis,
+    *,
+    input: CoordSystem,
+    out: CoordSystem | CsGen,
+) -> ProjectAxisEdge:
+    if isinstance(out, CoordSystem):
+        output = out
+    else:
+        num_dropped_inputs = len(model.droppedInputs or ())
+        num_created_outputs = len(model.droppedInputs or ())
+        num_output_axes = input.num_axes - num_dropped_inputs + num_created_outputs
+        output = out.generate(num_axes=num_output_axes)
+
+    return ProjectAxisEdge(
+        created_outputs={output.axes[i] for i in model.createdOutputs or ()},
+        dropped_inputs={input.axes[i] for i in model.droppedInputs or ()},
+        input=input,
+        output=output,
+        name=model.name,
+    )
 
 
 class TranslationEdge(BaseTransfEdge):
@@ -446,9 +542,9 @@ class ScaleEdge(BaseTransfEdge):
     def __repr__(self) -> str:
         return super().__repr__() + str(self.scale)
 
-    def inverse(self, name: str | None = None) -> ScaleEdge:
+    def inverse(self, name: str | None = None) -> ScaleEdge | None:
         if any(s == 0 for s in self.scale):
-            raise ValueError(f"Scaling {self} is not invertible")
+            return None
         new_scale = 1 / self.scale
         return ScaleEdge(
             scale=new_scale,
@@ -588,11 +684,14 @@ class SequenceEdge(BaseTransfEdge):
         out += "]"
         return out
 
-    def inverse(self, name: str | None = None) -> SequenceEdge:
-        return SequenceEdge(
-            [t.inverse() for t in reversed(self.transformations)],
-            name=name,
-        )
+    def inverse(self, name: str | None = None) -> SequenceEdge | None:
+        inverted: list[BaseTransfEdge] = []
+        for t in self.transformations:
+            inv = t.inverse()
+            if inv is None:
+                return None
+            inverted.append(inv)
+        return SequenceEdge(inverted, name=name)
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
         composed = self.transformations[0].to_affine().affine
@@ -676,8 +775,13 @@ class ByDimensionEdge(BaseTransfEdge):
         out += "]"
         return out
 
-    def inverse(self, name: str | None = None) -> BaseTransfEdge:
-        inverse_transformations = [t.inverse() for t in self.transformations]
+    def inverse(self, name: str | None = None) -> BaseTransfEdge | None:
+        inverse_transformations: list[BaseTransfEdge] = []
+        for t in self.transformations:
+            inv = t.inverse()
+            if inv is None:
+                return None
+            inverse_transformations.append(inv)
         return ByDimensionEdge(
             transformations=inverse_transformations,
             input=self.output,
