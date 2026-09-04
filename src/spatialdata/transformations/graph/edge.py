@@ -9,7 +9,15 @@ from typing import Final
 import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
-from spatialdata._core.transformation_manager.exceptions import AxisNotInCoordSystemError, UnmappableCoordSystemsError
+from spatialdata._core.transformation_manager.exceptions import (
+    AxisRedefinitionError,
+    EmptyTransformSequenceError,
+    IncompatibleCoordSystemsError,
+    MissingAxisError,
+    NotUnimodularError,
+    UnexpectedShapeError,
+    UnmappedAxisError,
+)
 from spatialdata._types import ArrayLike
 from spatialdata.transformations.graph.vert import Axis, CoordSystem
 
@@ -61,12 +69,18 @@ class BaseTransfEdge(ABC):
         """
         Validate if the shape of the points (coordinates to be transformed) are consistent with the input size of the
         transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
         """
         input_size = len(self.input.axes)
         if len(points.shape) != 2 or points.shape[1] != input_size:
-            raise ValueError(
-                f"points must be a tensor of shape (n, d), where n is the number of points and d is the "
-                f"the number of dimensions. Points shape: {points.shape}, input size: {input_size}"
+            raise UnexpectedShapeError(
+                array_name="points",
+                expected_shape=f"(<number of points>, {self.input.num_axes})",
+                array_shape=points.shape,
             )
 
     # order of the composition: self is applied first, then the transformation passed as argument
@@ -131,10 +145,14 @@ class AffineEdge(BaseTransfEdge):
 
         expected_linear_shape = (num_outputs, num_inputs)
         if linear.shape != expected_linear_shape:
-            raise ValueError(f"linear's shape is {linear.shape}. Expected f{(num_outputs, num_inputs)}")
+            raise UnexpectedShapeError(
+                array_name="linear", array_shape=linear.shape, expected_shape=expected_linear_shape
+            )
         expected_translation_shape = (num_outputs,)
         if translation.shape != expected_translation_shape:
-            raise ValueError(f"translation's shape is {translation.shape}. Expected {expected_translation_shape}")
+            raise UnexpectedShapeError(
+                array_name="translation", array_shape=translation.shape, expected_shape=expected_translation_shape
+            )
 
         self.linear = linear
         self.translation = translation
@@ -255,7 +273,9 @@ class IdentityEdge(BaseTransfEdge):
             Output coordinate system of the transformation.
         """
         if input.num_axes != output.num_axes:
-            raise ValueError("Input and output must have the same number of dimensions")
+            raise IncompatibleCoordSystemsError(
+                input=input, output=output, message="Axes must have the same number of dimensions"
+            )
         super().__init__(input=input, output=output, name=name)
 
     def inverse(self, name: str | None = None) -> BaseTransfEdge:
@@ -304,7 +324,9 @@ class MapAxisEdge(BaseTransfEdge):
         """
 
         if set(input.axes) != set(output.axes):
-            raise UnmappableCoordSystemsError(input=input, output=output)
+            raise IncompatibleCoordSystemsError(
+                input=input, output=output, message="Input and output must have the same axes"
+            )
         super().__init__(input=input, output=output, name=name)
 
     def __repr__(self) -> str:
@@ -354,12 +376,27 @@ class ProjectAxisEdge(BaseTransfEdge):
         dropped_inputs: set[Axis],
         created_outputs: set[Axis],
     ) -> None:
+        """
+        Parameters
+        ----------
+        dropped_inputs
+            axes in `input` that will be dropped by this transformation
+        created_inputs
+            axes in `output` that will be set to 0
+
+        Raises
+        ------
+        MissingAxisError
+            axis in `dropped_inputs` not in `input`
+            axis in `created_outputs` not in `output`
+        """
+
         for axis in dropped_inputs:
             if axis not in input.axes:
-                raise AxisNotInCoordSystemError(axis=axis, cs=input)
+                raise MissingAxisError(axis=axis, cs=input)
         for axis in dropped_inputs:
             if axis not in output.axes:
-                raise AxisNotInCoordSystemError(axis=axis, cs=output)
+                raise MissingAxisError(axis=axis, cs=output)
         self.dropped_inputs = set(dropped_inputs)
         self.created_outputs = set(created_outputs)
         super().__init__(name=name, input=input, output=output)
@@ -437,7 +474,6 @@ class TranslationEdge(BaseTransfEdge):
         output: CoordSystem,
     ) -> None:
         """
-        Init the NgffTranslation object.
         Parameters
         ----------
         name
@@ -448,9 +484,16 @@ class TranslationEdge(BaseTransfEdge):
             Input coordinate system of the transformation.
         output
             Output coordinate system of the transformation.
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            If the input and output have different number of dimensions
         """
         if input.num_axes != output.num_axes:
-            raise ValueError("Number of input and output axes must be the same")
+            raise IncompatibleCoordSystemsError(
+                input=input, output=output, message="Number of input and output axes must be the same"
+            )
         self.translation = translation
         super().__init__(input=input, output=output, name=name)
 
@@ -499,20 +542,29 @@ class ScaleEdge(BaseTransfEdge):
         output: CoordSystem,
     ) -> None:
         """
-        Init the NgffScale object.
         Parameters
         ----------
         scale
-            A list of numbers or a vector specifying the scale along each axis.
+            A vector specifying the scale along each axis of `input`.
         input
             Input coordinate system of the transformation.
         output
             Output coordinate system of the transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            If scale doesn't have the same number of elements as input has axes
+        IncompatibleCoordSystemsError
+            If input and output have different number of axes
         """
-        if scale.shape != (input.num_axes,):
-            raise ValueError(f"scale should be of shape f{(input.num_axes,)}")
+        expected_scale_shape = (input.num_axes,)
+        if scale.shape != expected_scale_shape:
+            raise UnexpectedShapeError(array_name="scale", array_shape=scale.shape, expected_shape=expected_scale_shape)
         if input.num_axes != output.num_axes:
-            raise ValueError("input and output must have same number of dimensions")
+            raise IncompatibleCoordSystemsError(
+                input=input, output=output, message="input and output must have same number of dimensions"
+            )
         self.scale = scale
         super().__init__(input=input, output=output, name=name)
 
@@ -565,7 +617,6 @@ class RotationEdge(BaseTransfEdge):
         output: CoordSystem,
     ) -> None:
         """
-        Init the NgffRotation object.
         Parameters
         ----------
         linear_matrix
@@ -574,14 +625,26 @@ class RotationEdge(BaseTransfEdge):
             Input coordinate system of the transformation.
         output
             Output coordinate system of the transformation.
+        Raises
+        ------
+        UnexpectedShapeError
+            if linear_matrix's shape isn't (output.num_axes, input.num_axes)
+        IncompatibleCoordSystemsError
+            if input and output don't have the same number of axes
+        NotUnimodularError
+            if linear_matrix doesn't have determinant ~= 1
         """
+        if input.num_axes != output.num_axes:
+            raise IncompatibleCoordSystemsError(
+                input=input, output=output, message="input and output should have the same numbe rof axes"
+            )
         expected_shape = (output.num_axes, input.num_axes)
         if linear_matrix.shape != expected_shape:
-            raise ValueError(f"linear matrix should have shape {expected_shape}")
-        if input.num_axes != output.num_axes:
-            raise ValueError("input and output should have the same numbe rof axes")
+            raise UnexpectedShapeError(
+                array_name="linear_matrix", array_shape=linear_matrix.shape, expected_shape=expected_shape
+            )
         if not np.isclose(np.linalg.det(linear_matrix), 1.0):
-            raise ValueError("det(linear_matrix) should be ~= 1")
+            raise NotUnimodularError(matrix=linear_matrix)
         linear_matrix.flags.writeable = False
         self.rotation = linear_matrix
         super().__init__(input=input, output=output, name=name)
@@ -638,13 +701,26 @@ class SequenceEdge(BaseTransfEdge):
         ----------
         transformations
             The transformations which compose the sequence.
+        Raises
+        ------
+        EmptyTransformSequence
+            if `transformations` is empty
+        IncompatibleCoordSystemsError
+            if any item in `transformations` is incompatible with its neighbors
         """
         if len(transformations) == 0:
-            raise ValueError("Empty transformation list")
+            raise EmptyTransformSequenceError()
         previous_transf = transformations[0]
-        for current_transf in transformations[1:]:
+        for transf_idx, current_transf in enumerate(transformations[1:], start=1):
             if previous_transf.output != current_transf.input:
-                raise ValueError(f"Mismatched input/output from {previous_transf} to {current_transf}")
+                raise IncompatibleCoordSystemsError(
+                    input=current_transf.input,
+                    output=previous_transf.output,
+                    message=(
+                        f"Output of transformation #{transf_idx - 1} is different "
+                        f"from input of transformation #{transf_idx}"
+                    ),
+                )
             previous_transf = current_transf
         self.transformations = transformations
         super().__init__(
@@ -709,8 +785,6 @@ class ByDimensionEdge(BaseTransfEdge):
         output: CoordSystem,
     ) -> None:
         """
-        Init the ByDimension object.
-
         Parameters
         ----------
         transformations
@@ -720,26 +794,34 @@ class ByDimensionEdge(BaseTransfEdge):
             The input coordinate system of the transformation.
         output
             The output coordinate system of the transformation.
+        Raises
+        ------
+        MissingAxisError
+            if any input axis from `transformations` is not present in `input` or
+            if any output axis from `transformations` is not present in `output`.
+        AxisRedefinitionError
+            if an output axis is specified by more than one item of `transformations`
+        UnmappedAxisError
+            if axis of `output` is not covered by any item of `transformations`
         """
         # we check that:
         # 1. each input from each transformation in self.transformation must appear in the set of input axes
         # 2. each output from each transformation in self.transformation must appear at most once in the set of output
         # axes
-        input_axes = input.axes_names
-        output_axes = output.axes_names
         defined_output_axes: set[str] = set()
         for t in transformations:
-            for ax in t.input.axes_names:
-                if ax not in input_axes:
-                    raise ValueError(f"By dimension axis {ax} not in {input_axes}")
-            for ax in t.output.axes_names:
-                if ax not in output_axes:
-                    raise ValueError(f"Axis {ax} not in output axes {output_axes}")
-                if ax in defined_output_axes:
-                    raise ValueError(f"Output axis {ax} is defined more than once")
-                defined_output_axes.add(ax)
-        if len(output_axes) != len(defined_output_axes):
-            raise ValueError("Not all outputs are mapped")
+            for ax in t.input.axes:
+                if ax not in input.axes:
+                    raise MissingAxisError(axis=ax, cs=input)
+            for ax in t.output.axes:
+                if ax not in output.axes:
+                    raise MissingAxisError(axis=ax, cs=output)
+                if ax.name in defined_output_axes:
+                    raise AxisRedefinitionError(axis=ax)
+                defined_output_axes.add(ax.name)
+        for ax in output.axes:
+            if ax.name not in defined_output_axes:
+                raise UnmappedAxisError(axis=ax, cs=output)
 
         self.transformations = tuple(transformations)
         super().__init__(input=input, output=output, name=name)
