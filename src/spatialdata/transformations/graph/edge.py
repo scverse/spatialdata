@@ -8,18 +8,10 @@ from typing import Final
 
 import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
-import pydantic as pyd
 
+from spatialdata._core.transformation_manager.exceptions import AxisNotInCoordSystemError, UnmappableCoordSystemsError
 from spatialdata._types import ArrayLike
 from spatialdata.transformations.graph.vert import Axis, CoordSystem
-
-
-class GarbledInput(Exception):
-    def __init__(self, message: str, input: pyd.JsonValue) -> None:
-        import json
-
-        super().__init__(message + "\n" + json.dumps(input, indent=4))
-        self.input = input
 
 
 class BaseTransfEdge(ABC):
@@ -95,7 +87,7 @@ class BaseTransfEdge(ABC):
         -------
         Self is applied first, then the transformation passed as argument.
         """
-        return SequenceEdge([self, transformation], name=name)
+        return SequenceEdge(transformations=[self, transformation], name=name)
 
     @abstractmethod
     def to_model(self) -> ozm06trans.AnyTransform:
@@ -289,25 +281,17 @@ class IdentityEdge(BaseTransfEdge):
         )
 
 
-class UnmappableCoordSystemsError(Exception):
-    def __init__(self, input: CoordSystem, output: CoordSystem) -> None:
-        self.input = input
-        self.output = output
-        super().__init__("Output axes can't be mapped to input axes")
-
-
 class MapAxisEdge(BaseTransfEdge):
     """The MapAxis transformation from the NGFF specification."""
 
     def __init__(
         self,
-        name: str | None,
         *,
+        name: str | None = None,
         input: CoordSystem,
         output: CoordSystem,
     ) -> None:
         """
-        Init the NgffMapAxis object.
         Parameters
         ----------
         name
@@ -355,13 +339,6 @@ class MapAxisEdge(BaseTransfEdge):
             input=self.input.to_model_cs_ident(),
             output=self.output.to_model_cs_ident(),
         )
-
-
-class AxisNotInCoordSystemError(Exception):
-    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
-        self.axis = axis
-        self.cs = cs
-        super().__init__(f"Axis {axis.name} is not in coordinate system {cs.name}")
 
 
 class ProjectAxisEdge(BaseTransfEdge):
@@ -453,8 +430,8 @@ class TranslationEdge(BaseTransfEdge):
 
     def __init__(
         self,
-        name: str | None,
         *,
+        name: str | None = None,
         translation: ArrayLike,
         input: CoordSystem,
         output: CoordSystem,
@@ -515,8 +492,8 @@ class ScaleEdge(BaseTransfEdge):
 
     def __init__(
         self,
-        name: str | None,
         *,
+        name: str | None = None,
         scale: ArrayLike,
         input: CoordSystem,
         output: CoordSystem,
@@ -581,8 +558,8 @@ class RotationEdge(BaseTransfEdge):
 
     def __init__(
         self,
-        name: str | None,
         *,
+        name: str | None = None,
         linear_matrix: ArrayLike,
         input: CoordSystem,
         output: CoordSystem,
@@ -650,8 +627,9 @@ class SequenceEdge(BaseTransfEdge):
 
     def __init__(
         self,
+        *,
+        name: str | None = None,
         transformations: Sequence[BaseTransfEdge],
-        name: str | None,
     ) -> None:
         """
         Init the NgffSequence object.
@@ -691,7 +669,7 @@ class SequenceEdge(BaseTransfEdge):
             if inv is None:
                 return None
             inverted.append(inv)
-        return SequenceEdge(inverted, name=name)
+        return SequenceEdge(transformations=inverted, name=name)
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
         composed = self.transformations[0].to_affine().affine
@@ -724,8 +702,8 @@ class ByDimensionEdge(BaseTransfEdge):
 
     def __init__(
         self,
-        name: str | None,
         *,
+        name: str | None = None,
         transformations: Sequence[BaseTransfEdge],
         input: CoordSystem,
         output: CoordSystem,

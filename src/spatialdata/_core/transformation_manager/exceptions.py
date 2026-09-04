@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from spatialdata.transformations.graph.vert import Axis, CoordSystem
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 
@@ -227,3 +228,17 @@ class TransformationManagerWarning(UserWarning):
     """Base warning category for TransformationManager."""
 
     pass
+
+
+class UnmappableCoordSystemsError(Exception):
+    def __init__(self, input: CoordSystem, output: CoordSystem) -> None:
+        self.input = input
+        self.output = output
+        super().__init__("Output axes can't be mapped to input axes")
+
+
+class AxisNotInCoordSystemError(Exception):
+    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
+        self.axis = axis
+        self.cs = cs
+        super().__init__(f"Axis {axis.name} is not in coordinate system {cs.name}")
