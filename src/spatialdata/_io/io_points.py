@@ -23,7 +23,6 @@ from spatialdata.transformations._utils import (
     _set_transformations,
 )
 
-
 #: Callable writing a points element's ``points.parquet``, given the dataframe (with
 #: transformations already stripped) and the destination path.
 PointsWriter: TypeAlias = Callable[[DaskDataFrame, Any], None]
