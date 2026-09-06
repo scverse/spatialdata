@@ -56,6 +56,7 @@ if TYPE_CHECKING:
         SpatialDataContainerFormatType,
         SpatialDataFormatType,
     )
+    from spatialdata._io.io_points import PointsWriter
 
 
 class SpatialData:
@@ -1115,6 +1116,7 @@ class SpatialData:
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
         convert_table_strings_to_categoricals: bool = False,
+        points_writer: PointsWriter | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1170,6 +1172,11 @@ class SpatialData:
         convert_table_strings_to_categoricals
             If True, convert string columns of all tables to categoricals before writing.
             Note that this will have a side effect of modifying string columns into categoricals in place.
+        points_writer
+            Optional callable ``(points, path) -> None`` used to write each points element's
+            ``points.parquet`` in place of the default dask writer, allowing a caller to control
+            the parquet layout (row-group boundaries, compression, number of files). Element
+            metadata is still written by SpatialData. See :func:`spatialdata._io.write_points`.
         """
         from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
         from spatialdata._io.format import _parse_formats
@@ -1199,6 +1206,7 @@ class SpatialData:
                 shapes_geometry_encoding=shapes_geometry_encoding,
                 raster_compressor=raster_compressor,
                 convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
+                points_writer=points_writer,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1218,6 +1226,7 @@ class SpatialData:
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
         convert_table_strings_to_categoricals: bool = False,
+        points_writer: PointsWriter | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1271,6 +1280,7 @@ class SpatialData:
                 points=element,
                 group=element_group,
                 element_format=parsed_formats["points"],
+                points_writer=points_writer,
             )
         elif element_type == "shapes":
             write_shapes(

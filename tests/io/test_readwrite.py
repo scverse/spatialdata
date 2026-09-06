@@ -1368,3 +1368,48 @@ def test_sdata_with_nan_in_obs(tmp_path: Path, convert_strings_to_categoricals: 
             assert pd.isna(r1.iloc[1])
         else:
             assert r1.iloc[1] == "nan"
+
+
+def test_write_points_writer_hook(tmp_path: Path, points: SpatialData) -> None:
+    """A custom points_writer replaces the parquet layout but not the element metadata."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    calls: list[tuple[str, int]] = []
+
+    def custom_writer(df, path):
+        # Two row groups of our choosing, which the default dask writer would not produce.
+        table = pa.Table.from_pandas(df.compute(), preserve_index=True)
+        calls.append((str(path.name), table.num_rows))
+        path.mkdir(parents=True, exist_ok=True)
+        with pq.ParquetWriter(path / "chunk_0.parquet", table.schema) as w:
+            half = table.num_rows // 2
+            w.write_table(table.slice(0, half))
+            w.write_table(table.slice(half, table.num_rows - half))
+
+    f = tmp_path / "hooked.zarr"
+    points.write(f, points_writer=custom_writer)
+
+    assert calls, "points_writer was never invoked"
+    assert all(name == "points.parquet" for name, _ in calls)
+
+    reread = read_zarr(f)
+    for name, original in points.points.items():
+        got = reread.points[name]
+        assert len(got) == len(original)
+        assert set(got.columns) == set(original.columns)
+        # metadata (transformations) still written by SpatialData, not the custom writer
+        assert "transform" in got.attrs
+        written = pq.ParquetFile(f / "points" / name / "points.parquet" / "chunk_0.parquet")
+        assert written.metadata.num_row_groups == 2
+
+
+def test_write_without_points_writer_is_unchanged(tmp_path: Path, points: SpatialData) -> None:
+    """Omitting the hook must keep the default dask output byte-for-byte equivalent."""
+    a, b = tmp_path / "a.zarr", tmp_path / "b.zarr"
+    points.write(a)
+    points.write(b, points_writer=None)
+    for name in points.points:
+        assert sorted(p.name for p in (a / "points" / name / "points.parquet").iterdir()) == sorted(
+            p.name for p in (b / "points" / name / "points.parquet").iterdir()
+        )

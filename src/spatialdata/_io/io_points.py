@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, TypeAlias
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -20,6 +22,11 @@ from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
 )
+
+
+#: Callable writing a points element's ``points.parquet``, given the dataframe (with
+#: transformations already stripped) and the destination path.
+PointsWriter: TypeAlias = Callable[[DaskDataFrame, Any], None]
 
 
 def _read_points(
@@ -53,6 +60,7 @@ def write_points(
     group: zarr.Group,
     group_type: str = "ngff:points",
     element_format: Format = CurrentPointsFormat(),
+    points_writer: PointsWriter | None = None,
 ) -> None:
     """Write a points element to a zarr store.
 
@@ -66,6 +74,14 @@ def write_points(
         The type of the element.
     element_format
         The format of the points element used to store it.
+    points_writer
+        Optional callable ``(points, path) -> None`` used to write ``points.parquet``
+        instead of :meth:`dask.dataframe.DataFrame.to_parquet`. It receives the dataframe
+        with the transformations already stripped from ``attrs``, and the destination path
+        (a directory, matching dask's multi-file output). The element's zarr metadata is
+        written by this function either way, so a custom writer only controls the parquet
+        layout -- for example to choose row-group boundaries, compression, or the number
+        of files. It must preserve the rows and the index; reordering them is allowed.
     """
     if element_format.zarr_format == 2:
         warnings.warn(
@@ -91,7 +107,10 @@ def write_points(
 
     points_without_transform = points.copy()
     del points_without_transform.attrs["transform"]
-    points_without_transform.to_parquet(path)
+    if points_writer is not None:
+        points_writer(points_without_transform, path)
+    else:
+        points_without_transform.to_parquet(path)
 
     attrs = element_format.attrs_to_dict(points.attrs)
     attrs["version"] = element_format.spatialdata_format_version
