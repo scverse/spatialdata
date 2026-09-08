@@ -169,7 +169,11 @@ def _prepare_storage_options(
 def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTransfEdge]]:
     multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store))
     assert isinstance(multiscale, oz.OMEZarrMultiscale)  # disambiguate from OMEZarrLabel
+    return try_parse_ngff06_multiscale(multiscale)
 
+
+def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataTree, Sequence[BaseTransfEdge]]:
+    """Parse an OMEZarMultiscale into a DataTree and collects Multiscale-level transforms."""
     name_to_cs: dict[str, CoordSystem] = {}
     for cs in multiscale.metadata.coordinateSystems or ():
         parsed_cs = CoordSystem.try_from_model(cs)
@@ -202,24 +206,27 @@ def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTran
     for scale_idx, (ds_md, ds) in enumerate(zip(multiscale.metadata.datasets, multiscale.images, strict=True)):
         transf = ds_md.coordinateTransformations[0]
 
-        out_cs = name_to_cs[multiscale.metadata.intrinsic_coordinate_system.name]
+        intrinsic_cs = name_to_cs[multiscale.metadata.intrinsic_coordinate_system.name]
         assert transf.input is not None
         assert transf.input.path is not None
-        in_cs = CoordSystem(name=str(transf.input.name), axes=[Axis(name=ax.name, type=ax.type) for ax in out_cs.axes])
+        pixel_cs = CoordSystem(
+            name=transf.input.path,
+            axes=[Axis(name=ax.name, type=ax.type) for ax in intrinsic_cs.axes],
+            virtual=True,
+        )
 
-        ozm_seq = ozm06trans.Sequence(transformations=ds_md.coordinateTransformations)
-        seq = parse_ngff_transf(input=in_cs, output=out_cs, model=ozm_seq)
+        pixel_cs_to_intrinsic_ngff = ozm06trans.Sequence(transformations=ds_md.coordinateTransformations)
+        seq = parse_ngff_transf(input=pixel_cs, output=intrinsic_cs, model=pixel_cs_to_intrinsic_ngff)
         ds_shape = np.asarray(ds.data.shape)
-        transformed_start = seq.transform_points(np.zeros_like(ds.data.shape)[np.newaxis, :])[0]
+        transformed_start = seq.transform_points(np.zeros_like(ds_shape)[np.newaxis, :])[0]
         transformed_stop = seq.transform_points((ds_shape - 1)[np.newaxis, :])[0]
 
-        coords = xr.Coordinates()
-        for low, high, ax, extent in zip(transformed_start, transformed_stop, out_cs.axes, ds_shape, strict=True):
+        coords: xr.Coordinates = xr.Coordinates()
+        for low, high, ax, extent in zip(transformed_start, transformed_stop, intrinsic_cs.axes, ds_shape, strict=True):
             if ax.type == "channel" and channel_names is not None:
-                coords.merge({ax.name: channel_names})
-                continue
-            coords = coords.merge(
-                xr.Coordinates.from_xindex(
+                coords = coords.merge({ax.name: channel_names}).coords
+            else:
+                axis_index = xr.Coordinates.from_xindex(
                     RangeIndex.linspace(
                         start=low,
                         stop=high,
@@ -228,17 +235,19 @@ def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTran
                         dim=ax.name,
                     )
                 )
-            )
+                coords = coords.merge(axis_index).coords
 
+        # Note: the magic "image" and "scale<N> " strings mimic the current
+        # behavior from `dask_arrays_to_datatree`
         data_tree[f"scale{scale_idx}"] = xr.Dataset(
             {
                 "image": xr.DataArray(
                     ds.data,
                     name="image",
-                    dims=out_cs.axes_names,
+                    dims=intrinsic_cs.axes_names,
                     coords=coords,
                 )
-            }
+            },
         )
     return data_tree, parsed_transfs
 
