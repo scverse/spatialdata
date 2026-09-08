@@ -196,7 +196,7 @@ class AffineEdge(BaseTransfEdge):
         """
         return AffineEdge(
             linear=affine_matrix[:-1, :-1],
-            translation=affine_matrix[-1, :-1],
+            translation=affine_matrix[:-1, -1],
             input=input,
             output=output,
             name=name,
