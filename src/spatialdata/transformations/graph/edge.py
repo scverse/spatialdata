@@ -55,10 +55,10 @@ class BaseTransfEdge(ABC):
         """
         Transform points (coordinates).
 
-        Notes
-        -------
-        This function will check if the dimensionality of the input and output coordinate systems of the
-        transformation are compatible with the given points.
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
         """
 
     @abstractmethod
@@ -100,6 +100,11 @@ class BaseTransfEdge(ABC):
         Notes
         -------
         Self is applied first, then the transformation passed as argument.
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            if this transformation's output coordinate system doesn't match `transformation`'s input
         """
         return SequenceEdge(transformations=[self, transformation], name=name)
 
@@ -134,6 +139,12 @@ class AffineEdge(BaseTransfEdge):
             Input coordinate system of the transformation.
         output
             Output coordinate system of the transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `linear`'s shape isn't (output.num_axes, input.num_axes) or
+            if `translation`'s shape isn't (output.num_axes,)
         """
         num_inputs = input.num_axes
         num_outputs = output.num_axes
@@ -189,6 +200,11 @@ class AffineEdge(BaseTransfEdge):
             Input coordinate system of the transformation.
         output
             Output coordinate system of the transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `affine_matrix`'s shape isn't (output.num_axes + 1, input.num_axes + 1)
         """
         return AffineEdge(
             linear=affine_matrix[:-1, :-1],
@@ -200,6 +216,7 @@ class AffineEdge(BaseTransfEdge):
 
     @classmethod
     def mapping(cls, input: CoordSystem, output: CoordSystem, name: str | None = None) -> AffineEdge:
+        """Create an AffineEdge that maps input axes to output axes of the same name."""
         linear: ArrayLike = np.zeros((output.num_axes, input.num_axes), dtype=float)
         for i, des_axis in enumerate(output.axes):
             for j, src_axis in enumerate(input.axes):
@@ -227,6 +244,14 @@ class AffineEdge(BaseTransfEdge):
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         self._validate_transform_points_shapes(points)
         p = np.vstack([points.T, np.ones(points.shape[0])])
         q = self.affine @ p
@@ -259,6 +284,11 @@ class IdentityEdge(BaseTransfEdge):
             Input coordinate system of the transformation.
         output
             Output coordinate system of the transformation.
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            if `input` and `output` don't have the same number of axes
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
@@ -270,6 +300,14 @@ class IdentityEdge(BaseTransfEdge):
         return IdentityEdge(input=self.output, output=self.input, name=name)
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         self._validate_transform_points_shapes(points)
         return points
 
@@ -302,6 +340,11 @@ class MapAxisEdge(BaseTransfEdge):
         output
             Output coordinate system of the transformation, whose axes
             must be a shuffling of `input`
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            if `input` and `output` don't have the same set of axes
         """
 
         if set(input.axes) != set(output.axes):
@@ -325,6 +368,14 @@ class MapAxisEdge(BaseTransfEdge):
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         self._validate_transform_points_shapes(points)
         new_indices = [self.input.axes.index(out_ax) for out_ax in self.output.axes]
         mapped = points[:, new_indices]
@@ -401,6 +452,14 @@ class ProjectAxisEdge(BaseTransfEdge):
         return AffineEdge(name=name, input=self.input, output=self.output, linear=linear)
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         return self.to_affine().transform_points(points)
 
     def inverse(self, name: str | None = None) -> BaseTransfEdge | None:
@@ -426,6 +485,7 @@ def parse_project_axis(
     input: CoordSystem,
     out: CoordSystem | CsGen,
 ) -> ProjectAxisEdge:
+    """Parse a `ProjectAxis` NGFF transformation model into a `ProjectAxisEdge`."""
     if isinstance(out, CoordSystem):
         output = out
     else:
@@ -470,10 +530,19 @@ class TranslationEdge(BaseTransfEdge):
         ------
         IncompatibleCoordSystemsError
             If the input and output have different number of dimensions
+        UnexpectedShapeError
+            if `translation`'s shape doesn't match `input`
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
                 input=input, output=output, message="Number of input and output axes must be the same"
+            )
+        expected_translation_shape = (input.num_axes,)
+        if translation.shape != expected_translation_shape:
+            raise UnexpectedShapeError(
+                array_name="translation",
+                array_shape=translation.shape,
+                expected_shape=expected_translation_shape,
             )
         self.translation = translation
         super().__init__(input=input, output=output, name=name)
@@ -490,6 +559,14 @@ class TranslationEdge(BaseTransfEdge):
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         self._validate_transform_points_shapes(points)
         return points + self.translation
 
@@ -556,6 +633,14 @@ class ScaleEdge(BaseTransfEdge):
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         self._validate_transform_points_shapes(points)
         return points * self.scale
 
@@ -628,6 +713,14 @@ class RotationEdge(BaseTransfEdge):
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         self._validate_transform_points_shapes(points)
         res = (self.rotation @ points.T).T
         assert isinstance(res, np.ndarray)
@@ -717,6 +810,14 @@ class SequenceEdge(BaseTransfEdge):
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         return self.to_affine().transform_points(points)  # FIXME
 
 
@@ -799,6 +900,14 @@ class ByDimensionEdge(BaseTransfEdge):
         )
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
         input_axes = self.input.axes_names
         output_axes = self.output.axes_names
         self._validate_transform_points_shapes(points)
@@ -882,6 +991,7 @@ def parse_identity(
     input: CoordSystem,
     out: CoordSystem | CsGen,
 ) -> IdentityEdge:
+    """Parse an `Identity` NGFF transformation model into an `IdentityEdge`."""
     output = out.generate_like(input) if isinstance(out, CsGen) else out
     return IdentityEdge(name=model.name, input=input, output=output)
 
@@ -892,6 +1002,7 @@ def parse_translation(
     input: CoordSystem,
     out: CoordSystem | CsGen,
 ) -> TranslationEdge:
+    """Parse a `Translation` NGFF transformation model into a `TranslationEdge`."""
     output = out.generate_like(input) if isinstance(out, CsGen) else out
     return TranslationEdge(
         translation=np.asarray(model.translation, dtype=float),
@@ -907,6 +1018,7 @@ def parse_scale(
     input: CoordSystem,
     out: CoordSystem | CsGen,
 ) -> ScaleEdge:
+    """Parse a `Scale` NGFF transformation model into a `ScaleEdge`."""
     output = out.generate_like(input) if isinstance(out, CsGen) else out
     return ScaleEdge(
         scale=np.asarray(model.scale, dtype=float),
@@ -922,6 +1034,7 @@ def parse_map_axis(
     input: CoordSystem,
     out: CoordSystem | CsGen,
 ) -> MapAxisEdge:
+    """Parse a `MapAxis` NGFF transformation model into a `MapAxisEdge`."""
     if isinstance(out, CoordSystem):
         output = out
     else:
@@ -944,6 +1057,7 @@ def parse_affine(
     input: CoordSystem,
     output: CoordSystem | CsGen,
 ) -> AffineEdge:
+    """Parse an `Affine` NGFF transformation model into an `AffineEdge`."""
     num_output_axes = len(model.affine_matrix)  # spec doesn't save last row
     output = output.generate(num_axes=num_output_axes) if isinstance(output, CsGen) else output
     affine_array = np.asarray(model.affine_matrix, dtype=float)
@@ -958,6 +1072,7 @@ def parse_rotation(
     input: CoordSystem,
     out: CoordSystem | CsGen,
 ) -> RotationEdge:
+    """Parse a `Rotation` NGFF transformation model into a `RotationEdge`."""
     num_output_axes = len(model.rotation_matrix)
     output = out.generate(num_axes=num_output_axes) if isinstance(out, CsGen) else out
     return RotationEdge(
@@ -974,6 +1089,7 @@ def parse_sequence(
     input: CoordSystem,
     output: CoordSystem | CsGen,
 ) -> SequenceEdge:
+    """Parse a `Sequence` NGFF transformation model into a `SequenceEdge`."""
     parsed_inners: list[BaseTransfEdge] = []
 
     base_name = "intermediate" + ("" if not model.name else f"_for_{model.name}")
@@ -1002,6 +1118,7 @@ def parse_by_dimension(
     input: CoordSystem,
     output: CoordSystem | CsGen,
 ) -> ByDimensionEdge:
+    """Parse a `ByDimension` NGFF transformation model into a `ByDimensionEdge`."""
     if not isinstance(output, CoordSystem):
         max_out_idx = max(ax_idx for t in model.transformations for ax_idx in t.output_axes)
         output = output.generate(num_axes=max_out_idx + 1)
@@ -1038,6 +1155,7 @@ def parse_ngff_transf(
     model: ozm06trans.AnyTransform,
     output: CoordSystem | CsGen,
 ) -> BaseTransfEdge:
+    """Parse an NGFF coordinate transformation model into a `BaseTransfEdge`"""
     if isinstance(model, ozm06trans.Identity):
         return parse_identity(model, input=input, out=output)
     elif isinstance(model, ozm06trans.Translation):
