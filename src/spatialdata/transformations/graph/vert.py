@@ -6,7 +6,9 @@ from typing import Final, Literal
 import ome_zarr.classes.image as ozi
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
 
-from spatialdata._core.transformation_manager.exceptions import AxisParsingException
+
+class AxisParsingException(Exception):
+    pass
 
 
 class Axis:

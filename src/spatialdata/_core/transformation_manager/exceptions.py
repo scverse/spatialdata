@@ -285,7 +285,3 @@ class UnmappedAxisError(Exception):
         self.axis = axis
         self.cs = cs
         super().__init__(f"Axis {axis.name} from coordinate system {cs.name} is not mapped to anything")
-
-
-class AxisParsingException(Exception):
-    pass
