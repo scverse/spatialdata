@@ -11,9 +11,11 @@ from tests.conftest import SEED
 
 
 def test_parse_multiscale():
-    data = np.random.default_rng(seed=SEED).random((256, 256))
+    full_shape = (256, 256)
+    data = np.random.default_rng(seed=SEED).random(full_shape)
     omz_img = OMEZarrImage(data=data, axes="yx")
-    ms = OMEZarrMultiscale(image=omz_img, scale_factors=(2, 4, 8, 16))
+    scale_factors = (2, 4, 8, 16)
+    ms = OMEZarrMultiscale(image=omz_img, scale_factors=scale_factors)
 
     data_tree, _transforms = try_parse_ngff06_multiscale(ms)
     for xr_scale_node, ngff_scale, ngff_meta in zip(
@@ -45,4 +47,8 @@ def test_parse_multiscale():
     sliced_data_tree = data_tree.sel(x=slice(0, 256), y=slice(0, 256), method="nearest")
     assert sliced_data_tree.equals(data_tree)
 
-    return data_tree, ms
+    quarter_tree = data_tree.sel(x=slice(0, 128), y=slice(0, 128), method="nearest")
+    for xr_scale_node, scale_factor in zip(quarter_tree.children.values(), [1, *scale_factors], strict=True):
+        xr_scale = xr_scale_node["image"]
+        expected_shape = np.asarray(full_shape) / 2 / scale_factor
+        np.testing.assert_equal(xr_scale.shape, expected_shape)
