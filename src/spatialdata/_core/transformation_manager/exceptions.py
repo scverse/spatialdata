@@ -282,4 +282,6 @@ class AxisRedefinitionError(Exception):
 
 class UnmappedAxisError(Exception):
     def __init__(self, axis: Axis, cs: CoordSystem) -> None:
+        self.axis = axis
+        self.cs = cs
         super().__init__(f"Axis {axis.name} from coordinate system {cs.name} is not mapped to anything")
