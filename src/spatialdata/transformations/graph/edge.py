@@ -984,7 +984,7 @@ def parse_translation(
         translation=np.asarray(model.translation, dtype=float),
         input=input,
         output=output,
-        name=input.name,
+        name=model.name,
     )
 
 
