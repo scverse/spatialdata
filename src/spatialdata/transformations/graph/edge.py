@@ -224,7 +224,7 @@ class AffineEdge(BaseTransfEdge):
             return None
         return AffineEdge(
             linear=inv[:-1, :-1],
-            translation=inv[-1, :-1],
+            translation=inv[:-1, -1],
             input=self.output,
             output=self.input,
             name=name,
@@ -345,7 +345,7 @@ class MapAxisEdge(BaseTransfEdge):
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         self._validate_transform_points_shapes(points)
-        new_indices = [self.input.axes.index(out_ax.name) for out_ax in self.output.axes]
+        new_indices = [self.input.axes.index(out_ax) for out_ax in self.output.axes]
         mapped = points[:, new_indices]
         assert isinstance(mapped, np.ndarray)
         return mapped
@@ -389,27 +389,42 @@ class ProjectAxisEdge(BaseTransfEdge):
         MissingAxisError
             axis in `dropped_inputs` not in `input`
             axis in `created_outputs` not in `output`
+        IncompatibleCoordSystemsError
+            when input can't be mapped to output given dropped_inputs and created_outputs
         """
 
         for axis in dropped_inputs:
             if axis not in input.axes:
                 raise MissingAxisError(axis=axis, cs=input)
-        for axis in dropped_inputs:
+        for axis in created_outputs:
             if axis not in output.axes:
                 raise MissingAxisError(axis=axis, cs=output)
+        if input.num_axes - len(dropped_inputs) + len(created_outputs) != output.num_axes:
+            message = f"Can't map from {input} to {output}"
+            if dropped_inputs:
+                message += f" dropping {dropped_inputs}"
+            if created_outputs:
+                message += f" creating {created_outputs}"
+            raise IncompatibleCoordSystemsError(
+                input=input,
+                output=output,
+                message=message,
+            )
+
         self.dropped_inputs = set(dropped_inputs)
         self.created_outputs = set(created_outputs)
         super().__init__(name=name, input=input, output=output)
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
         linear = np.zeros((self.output.num_axes, self.input.num_axes), dtype=float)
-
+        input_indices = iter(range(self.input.num_axes))
         for out_idx, out_ax in enumerate(self.output.axes):
             if out_ax in self.created_outputs:
                 continue
-            for in_idx, in_ax in enumerate(self.input.axes):
-                if in_ax not in self.dropped_inputs:
-                    linear[out_idx, in_idx] = 1
+            in_idx = next(input_indices)
+            if in_idx in self.dropped_inputs:
+                continue
+            linear[out_idx, in_idx] = 1
 
         return AffineEdge(name=name, input=self.input, output=self.output, linear=linear)
 
@@ -449,7 +464,7 @@ def parse_project_axis(
         output = out
     else:
         num_dropped_inputs = len(model.droppedInputs or ())
-        num_created_outputs = len(model.droppedInputs or ())
+        num_created_outputs = len(model.createdOutputs or ())
         num_output_axes = input.num_axes - num_dropped_inputs + num_created_outputs
         output = out.generate(num_axes=num_output_axes)
 
@@ -740,7 +755,7 @@ class SequenceEdge(BaseTransfEdge):
 
     def inverse(self, name: str | None = None) -> SequenceEdge | None:
         inverted: list[BaseTransfEdge] = []
-        for t in self.transformations:
+        for t in reversed(self.transformations):
             inv = t.inverse()
             if inv is None:
                 return None
