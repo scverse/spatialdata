@@ -75,15 +75,6 @@ class Axis:
             long_name=model.longName,
         )
 
-    def to_model(self) -> ozm06ct.Axis:
-        return ozm06ct.Axis(
-            discrete=False,
-            longName=self.long_name,
-            name=self.name,
-            type=self.type,
-            unit=self.unit,
-        )
-
 
 class CoordSystemParsingException(Exception):
     pass
@@ -138,20 +129,6 @@ class CoordSystem:
         if model is not None:
             return CoordSystem.try_from_model(model)
         return default
-
-    def to_model(self) -> ozi.CoordinateSystem | None:
-        if self.virtual:
-            return None
-        return ozi.CoordinateSystem(
-            name=self.name,
-            axes=tuple(ax.to_model() for ax in self.axes),
-        )
-
-    def to_model_cs_ident(self) -> ozi.CoordinateSystemIdentifier | None:
-        input = self.to_model()
-        if input is None:
-            return None
-        return ozi.CoordinateSystemIdentifier(name=input.name)
 
     @property
     def num_axes(self) -> int:
