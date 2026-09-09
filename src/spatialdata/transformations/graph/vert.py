@@ -61,6 +61,15 @@ class Axis:
 
     @classmethod
     def try_from_model(cls, model: ozm06ct.Axis) -> Axis:
+        """
+        Parse an `Axis` from an ome-zarr-models axis model.
+
+        Raises
+        ------
+        AxisParsingException
+            if `model` doesn't have a name, has a type other than "channel" or "space", or has a unit
+            that isn't a string or None
+        """
         name = model.name
         if name is None:
             raise AxisParsingException("Axis doesn't have a name")
@@ -80,16 +89,15 @@ class CoordSystemParsingException(Exception):
     pass
 
 
+class DuplicateAxisNameError(Exception):
+    def __init__(self, *, axis_name: str) -> None:
+        self.axis_name = axis_name
+        super().__init__(f"Axis name '{axis_name}' is used more than once")
+
+
 class CoordSystem:
     """
-    Representation of a coordinate system, following the NGFF specification.
-
-    Parameters
-    ----------
-    name
-        name of the coordinate system
-    axes
-        names of the axes of the coordinate system
+    Representation of a coordinate system.
     """
 
     name: Final[str]
@@ -100,11 +108,29 @@ class CoordSystem:
     non-virtual coordinate systems and is usually ignored during serialization"""
 
     def __init__(self, name: str, axes: Sequence[Axis], virtual: bool = False):
+        """
+        Parameters
+        ----------
+        name
+            name of the coordinate system
+        axes
+            axes of the coordinate system
+        virtual
+            vitual coordinate systems don't serialize to NGFF
+
+        Raises
+        ------
+        DuplicateAxisNameError
+            if `axes` contains axes with duplicate names
+        """
         self.name = name
         self.axes = tuple(axes)
         self.virtual = virtual
-        if len(self.axes) != len({axis.name for axis in self.axes}):
-            raise ValueError("Axes names must be unique")
+        seen_names: set[str] = set()
+        for axis in self.axes:
+            if axis.name in seen_names:
+                raise DuplicateAxisNameError(axis_name=axis.name)
+            seen_names.add(axis.name)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.name!r}, {self.axes})"
@@ -114,18 +140,31 @@ class CoordSystem:
 
     @classmethod
     def try_from_model(cls, model: ozi.CoordinateSystem) -> CoordSystem:
-        axes: list[Axis] = []
-        for axis in model.axes:
-            if isinstance(parsed := Axis.try_from_model(axis), Exception):
-                raise CoordSystemParsingException(parsed)  # FIXME
-            axes.append(parsed)
+        """
+        Parse a `CoordSystem` from an ome-zarr-models coordinate system model.
+
+        Raises
+        ------
+        AxisParsingException
+            if any axis in `model.axes` fails to parse
+        DuplicateAxisNameError
+            if `model.axes` contains axes with duplicate names
+        """
         return CoordSystem(
             name=model.name,
-            axes=axes,
+            axes=[Axis.try_from_model(axis) for axis in model.axes],
         )
 
     @classmethod
     def try_from_model_or_default[T](cls, model: ozi.CoordinateSystem | None, *, default: T) -> CoordSystem | T:
+        """
+        Parse a `CoordSystem` from `model`, or return `default` if `model` is None.
+
+        Raises
+        ------
+        AxisParsingException
+            if `model` is not None and any of its axes fails to parse
+        """
         if model is not None:
             return CoordSystem.try_from_model(model)
         return default
