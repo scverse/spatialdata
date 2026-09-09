@@ -42,4 +42,7 @@ def test_parse_multiscale():
             expected = np.asarray(scale.scale) * indices + translate.translation
             assert np.allclose(expected, point)
 
+    sliced_data_tree = data_tree.sel(x=slice(0, 256), y=slice(0, 256), method="nearest")
+    assert sliced_data_tree.equals(data_tree)
+
     return data_tree, ms
