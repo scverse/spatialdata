@@ -108,9 +108,6 @@ class CoordSystem:
     """A virtual coordinate system exists as an intermediate step between
     non-virtual coordinate systems and is usually ignored during serialization"""
 
-    class LegacyAxes:
-        pass
-
     def __init__(self, name: str, axes: Sequence[Axis], virtual: bool = False):
         self.name = name
         self.axes = tuple(axes)
