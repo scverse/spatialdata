@@ -479,30 +479,6 @@ class ProjectAxisEdge(BaseTransfEdge):
         )
 
 
-def parse_project_axis(
-    model: ozm06trans.ProjectAxis,
-    *,
-    input: CoordSystem,
-    out: CoordSystem | CsGen,
-) -> ProjectAxisEdge:
-    """Parse a `ProjectAxis` NGFF transformation model into a `ProjectAxisEdge`."""
-    if isinstance(out, CoordSystem):
-        output = out
-    else:
-        num_dropped_inputs = len(model.droppedInputs or ())
-        num_created_outputs = len(model.createdOutputs or ())
-        num_output_axes = input.num_axes - num_dropped_inputs + num_created_outputs
-        output = out.generate(num_axes=num_output_axes)
-
-    return ProjectAxisEdge(
-        created_outputs={output.axes[i] for i in model.createdOutputs or ()},
-        dropped_inputs={input.axes[i] for i in model.droppedInputs or ()},
-        input=input,
-        output=output,
-        name=model.name,
-    )
-
-
 class TranslationEdge(BaseTransfEdge):
     """The Translation transformation from the NGFF specification."""
 
@@ -1012,6 +988,28 @@ def parse_translation(
     )
 
 
+def parse_project_axis(
+    model: ozm06trans.ProjectAxis,
+    *,
+    input: CoordSystem,
+    output: CoordSystem | CsGen,
+) -> ProjectAxisEdge:
+    """Parse a `ProjectAxis` NGFF transformation model into a `ProjectAxisEdge`."""
+    if isinstance(output, CsGen):
+        num_dropped_inputs = len(model.droppedInputs or ())
+        num_created_outputs = len(model.createdOutputs or ())
+        num_output_axes = input.num_axes - num_dropped_inputs + num_created_outputs
+        output = output.generate(num_axes=num_output_axes)
+
+    return ProjectAxisEdge(
+        created_outputs={output.axes[i] for i in model.createdOutputs or ()},
+        dropped_inputs={input.axes[i] for i in model.droppedInputs or ()},
+        input=input,
+        output=output,
+        name=model.name,
+    )
+
+
 def parse_scale(
     model: ozm06trans.Scale,
     *,
@@ -1172,5 +1170,7 @@ def parse_ngff_transf(
         return parse_sequence(model, input=input, output=output)
     elif isinstance(model, ozm06trans.ByDimension):
         return parse_by_dimension(model, input=input, output=output)
+    elif isinstance(model, ozm06trans.ProjectAxis):
+        return parse_project_axis(model, input=input, output=output)
     else:
         raise NotImplementedError(f"Unsupported transformation: {model.type}")
