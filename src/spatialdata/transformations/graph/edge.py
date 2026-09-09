@@ -103,10 +103,6 @@ class BaseTransfEdge(ABC):
         """
         return SequenceEdge(transformations=[self, transformation], name=name)
 
-    @abstractmethod
-    def to_model(self) -> ozm06trans.AnyTransform:
-        pass
-
 
 class AffineEdge(BaseTransfEdge):
     """The Affine transformation from the NGFF specification."""
@@ -243,14 +239,6 @@ class AffineEdge(BaseTransfEdge):
             input=self.input, output=self.output, linear=self.linear, translation=self.translation, name=name
         )
 
-    def to_model(self) -> ozm06trans.Affine:
-        return ozm06trans.Affine(
-            name=self.name,
-            affine=tuple(tuple(row) for row in self.affine[:-1, :]),
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
-        )
-
 
 class IdentityEdge(BaseTransfEdge):
     """The Identity transformation from the NGFF specification."""
@@ -291,13 +279,6 @@ class IdentityEdge(BaseTransfEdge):
             input=self.input,
             output=self.output,
             name=name,
-        )
-
-    def to_model(self) -> ozm06trans.Identity:
-        return ozm06trans.Identity(
-            name=self.name,
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
         )
 
 
@@ -352,15 +333,6 @@ class MapAxisEdge(BaseTransfEdge):
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
         return AffineEdge.mapping(input=self.input, output=self.output, name=name)
-
-    def to_model(self) -> ozm06trans.MapAxis:
-        mapAxis: list[int] = [self.input.axes.index(out_ax) for out_ax in self.output.axes]
-        return ozm06trans.MapAxis(
-            name=self.name,
-            mapAxis=tuple(mapAxis),
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
-        )
 
 
 class ProjectAxisEdge(BaseTransfEdge):
@@ -447,12 +419,6 @@ class ProjectAxisEdge(BaseTransfEdge):
             name=name,
         )
 
-    def to_model(self) -> ozm06trans.ProjectAxis:
-        return ozm06trans.ProjectAxis(
-            createdOutputs=tuple(self.output.axes.index(co) for co in self.created_outputs) or None,
-            droppedInputs=tuple(self.input.axes.index(di) for di in self.dropped_inputs) or None,
-        )
-
 
 def parse_project_axis(
     model: ozm06trans.ProjectAxis,
@@ -536,14 +502,6 @@ class TranslationEdge(BaseTransfEdge):
             name=name,
         )
 
-    def to_model(self) -> ozm06trans.Translation:
-        return ozm06trans.Translation(
-            name=self.name,
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
-            translation=tuple(self.translation),
-        )
-
 
 class ScaleEdge(BaseTransfEdge):
     """The Scale transformation from the NGFF specification."""
@@ -607,14 +565,6 @@ class ScaleEdge(BaseTransfEdge):
             input=self.input,
             output=self.output,
             name=name,
-        )
-
-    def to_model(self) -> ozm06trans.Scale:
-        return ozm06trans.Scale(
-            name=self.name,
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
-            scale=tuple(self.scale),
         )
 
 
@@ -689,14 +639,6 @@ class RotationEdge(BaseTransfEdge):
             input=self.input,
             output=self.output,
             name=name,
-        )
-
-    def to_model(self) -> ozm06trans.Rotation:
-        return ozm06trans.Rotation(
-            name=self.name,
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
-            rotation=tuple(tuple(row) for row in self.rotation),
         )
 
 
@@ -776,14 +718,6 @@ class SequenceEdge(BaseTransfEdge):
 
     def transform_points(self, points: ArrayLike) -> ArrayLike:
         return self.to_affine().transform_points(points)  # FIXME
-
-    def to_model(self) -> ozm06trans.Sequence:
-        return ozm06trans.Sequence(
-            name=self.name,
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
-            transformations=tuple(t.to_model() for t in self.transformations),
-        )
 
 
 class ByDimensionEdge(BaseTransfEdge):
@@ -894,25 +828,6 @@ class ByDimensionEdge(BaseTransfEdge):
             input=self.input,
             output=self.output,
             name=name,
-        )
-
-    def to_model(self) -> ozm06trans.ByDimension:
-        by_dim_transfs: list[ozm06trans.ByDimensionTransform] = []
-        for t in self.transformations:
-            input_axes = tuple(self.input.axes_names.index(ax_name) for ax_name in t.input.axes_names)
-            output_axes = tuple(self.output.axes_names.index(ax_name) for ax_name in t.output.axes_names)
-            by_dim_transfs.append(
-                ozm06trans.ByDimensionTransform(
-                    input_axes=input_axes,
-                    output_axes=output_axes,
-                    transformation=t.to_model(),
-                )
-            )
-        return ozm06trans.ByDimension(
-            name=self.name,
-            input=self.input.to_model_cs_ident(),
-            output=self.output.to_model_cs_ident(),
-            transformations=tuple(by_dim_transfs),
         )
 
 
