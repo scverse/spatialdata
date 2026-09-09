@@ -187,9 +187,9 @@ def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataT
         assert in_cs_id is not None
         assert out_cs_ref is not None
 
+        # FIXME: not handling references into labels yet, which use name and path
         in_cs_name = in_cs_id.name
         out_cs_name = out_cs_ref.name
-        # FIXME: not handling references into labels yet
         assert in_cs_name is not None
         assert out_cs_name is not None
 
@@ -209,6 +209,11 @@ def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataT
         intrinsic_cs = name_to_cs[multiscale.metadata.intrinsic_coordinate_system.name]
         assert transf.input is not None
         assert transf.input.path is not None
+
+        # This coord system doesn't exist explicitly in the NGFF file, nor will
+        # it exist in our graph of transformations; It is only created here
+        # for the sake of creating the transformations that will be expressed
+        # in levels of a xr.DataTree
         pixel_cs = CoordSystem(
             name=transf.input.path,
             axes=[Axis(name=ax.name, type=ax.type) for ax in intrinsic_cs.axes],
