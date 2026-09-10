@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Final, Literal
 
-import ome_zarr.classes.image as ozi
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
 
 
@@ -11,34 +11,16 @@ class AxisParsingException(Exception):
     pass
 
 
+@dataclass(frozen=True)
 class Axis:
-    """
-    Representation of an axis, following the NGFF specification.
-
-    Attributes
-    ----------
-    name
-        name of the axis.
-    type
-        type of the axis. Should be in ["channel", "space"].
-    unit
-        unit of the axis. For a set of valid options see https://ngff.openmicroscopy.org/
-    long_name:
-        a longer, human-friendly name for this axis
-    """
+    """Representation of a coordinate system axis"""
 
     name: Final[str]
     type: Final[Literal["space", "channel"]]
-    unit: Final[str | None]
-    long_name: Final[str | None]
-
-    def __init__(
-        self, *, name: str, type: Literal["space", "channel"], unit: str | None = None, long_name: str | None = None
-    ):
-        self.name = name
-        self.type = type
-        self.unit = unit
-        self.long_name = long_name
+    unit: Final[str | None] = None
+    "unit of the axis. For a set of valid options see https://ngff.openmicroscopy.org/"
+    long_name: Final[str | None] = None
+    "a longer, human-friendly name for this axis"
 
     def cloned_with(self, *, unit: str | None) -> Axis:
         return Axis(name=self.name, type=self.type, unit=unit or self.unit, long_name=self.long_name)
@@ -47,7 +29,7 @@ class Axis:
         return hash((self.name, self.type, self.unit, self.long_name))
 
     def __repr__(self) -> str:
-        return f"NgffAxis(name={self.name}, type={self.type})"
+        return f"Axis(name={self.name}, type={self.type})"
 
     def __eq__(self, value: object, /) -> bool:
         if not isinstance(value, Axis):
@@ -95,6 +77,7 @@ class DuplicateAxisNameError(Exception):
         super().__init__(f"Axis name '{axis_name}' is used more than once")
 
 
+@dataclass(frozen=True)
 class CoordSystem:
     """
     Representation of a coordinate system.
@@ -102,30 +85,17 @@ class CoordSystem:
 
     name: Final[str]
     axes: Final[tuple[Axis, ...]]
-
     virtual: Final[bool]
     """A virtual coordinate system exists as an intermediate step between
     non-virtual coordinate systems and is usually ignored during serialization"""
 
-    def __init__(self, name: str, axes: Sequence[Axis], virtual: bool = False):
+    def __post_init__(self) -> None:
         """
-        Parameters
-        ----------
-        name
-            name of the coordinate system
-        axes
-            axes of the coordinate system
-        virtual
-            vitual coordinate systems don't serialize to NGFF
-
         Raises
         ------
         DuplicateAxisNameError
             if `axes` contains axes with duplicate names
         """
-        self.name = name
-        self.axes = tuple(axes)
-        self.virtual = virtual
         seen_names: set[str] = set()
         for axis in self.axes:
             if axis.name in seen_names:
@@ -139,7 +109,7 @@ class CoordSystem:
         return hash((self.name, self.axes, self.virtual))
 
     @classmethod
-    def try_from_model(cls, model: ozi.CoordinateSystem) -> CoordSystem:
+    def try_from_model(cls, model: ozm06ct.CoordinateSystem) -> CoordSystem:
         """
         Parse a `CoordSystem` from an ome-zarr-models coordinate system model.
 
@@ -152,11 +122,12 @@ class CoordSystem:
         """
         return CoordSystem(
             name=model.name,
-            axes=[Axis.try_from_model(axis) for axis in model.axes],
+            axes=tuple(Axis.try_from_model(axis) for axis in model.axes),
+            virtual=False,
         )
 
     @classmethod
-    def try_from_model_or_default[T](cls, model: ozi.CoordinateSystem | None, *, default: T) -> CoordSystem | T:
+    def try_from_model_or_default[T](cls, model: ozm06ct.CoordinateSystem | None, *, default: T) -> CoordSystem | T:
         """
         Parse a `CoordSystem` from `model`, or return `default` if `model` is None.
 

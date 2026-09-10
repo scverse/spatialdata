@@ -42,7 +42,7 @@ from spatialdata.transformations._utils import (
     _set_transformations,
     compute_coordinates,
 )
-from spatialdata.transformations.graph.edge import BaseTransfEdge, parse_ngff_transf
+from spatialdata.transformations.graph.edge import BaseTransformationEdge, parse_ngff_transf
 from spatialdata.transformations.graph.vert import Axis, CoordSystem
 
 
@@ -166,20 +166,20 @@ def _prepare_storage_options(
     return prepared_options
 
 
-def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTransfEdge]]:
+def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTransformationEdge]]:
     multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store))
     assert isinstance(multiscale, oz.OMEZarrMultiscale)  # disambiguate from OMEZarrLabel
     return try_parse_ngff06_multiscale(multiscale)
 
 
-def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataTree, Sequence[BaseTransfEdge]]:
+def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataTree, Sequence[BaseTransformationEdge]]:
     """Parse an OMEZarMultiscale into a DataTree and collects Multiscale-level transforms."""
     name_to_cs: dict[str, CoordSystem] = {}
     for cs in multiscale.metadata.coordinateSystems or ():
         parsed_cs = CoordSystem.try_from_model(cs)
         name_to_cs[cs.name] = parsed_cs
 
-    parsed_transfs: list[BaseTransfEdge] = []
+    parsed_transfs: list[BaseTransformationEdge] = []
     for transf in multiscale.metadata.coordinateTransformations or ():
         in_cs_id = transf.input
         out_cs_ref = transf.output
@@ -216,7 +216,7 @@ def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataT
         # in levels of a xr.DataTree
         pixel_cs = CoordSystem(
             name=transf.input.path,
-            axes=[Axis(name=ax.name, type=ax.type) for ax in intrinsic_cs.axes],
+            axes=tuple(Axis(name=ax.name, type=ax.type) for ax in intrinsic_cs.axes),
             virtual=True,
         )
 
