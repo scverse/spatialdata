@@ -932,9 +932,15 @@ class CsGen:
         self._cs_count: int = 0
         super().__init__()
 
+    def get_unique_name(self) -> str:
+
+        unique_name = f"{self._base_name}{self._cs_count}"
+        self._cs_count += 1
+        return unique_name
+
     def generate(self, *, num_axes: int) -> CoordSystem:
-        out = CoordSystem(
-            name=f"{self._base_name}{self._cs_count}",
+        return CoordSystem(
+            name=self.get_unique_name(),
             axes=[
                 Axis(
                     name=f"axis_{ax_idx}",
@@ -944,12 +950,18 @@ class CsGen:
             ],
             virtual=True,
         )
-        self._cs_count += 1
-        return out
+
+    def generate_with_axes(self, *, axes: Sequence[Axis]) -> CoordSystem:
+
+        return CoordSystem(
+            name=self.get_unique_name(),
+            axes=axes,
+            virtual=True,
+        )
 
     def generate_like(self, other: CoordSystem) -> CoordSystem:
-        out = CoordSystem(
-            name=f"{self._base_name}{self._cs_count}",
+        return CoordSystem(
+            name=self.get_unique_name(),
             axes=[
                 Axis(
                     name=axis.name,
@@ -961,8 +973,6 @@ class CsGen:
             ],
             virtual=True,
         )
-        self._cs_count += 1
-        return out
 
 
 def parse_identity(
