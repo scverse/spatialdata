@@ -70,6 +70,10 @@ Update Feb 2025: `spatialdata` cannot be currently be installed via `conda` beca
 mamba install -c conda-forge spatialdata napari-spatialdata spatialdata-io spatialdata-plot
 ```
 
+## Limitations
+
+- Windows users are advised to use the Windows Subsystem for Linux (WSL), as it provides a Linux environment covered by the package's automated Linux tests. If WSL is not used, please keep in mind that automated testing for this package is currently limited to Linux and macOS, and native Windows is only manually tested.
+
 ## Contact
 
 To get involved in the discussion, or if you need help to get started, you are welcome to use the following options.

@@ -8,7 +8,10 @@ description = "Spatial data format."
 readme = "README.md"
 license = { file = "LICENSE" }
 maintainers = [
-  { name = "scverse", email = "giov.pll@gmail.com" },
+  { name = "Luca Marconato", email = "luca.marconato@scverse.org" },
+  { name = "Wouter Vierdag", email = "michiel.vierdag@scverse.org" },
+  { name = "Tomaz Vieira", email = "tomaz.vieira@embl.de" },
+  { name = "Ajayrama Kumaraswamy", email = "ajayrama.kumaraswamy@embl.de" },
 ]
 authors = [
   { name = "scverse" },
@@ -44,9 +47,6 @@ dependencies = [
   "scikit-image",
   "scipy!=1.17",
   "scverse-misc[datasets]>=0.1",
-  # for debug logging (referenced from the issue template)
-  "session-info2",
-  "setuptools",
   "shapely>=2.0.1",
   "spatial-image>=1.2.3",
   "typing-extensions>=4.8",
