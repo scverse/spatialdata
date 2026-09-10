@@ -264,10 +264,16 @@ class UnexpectedShapeError(Exception):
         super().__init__(message)
 
 
-class NotUnimodularError(Exception):
+class DeterminantDifferentFromOne(Exception):
     def __init__(self, matrix: ArrayLike) -> None:
         self.matrix = matrix
         super().__init__("Matrix does not have det(M) == 1")
+
+
+class NotOrthonormalError(Exception):
+    def __init__(self, matrix: ArrayLike) -> None:
+        self.matrix = matrix
+        super().__init__("Matrix is not orthonormal")
 
 
 class EmptyTransformSequenceError(Exception):

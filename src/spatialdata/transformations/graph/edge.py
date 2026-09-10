@@ -11,10 +11,11 @@ import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
 from spatialdata._core.transformation_manager.exceptions import (
     AxisRedefinitionError,
+    DeterminantDifferentFromOne,
     EmptyTransformSequenceError,
     IncompatibleCoordSystemsError,
     MissingAxisError,
-    NotUnimodularError,
+    NotOrthonormalError,
     UnexpectedShapeError,
     UnmappedAxisError,
 )
@@ -658,7 +659,7 @@ class RotationEdge(BaseTransformationEdge):
         Parameters
         ----------
         linear_matrix
-            an array of shape (output.num_axes, input.num_axes) representing the rotation
+            And orthonormal matrix of shape (output.num_axes, input.num_axes)
         input
             Input coordinate system of the transformation.
         output
@@ -669,8 +670,10 @@ class RotationEdge(BaseTransformationEdge):
             if linear_matrix's shape isn't (output.num_axes, input.num_axes)
         IncompatibleCoordSystemsError
             if input and output don't have the same number of axes
-        NotUnimodularError
+        DeterminantDifferentFromOne
             if linear_matrix doesn't have determinant ~= 1
+        NotOrthonormal
+            if linear_matrix is not orthonormal
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
@@ -681,8 +684,10 @@ class RotationEdge(BaseTransformationEdge):
             raise UnexpectedShapeError(
                 array_name="linear_matrix", array_shape=linear_matrix.shape, expected_shape=expected_shape
             )
+        if not np.allclose(linear_matrix.T @ linear_matrix, np.identity(input.num_axes)):
+            raise NotOrthonormalError(matrix=linear_matrix)
         if not np.isclose(np.linalg.det(linear_matrix), 1.0):
-            raise NotUnimodularError(matrix=linear_matrix)
+            raise DeterminantDifferentFromOne(matrix=linear_matrix)
         linear_matrix.flags.writeable = False
         self.rotation = linear_matrix
         super().__init__(input=input, output=output, name=name)
