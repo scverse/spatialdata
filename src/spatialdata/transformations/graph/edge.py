@@ -681,10 +681,8 @@ class RotationEdge(BaseTransformationEdge):
             if linear_matrix's shape isn't (output.num_axes, input.num_axes)
         IncompatibleCoordSystemsError
             if input and output don't have the same number of axes
-        DeterminantDifferentFromOne
+        NotUnimodularError
             if linear_matrix doesn't have determinant ~= 1
-        NotOrthonormal
-            if linear_matrix is not orthonormal
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(

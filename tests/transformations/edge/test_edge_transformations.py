@@ -26,6 +26,11 @@ from spatialdata.transformations.graph.edge import (
     TranslationEdge,
 )
 from tests.transformations.edge.conftest import (
+    a_axis,
+    abc_cs,
+    b_axis,
+    c_axis,
+    x_axis,
     x_cs,
     xy_cs,
     xyc_cs,
@@ -70,11 +75,6 @@ class TestAffineEdge:
         np.testing.assert_equal(edge.linear, linear)
         np.testing.assert_equal(edge.translation, translation)
         np.testing.assert_allclose(edge.transform_points(POINTS_2D), np.array([[3.0, 11.0], [7.0, 17.0]]))
-
-    def test_mapping_classmethod_builds_permutation_matrix(self):
-        edge = AffineEdge.mapping(input=xy_cs, output=yx_cs)
-        np.testing.assert_allclose(edge.linear, np.array([[0.0, 1.0], [1.0, 0.0]]))
-        np.testing.assert_allclose(edge.transform_points(POINTS_2D), np.array([[2.0, 1.0], [4.0, 3.0]]))
 
     def test_transform_points_scale_and_translate(self):
         edge = AffineEdge(
@@ -131,25 +131,29 @@ class TestIdentityEdge:
 
 
 class TestMapAxisEdge:
-    def test_constructor_rejects_different_sets_of_axes(self):
-        with pytest.raises(IncompatibleCoordSystemsError):
-            MapAxisEdge(input=xy_cs, output=xyz_cs)
-
     def test_transform_points_swaps_axes(self):
-        edge = MapAxisEdge(input=xy_cs, output=yx_cs)
-        np.testing.assert_allclose(edge.transform_points(POINTS_2D), np.array([[2.0, 1.0], [4.0, 3.0]]))
+        edge = MapAxisEdge(
+            input=xyz_cs,
+            output=abc_cs,
+            input_to_output={x_axis: b_axis, y_axis: c_axis, z_axis: a_axis},
+        )
+        np.testing.assert_equal(edge.transform_points(POINTS_3D), np.array([[3.0, 1.0, 2.0], [6.0, 4.0, 5.0]]))
 
     def test_transform_points_permutation_of_three_axes(self):
-        edge = MapAxisEdge(input=xyz_cs, output=zyx_cs)
+        edge = MapAxisEdge(
+            input=xyz_cs, output=abc_cs, input_to_output={x_axis: c_axis, y_axis: b_axis, z_axis: a_axis}
+        )
         np.testing.assert_allclose(edge.transform_points(POINTS_3D), np.array([[3.0, 2.0, 1.0], [6.0, 5.0, 4.0]]))
 
     def test_to_affine_matches_transform_points(self):
-        edge = MapAxisEdge(input=xy_cs, output=yx_cs)
+        edge = MapAxisEdge(input=xy_cs, output=xy_cs, input_to_output={x_axis: y_axis, y_axis: x_axis})
         affine = edge.to_affine()
         np.testing.assert_allclose(affine.transform_points(POINTS_2D), edge.transform_points(POINTS_2D))
 
     def test_inverse_roundtrips(self):
-        edge = MapAxisEdge(input=xyz_cs, output=zyx_cs)
+        edge = MapAxisEdge(
+            input=xyz_cs, output=zyx_cs, input_to_output={x_axis: z_axis, y_axis: y_axis, z_axis: x_axis}
+        )
         inv = edge.inverse()
         np.testing.assert_allclose(inv.transform_points(edge.transform_points(POINTS_3D)), POINTS_3D)
 

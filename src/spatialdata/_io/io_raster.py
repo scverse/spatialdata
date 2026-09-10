@@ -218,7 +218,7 @@ def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataT
         # in levels of a xr.DataTree
         pixel_cs = CoordSystem(
             name=transf.input.path,
-            axes=[Axis(name=ax.name, type=ax.type) for ax in intrinsic_cs.axes],
+            axes=tuple(Axis(name=ax.name, type=ax.type) for ax in intrinsic_cs.axes),
             virtual=True,
         )
 
