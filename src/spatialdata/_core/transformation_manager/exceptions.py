@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import override
+
 from spatialdata._types import ArrayLike
 from spatialdata.transformations.graph.vert import Axis, CoordSystem
-from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 
 class CoordinateSystemNotFoundError(ValueError):
@@ -16,7 +17,7 @@ class CoordinateSystemNotFoundError(ValueError):
     """
 
     def __init__(self, name: str) -> None:
-        self.name = name
+        self.name: str = name
         super().__init__(f"Coordinate system '{name}' not found in the transformation manager.")
 
 
@@ -31,7 +32,7 @@ class CoordinateSystemAlreadyExistsError(ValueError):
     """
 
     def __init__(self, name: str) -> None:
-        self.name = name
+        self.name: str = name
         super().__init__(f"Coordinate system '{name}' already exists in the transformation manager.")
 
 
@@ -46,7 +47,7 @@ class ElementNotRegisteredToAnyCoordinateSystemError(KeyError):
     """
 
     def __init__(self, element_name: str) -> None:
-        self.element_name = element_name
+        self.element_name: str = element_name
         super().__init__(f"Element '{element_name}' has not been registered to any coordinate system.")
 
 
@@ -65,9 +66,9 @@ class TransformationNotFoundError(KeyError):
     """
 
     def __init__(self, source_cs_name: str, target_cs_name: str, edge_key: str | None = None) -> None:
-        self.input_cs_name = source_cs_name
-        self.output_cs_name = target_cs_name
-        self.edge_key = edge_key
+        self.input_cs_name: str = source_cs_name
+        self.output_cs_name: str = target_cs_name
+        self.edge_key: str | None = edge_key
         msg = f"Transformation from '{source_cs_name}' to '{target_cs_name}' not found"
         if edge_key is not None:
             msg += f" with key '{edge_key}'"
@@ -85,7 +86,7 @@ class ElementAlreadyExistsError(ValueError):
     """
 
     def __init__(self, name: str) -> None:
-        self.name = name
+        self.name: str = name
         super().__init__(f"Element '{name}' already exists in the transformation manager")
 
 
@@ -95,10 +96,10 @@ class InvalidPathError(ValueError):
 
     Attributes
     ----------
-    invalid_path : list[NgffCoordinateSystem]
+    invalid_path : list[CoordSystem]
     """
 
-    def __init__(self, invalid_path: list[NgffCoordinateSystem]) -> None:
+    def __init__(self, invalid_path: list[CoordSystem]) -> None:
         super().__init__(f"Found an invalid path with less than 2 nodes: {invalid_path}")
 
 
@@ -115,8 +116,8 @@ class TransformationPathNotFoundError(ValueError):
     """
 
     def __init__(self, source_cs_name: str, target_cs_name: str) -> None:
-        self.source_cs_name = source_cs_name
-        self.target_cs_name = target_cs_name
+        self.source_cs_name: str = source_cs_name
+        self.target_cs_name: str = target_cs_name
         super().__init__(f"No transformation path found from {source_cs_name} to {target_cs_name}")
 
 
@@ -133,8 +134,8 @@ class TransformationPathAmbiguousError(ValueError):
     """
 
     def __init__(self, source_cs_name: str, target_cs_name: str) -> None:
-        self.source_cs_name = source_cs_name
-        self.target_cs_name = target_cs_name
+        self.source_cs_name: str = source_cs_name
+        self.target_cs_name: str = target_cs_name
         base_msg = f"Transformation Path ambiguous from {source_cs_name} to {target_cs_name}."
         cause_of_confusion = self.cause_of_confusion()
         msg = f"{base_msg} {cause_of_confusion}" if cause_of_confusion else base_msg
@@ -148,6 +149,7 @@ class TransformationPathAmbiguousNoEdgeExpectedError(TransformationPathAmbiguous
     def __init__(self, source_cs_name: str, target_cs_name: str) -> None:
         super().__init__(source_cs_name, target_cs_name)
 
+    @override
     def cause_of_confusion(self) -> str:
 
         return "Multiple edges found. None of them were specified to be expected"
@@ -155,9 +157,10 @@ class TransformationPathAmbiguousNoEdgeExpectedError(TransformationPathAmbiguous
 
 class TransformationPathAmbiguousMultipleEdgeExpectedError(TransformationPathAmbiguousError):
     def __init__(self, source_cs_name: str, target_cs_name: str, number_of_edges_expected: int) -> None:
-        self.number_of_edges_expected = number_of_edges_expected
+        self.number_of_edges_expected: int = number_of_edges_expected
         super().__init__(source_cs_name, target_cs_name)
 
+    @override
     def cause_of_confusion(self) -> str:
         return f"Multiple ({self.number_of_edges_expected}) edges were specified to be expected"
 
@@ -169,12 +172,12 @@ class TransformationPathNotSimple(ValueError):
     A simple path is one in which each coordinate system appears only once
     """
 
-    def __init__(self, path: list[NgffCoordinateSystem]) -> None:
-        self.path = path
+    def __init__(self, path: list[CoordSystem]) -> None:
+        self.path: list[CoordSystem] = path
         css_formatted_one_per_line = "\n".join(repr(cs) for cs in path)
         super().__init__(
-            f"Transformation Path not simple, i.e., some coordinate systems appear multiple times:\n"
-            f"{css_formatted_one_per_line}"
+            "Transformation Path not simple, i.e., some coordinate systems appear multiple times:\n"
+            + f"{css_formatted_one_per_line}"
         )
 
 
@@ -188,7 +191,7 @@ class CannotRemoveCoordinateSystemError(ValueError):
     """
 
     def __init__(self, name: str) -> None:
-        self.name = name
+        self.name: str = name
         super().__init__(f"Cannot remove coordinate system with name {name}.")
 
 
@@ -203,7 +206,7 @@ class CoordinateSystemHasTransformationsError(ValueError):
     """
 
     def __init__(self, name: str) -> None:
-        self.name = name
+        self.name: str = name
         super().__init__(f"Coordinate System ('{name}') has transformations.")
 
 
@@ -220,8 +223,8 @@ class CoordinateSystemHasElementsError(ValueError):
     """
 
     def __init__(self, name: str, associated_elements: list[str]) -> None:
-        self.name = name
-        self.associated_elements = associated_elements
+        self.name: str = name
+        self.associated_elements: list[str] = associated_elements
         super().__init__(f"Coordinate system '{name}' has elements belonging to it: {associated_elements}")
 
 
@@ -232,10 +235,21 @@ class TransformationManagerWarning(UserWarning):
 
 
 class IncompatibleCoordSystemsError(Exception):
-    def __init__(self, input: CoordSystem, output: CoordSystem, message: str | None = None) -> None:
+    def __init__(
+        self,
+        input: CoordSystem,
+        output: CoordSystem,
+        transformation_name: str | None = None,
+        axes_error_message: str | None = None,
+    ) -> None:
         self.input = input
         self.output = output
-        super().__init__(message or "Output axes can't be mapped to input axes")
+        self.transformation_name = transformation_name
+        axes_message = axes_error_message or "Output axes can't be mapped to input axes"
+        axes_transformation_message = (
+            transformation_name and f"In the context of a `{transformation_name}` transformation, {axes_message}"
+        )
+        super().__init__(axes_transformation_message or axes_message)
 
 
 class MissingAxisError(Exception):
@@ -285,3 +299,7 @@ class UnmappedAxisError(Exception):
         self.axis = axis
         self.cs = cs
         super().__init__(f"Axis {axis.name} from coordinate system {cs.name} is not mapped to anything")
+
+
+class AxisParsingException(Exception):
+    pass

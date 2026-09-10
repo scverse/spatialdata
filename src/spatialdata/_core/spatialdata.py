@@ -22,7 +22,7 @@ from xarray import DataArray, DataTree
 from zarr.errors import GroupNotFoundError
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
-from spatialdata._core.transformation_manager import TransformationManager
+from spatialdata._core.transformation_manager._transformation_graph import TransformationGraph
 from spatialdata._core.validation import (
     check_all_keys_case_insensitively_unique,
     check_target_region_column_symmetry,
@@ -131,7 +131,7 @@ class SpatialData:
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
         self.attrs = attrs if attrs else {}  # type: ignore[assignment]
-        self.transformation_manager = TransformationManager()  # Initialize the TransformationManager
+        self.transformation_graph = TransformationGraph()  # Initialize the TransformationManager
 
         element_names = list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
 

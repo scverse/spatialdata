@@ -293,7 +293,10 @@ class IdentityEdge(BaseTransfEdge):
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="Axes must have the same number of dimensions"
+                input=input,
+                output=output,
+                axes_error_message="Axes must have the same number of dimensions",
+                transformation_name=self.__class__.__name__,
             )
         super().__init__(input=input, output=output, name=name)
 
@@ -350,7 +353,7 @@ class MapAxisEdge(BaseTransfEdge):
 
         if set(input.axes) != set(output.axes):
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="Input and output must have the same axes"
+                input=input, output=output, axes_error_message="Input and output must have the same axes"
             )
         super().__init__(input=input, output=output, name=name)
 
@@ -432,7 +435,7 @@ class ProjectAxisEdge(BaseTransfEdge):
             raise IncompatibleCoordSystemsError(
                 input=input,
                 output=output,
-                message=message,
+                axes_error_message=message,
             )
 
         self.dropped_inputs = set(dropped_inputs)
@@ -512,7 +515,7 @@ class TranslationEdge(BaseTransfEdge):
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="Number of input and output axes must be the same"
+                input=input, output=output, axes_error_message="Number of input and output axes must be the same"
             )
         expected_translation_shape = (input.num_axes,)
         if translation.shape != expected_translation_shape:
@@ -590,7 +593,7 @@ class ScaleEdge(BaseTransfEdge):
             raise UnexpectedShapeError(array_name="scale", array_shape=scale.shape, expected_shape=expected_scale_shape)
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="input and output must have same number of dimensions"
+                input=input, output=output, axes_error_message="input and output must have same number of dimensions"
             )
         self.scale = scale
         super().__init__(input=input, output=output, name=name)
@@ -663,7 +666,7 @@ class RotationEdge(BaseTransfEdge):
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="input and output should have the same numbe rof axes"
+                input=input, output=output, axes_error_message="input and output should have the same numbe rof axes"
             )
         expected_shape = (output.num_axes, input.num_axes)
         if linear_matrix.shape != expected_shape:
@@ -743,7 +746,7 @@ class SequenceEdge(BaseTransfEdge):
                 raise IncompatibleCoordSystemsError(
                     input=current_transf.input,
                     output=previous_transf.output,
-                    message=(
+                    axes_error_message=(
                         f"Output of transformation #{transf_idx - 1} is different "
                         f"from input of transformation #{transf_idx}"
                     ),

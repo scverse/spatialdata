@@ -34,7 +34,13 @@ class NgffAxisType(StrEnum):
     CHANNEL = "channel"
 
 
-axis_type_mapping_ngff = {C: NgffAxisType.CHANNEL, X: NgffAxisType.SPACE, Y: NgffAxisType.SPACE, Z: NgffAxisType.SPACE}
+axis_type_mapping_ngff = {
+    C: NgffAxisType.CHANNEL,
+    X: NgffAxisType.SPACE,
+    Y: NgffAxisType.SPACE,
+    Z: NgffAxisType.SPACE,
+}
+
 
 if TYPE_CHECKING:
     from anndata import AnnData
