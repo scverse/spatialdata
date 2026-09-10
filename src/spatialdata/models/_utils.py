@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from enum import StrEnum
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +27,14 @@ C = "c"
 Z = "z"
 Y = "y"
 X = "x"
+
+
+class NgffAxisType(StrEnum):
+    SPACE = "space"
+    CHANNEL = "channel"
+
+
+axis_type_mapping_ngff = {C: NgffAxisType.CHANNEL, X: NgffAxisType.SPACE, Y: NgffAxisType.SPACE, Z: NgffAxisType.SPACE}
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -119,6 +128,10 @@ def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
     """
     validate_axes(axes)
     return tuple(ax for ax in axes if ax in [X, Y, Z])
+
+
+def get_axes_types(e: SpatialElement) -> tuple[NgffAxisType, ...]:
+    return tuple(axis_type_mapping_ngff[x] for x in get_axes_names(e))
 
 
 @singledispatch

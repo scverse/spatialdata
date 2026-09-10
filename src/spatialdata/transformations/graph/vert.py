@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Final, Literal
+from typing import Final
 
 import ome_zarr.classes.image as ozi
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
+
+from spatialdata.models._utils import NgffAxisType
 
 
 class AxisParsingException(Exception):
@@ -28,13 +30,11 @@ class Axis:
     """
 
     name: Final[str]
-    type: Final[Literal["space", "channel"]]
+    type: Final[NgffAxisType]
     unit: Final[str | None]
     long_name: Final[str | None]
 
-    def __init__(
-        self, *, name: str, type: Literal["space", "channel"], unit: str | None = None, long_name: str | None = None
-    ):
+    def __init__(self, *, name: str, type: NgffAxisType, unit: str | None = None, long_name: str | None = None):
         self.name = name
         self.type = type
         self.unit = unit
@@ -73,7 +73,7 @@ class Axis:
         name = model.name
         if name is None:
             raise AxisParsingException("Axis doesn't have a name")
-        if model.type != "channel" and model.type != "space":
+        if model.type != NgffAxisType.CHANNEL and model.type != NgffAxisType.SPACE:
             raise AxisParsingException(f"Can't handle axis of type {model.type}")
         if not isinstance(model.unit, (str, type(None))):
             raise AxisParsingException("Can't handle axis unit")
