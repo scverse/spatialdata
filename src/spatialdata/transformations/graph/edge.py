@@ -959,9 +959,15 @@ class CsGen:
         self._cs_count: int = 0
         super().__init__()
 
+    def get_unique_name(self) -> str:
+
+        unique_name = f"{self._base_name}{self._cs_count}"
+        self._cs_count += 1
+        return unique_name
+
     def generate(self, *, num_axes: int) -> CoordSystem:
-        out = CoordSystem(
-            name=f"{self._base_name}{self._cs_count}",
+        return CoordSystem(
+            name=self.get_unique_name(),
             axes=tuple(
                 Axis(
                     name=f"axis_{ax_idx}",
@@ -971,12 +977,18 @@ class CsGen:
             ),
             virtual=True,
         )
-        self._cs_count += 1
-        return out
+
+    def generate_with_axes(self, *, axes: tuple[Axis]) -> CoordSystem:
+
+        return CoordSystem(
+            name=self.get_unique_name(),
+            axes=axes,
+            virtual=True,
+        )
 
     def generate_like(self, other: CoordSystem) -> CoordSystem:
-        out = CoordSystem(
-            name=f"{self._base_name}{self._cs_count}",
+        return CoordSystem(
+            name=self.get_unique_name(),
             axes=tuple(
                 Axis(
                     name=axis.name,
@@ -988,8 +1000,6 @@ class CsGen:
             ),
             virtual=True,
         )
-        self._cs_count += 1
-        return out
 
 
 def parse_identity(
@@ -1183,7 +1193,7 @@ def parse_ngff_transf(
     model: ozm06trans.AnyTransform,
     output: CoordSystem | CsGen,
 ) -> BaseTransformationEdge:
-    """Parse an NGFF coordinate transformation model into a `BaseTransfEdge`"""
+    """Parse an NGFF coordinate transformation model into a `BaseTransformationEdge`"""
     if isinstance(model, ozm06trans.Identity):
         return parse_identity(model, input=input, out=output)
     elif isinstance(model, ozm06trans.Translation):
