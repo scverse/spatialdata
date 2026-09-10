@@ -7,10 +7,11 @@ import pytest
 
 from spatialdata._core.transformation_manager.exceptions import (
     AxisRedefinitionError,
+    DeterminantDifferentFromOne,
     EmptyTransformSequenceError,
     IncompatibleCoordSystemsError,
     MissingAxisError,
-    NotUnimodularError,
+    NotOrthonormalError,
     UnexpectedShapeError,
     UnmappedAxisError,
 )
@@ -263,9 +264,13 @@ class TestRotationEdge:
         with pytest.raises(UnexpectedShapeError):
             RotationEdge(linear_matrix=np.eye(3), input=xy_cs, output=xy_cs)
 
-    def test_constructor_rejects_non_unimodular_matrix(self):
-        with pytest.raises(NotUnimodularError):
+    def test_constructor_rejects_matrix_with_det_diff_from_1(self):
+        with pytest.raises(DeterminantDifferentFromOne):
             RotationEdge(linear_matrix=np.array([[1.0, 0.0], [0.0, -1.0]]), input=xy_cs, output=xy_cs)
+
+    def test_constructor_rejects_non_orthonormal_matrix(self):
+        with pytest.raises(NotOrthonormalError):
+            RotationEdge(linear_matrix=np.array([[1.0, 0.0], [0.0, 2.0]]), input=xy_cs, output=xy_cs)
 
     def test_transform_points_rotates_90_degrees(self):
         edge = RotationEdge(linear_matrix=np.array([[0.0, -1.0], [1.0, 0.0]]), input=xy_cs, output=xy_cs)
