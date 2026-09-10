@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Final
 
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
+
+from spatialdata.models._utils import NgffAxisType
 
 
 class AxisParsingException(Exception):
@@ -16,7 +18,7 @@ class Axis:
     """Representation of a coordinate system axis"""
 
     name: Final[str]
-    type: Final[Literal["space", "channel"]]
+    type: Final[NgffAxisType]
     unit: Final[str | None] = None
     "unit of the axis. For a set of valid options see https://ngff.openmicroscopy.org/"
     long_name: Final[str | None] = None
@@ -58,13 +60,15 @@ class Axis:
             raise AxisParsingException("Axis doesn't have a name")
         if model.type is None:
             raise AxisParsingException("Axis doesn't have a type")
-        if model.type not in ("channel", "space"):
-            raise AxisParsingException(f"Can't handle axis of type {model.type}")
+        try:
+            axis_type = NgffAxisType(model.type)
+        except ValueError as ve:
+            raise AxisParsingException(f"Can't handle axis of type {model.type}") from ve
         if not isinstance(model.unit, (str, type(None))):
             raise AxisParsingException("Can't handle axis unit")
         return Axis(
             name=name,
-            type=model.type,  # type: ignore[arg-type]
+            type=axis_type,
             unit=model.unit,
             long_name=model.longName,
         )

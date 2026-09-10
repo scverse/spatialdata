@@ -20,6 +20,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     UnmappedAxisError,
 )
 from spatialdata._types import ArrayLike
+from spatialdata.models._utils import NgffAxisType
 from spatialdata.transformations.graph.vert import Axis, CoordSystem
 
 
@@ -961,7 +962,7 @@ class CsGen:
             axes=tuple(
                 Axis(
                     name=f"axis_{ax_idx}",
-                    type="space",  # FIXME
+                    type=NgffAxisType.SPACE,  # FIXME
                 )
                 for ax_idx in range(num_axes)
             ),
