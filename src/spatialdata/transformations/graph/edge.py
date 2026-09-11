@@ -239,10 +239,7 @@ class AffineEdge(BaseTransformationEdge):
             if `points`'s shape is incompatible with this transformation's input shape
         """
         self._validate_transform_points_shapes(points)
-        p = np.vstack([points.T, np.ones(points.shape[0])])
-        q = self.affine @ p
-        res = q[: self.output.num_axes, :].T
-        return res
+        return (points @ self.linear.T) + self.translation
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
         return AffineEdge(
@@ -715,9 +712,7 @@ class RotationEdge(BaseTransformationEdge):
             if `points`'s shape is incompatible with this transformation's input shape
         """
         self._validate_transform_points_shapes(points)
-        res = (self.rotation @ points.T).T
-        assert isinstance(res, np.ndarray)
-        return res
+        return points @ self.rotation.T
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
         return AffineEdge(
