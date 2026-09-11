@@ -202,8 +202,8 @@ class TestParseByDimension:
         model = ozm06trans.ByDimension(
             name="my-by-dim",
             transformations=(
-                ozm06trans.ByDimensionTransform(transformation=scale_x, input_axes=(0,), output_axes=(0,)),
-                ozm06trans.ByDimensionTransform(transformation=translate_y, input_axes=(1,), output_axes=(1,)),
+                ozm06trans.ByDimensionTransform(transformation=scale_x, inputAxes=(0,), outputAxes=(0,)),
+                ozm06trans.ByDimensionTransform(transformation=translate_y, inputAxes=(1,), outputAxes=(1,)),
             ),
         )
         edge = parse_by_dimension(model, input=xy_cs, output=xy_cs)
@@ -217,8 +217,8 @@ class TestParseByDimension:
         translate_y = ozm06trans.Translation(translation=(5.0,))
         model = ozm06trans.ByDimension(
             transformations=(
-                ozm06trans.ByDimensionTransform(transformation=scale_x, input_axes=(0,), output_axes=(0,)),
-                ozm06trans.ByDimensionTransform(transformation=translate_y, input_axes=(1,), output_axes=(1,)),
+                ozm06trans.ByDimensionTransform(transformation=scale_x, inputAxes=(0,), outputAxes=(0,)),
+                ozm06trans.ByDimensionTransform(transformation=translate_y, inputAxes=(1,), outputAxes=(1,)),
             ),
         )
         edge = parse_by_dimension(model, input=xy_cs, output=CsGen(base_name="gen"))
