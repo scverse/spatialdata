@@ -1129,19 +1129,19 @@ def parse_by_dimension(
 ) -> ByDimensionEdge:
     """Parse a `ByDimension` NGFF transformation model into a `ByDimensionEdge`."""
     if not isinstance(output, CoordSystem):
-        max_out_idx = max(ax_idx for t in model.transformations for ax_idx in t.output_axes)
+        max_out_idx = max(ax_idx for t in model.transformations for ax_idx in t.outputAxes)
         output = output.generate(num_axes=max_out_idx + 1)
 
     piecewise_transforms: list[BaseTransformationEdge] = []
     for t in model.transformations:
-        inp_axes = tuple(input.axes[i] for i in t.input_axes)
+        inp_axes = tuple(input.axes[i] for i in t.inputAxes)
         partial_input = CoordSystem(
             axes=inp_axes,
             name=f"{input.name}_{','.join(ax.name for ax in inp_axes)}",
             virtual=True,
         )
 
-        out_axes = tuple(output.axes[i] for i in t.output_axes)
+        out_axes = tuple(output.axes[i] for i in t.outputAxes)
         partial_out = CoordSystem(
             axes=out_axes,
             name=f"{output.name}_{','.join(ax.name for ax in inp_axes)}",
