@@ -585,7 +585,7 @@ def _(
     max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
     return_request_only: bool = False,
-) -> DataArray | DataTree | Mapping[str, slice] | list[Mapping[str, slice]] | list[DataArray] | list[DataTree] | None:
+) -> DataArray | DataTree | Mapping[str, slice] | list[Mapping[str, slice]] | list[DataArray | DataTree] | None:
     """Implement bounding box query for Spatialdata supported DataArray.
 
     Notes
@@ -638,30 +638,34 @@ def _(
         translation_vectors = translation_vectors[0].tolist()
 
     if return_request_only:
-        if isinstance(selection, dict):
-            selected: Mapping[str, slice] | list[Mapping[str, slice]] = selection
-        else:
-            selected = list(selection)
+        selected: Mapping[str, slice] | list[Mapping[str, slice]] = (
+            selection if isinstance(selection, dict) else list(selection)
+        )
         return selected
 
-    # query the data
+    # query the data; treat the single-box case uniformly with the multi-box one by wrapping it into a list of one
     if isinstance(selection, dict):
-        single = image.sel(selection)
-        assert isinstance(single, DataArray | DataTree)
-        return _process_query_result(single, translation_vectors, axes)
+        multiple_boxes = False
+        selections: list[dict[str, slice]] = [selection]
+        box_translation_vectors = [translation_vectors]
+    else:
+        multiple_boxes = True
+        selections = selection
+        box_translation_vectors = translation_vectors
 
     processed_results: list[DataArray | DataTree] = []
-    for sel, translation_vector in zip(selection, translation_vectors, strict=True):
+    for sel, translation_vector in zip(selections, box_translation_vectors, strict=True):
         result = image.sel(sel)
         assert isinstance(result, DataArray | DataTree)
         processed_result = _process_query_result(result, translation_vector, axes)
         if processed_result is not None:
             processed_results.append(processed_result)
+
     if not processed_results:
         return None
-    if all(isinstance(r, DataArray) for r in processed_results):
-        return [r for r in processed_results if isinstance(r, DataArray)]
-    return [r for r in processed_results if isinstance(r, DataTree)]
+    if multiple_boxes:
+        return processed_results
+    return processed_results[0]
 
 
 @bounding_box_query.register(DaskDataFrame)

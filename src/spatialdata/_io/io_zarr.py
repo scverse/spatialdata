@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Callable
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import zarr.storage
 from anndata import AnnData
@@ -28,7 +28,7 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
-from spatialdata._types import Raster_T
+from spatialdata._types import JSONValue, Raster_T
 
 
 def _read_zarr_group_spatialdata_element(
@@ -139,6 +139,11 @@ def read_zarr(
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
 
+    This is the underlying reader used by :meth:`spatialdata.SpatialData.read`. Compared to that method, it also
+    accepts an already-open :class:`zarr.Group` and lets you skip corrupted or invalid elements instead of failing
+    (see ``on_bad_files``). It cannot repair the consolidated metadata of the store; for that, read from a path with
+    :meth:`spatialdata.SpatialData.read` and ``reconsolidate_metadata=True``.
+
     Parameters
     ----------
     store
@@ -161,6 +166,10 @@ def read_zarr(
     Returns
     -------
     A SpatialData object.
+
+    See Also
+    --------
+    spatialdata.SpatialData.read : Convenience wrapper that reads from a path and can reconsolidate the metadata.
     """
     from spatialdata._io._utils import _resolve_zarr_store
 
@@ -228,12 +237,14 @@ def read_zarr(
 
     # read attrs metadata
     root_attrs = root_group.attrs.asdict()
-    attrs: dict[str, Any] | None
+    attrs: dict[str, JSONValue] | None
     if "spatialdata_attrs" in root_attrs:
         # when refactoring the read_zarr function into reading componenets separately (and according to the version),
         # we can move the code below (.pop()) into attrs_from_dict()
         root_attrs.pop("spatialdata_attrs")
-        attrs = root_attrs
+        # what we read back from the Zarr store is JSON, so it satisfies `JSONValue`; the cast is needed because zarr
+        # types its attributes with a slightly laxer `JSON` alias
+        attrs = cast("dict[str, JSONValue]", root_attrs)
     else:
         attrs = None
 

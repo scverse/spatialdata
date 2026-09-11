@@ -7,7 +7,7 @@ import warnings
 from collections.abc import Generator, Mapping
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pandas as pd
 import zarr
@@ -30,7 +30,7 @@ from spatialdata._core.validation import (
     validate_table_attr_keys,
 )
 from spatialdata._logging import logger
-from spatialdata._types import ArrayLike, Raster_T
+from spatialdata._types import ArrayLike, JSONValue, Raster_T
 from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
     Image2DModel,
@@ -121,7 +121,7 @@ class SpatialData:
         points: dict[str, DaskDataFrame] | None = None,
         shapes: dict[str, GeoDataFrame] | None = None,
         tables: dict[str, AnnData] | Tables | None = None,
-        attrs: Mapping[Any, Any] | None = None,
+        attrs: Mapping[str, JSONValue] | None = None,
     ) -> None:
         self._path: Path | None = None
 
@@ -577,21 +577,21 @@ class SpatialData:
         else:
             raise TypeError("Path must be `None`, a `str` or a `Path` object.")
 
-    def locate_element(self, element: SpatialElement) -> list[str]:
+    def locate_element(self, element: SpatialElement | AnnData) -> list[str]:
         """
-        Locate a SpatialElement within the SpatialData object and returns its Zarr paths relative to the root.
+        Locate an element within the SpatialData object and returns its Zarr paths relative to the root.
 
         Parameters
         ----------
         element
-            The queried SpatialElement
+            The queried SpatialElement or table
 
         Returns
         -------
         A list of Zarr paths of the element relative to the root (multiple copies of the same element are allowed).
         The list is empty if the element is not present.
         """
-        found: list[SpatialElement] = []
+        found: list[SpatialElement | AnnData] = []
         found_element_type: list[str] = []
         found_element_name: list[str] = []
         for element_type in ["images", "labels", "points", "shapes", "tables"]:
@@ -1758,8 +1758,6 @@ class SpatialData:
         element = self.get(element_name)
         if element is None:
             raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
-        if isinstance(element, AnnData):
-            return "tables"
 
         located = self.locate_element(element)
         element_type = None
@@ -1768,8 +1766,6 @@ class SpatialData:
             if element_name == found_element_name:
                 element_type = found_element_type
                 break
-        if element_type is None:
-            pass
         assert element_type is not None
         return element_type
 
@@ -1801,7 +1797,9 @@ class SpatialData:
         attrs_to_write = {"spatialdata_attrs": {"version": version} | version_specific_attrs} | self.attrs
 
         try:
-            zarr_group.attrs.put(attrs_to_write)
+            # `JSONValue` is a stricter version of the `JSON` type that zarr uses to annotate the attributes, so the
+            # cast is safe; it is needed because `dict` is invariant in its value type
+            zarr_group.attrs.put(cast("dict[str, Any]", attrs_to_write))
         except TypeError as e:
             raise TypeError("Invalid attribute in SpatialData.attrs") from e
 
@@ -1867,7 +1865,7 @@ class SpatialData:
         return_as: Literal["dict", "json", "df"] | None = None,
         sep: str = "_",
         flatten: bool = True,
-    ) -> dict[str, Any] | str | pd.DataFrame:
+    ) -> JSONValue | pd.DataFrame:
         """
         Retrieve a specific key from sdata.attrs and return it in the specified format.
 
@@ -1890,8 +1888,8 @@ class SpatialData:
         the value of `return_as`.
         """
 
-        def _flatten_mapping(m: Mapping[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
-            items: list[tuple[str, Any]] = []
+        def _flatten_mapping(m: Mapping[str, JSONValue], parent_key: str = "", sep: str = "_") -> dict[str, JSONValue]:
+            items: list[tuple[str, JSONValue]] = []
             for k, v in m.items():
                 new_key = f"{parent_key}{sep}{k}" if parent_key else k
                 if isinstance(v, Mapping):
@@ -1909,7 +1907,7 @@ class SpatialData:
         if key not in self.attrs:
             raise KeyError(f"The key '{key}' was not found in sdata.attrs.")
 
-        data: dict[str, Any] | str | pd.DataFrame = self.attrs[key]
+        data: JSONValue = self.attrs[key]
 
         # If the data is a mapping, flatten it
         if flatten and isinstance(data, Mapping):
@@ -1961,33 +1959,49 @@ class SpatialData:
 
     @staticmethod
     def read(
-        file_path: str | Path | UPath | zarr.Group,
+        file_path: str | Path | UPath,
         selection: tuple[str] | None = None,
         reconsolidate_metadata: bool = False,
     ) -> SpatialData:
         """
         Read a SpatialData object from a Zarr storage (on-disk or remote).
 
+        This is a convenience wrapper around :func:`spatialdata.read_zarr` that reads from a path or URL and can
+        additionally repair the consolidated metadata of the store before reading it (see ``reconsolidate_metadata``).
+        Compared to :func:`spatialdata.read_zarr`, it does not accept an already-open :class:`zarr.Group` and does not
+        expose the ``on_bad_files`` option: corrupted or invalid elements always raise an error.
+
         Parameters
         ----------
         file_path
-            The path, URL, or zarr.Group to the Zarr storage.
+            The path or URL to the Zarr storage. To read from an already-open :class:`zarr.Group`, use
+            :func:`spatialdata.read_zarr` instead.
         selection
             The elements to read (images, labels, points, shapes, table). If None, all elements are read.
         reconsolidate_metadata
-            If the consolidated metadata store got corrupted this can lead to errors when trying to read the data.
+            If `True`, rewrite the consolidated metadata of the store before reading it. Use this when the consolidated
+            metadata is corrupted or out of date, which otherwise leads to errors when reading the data. This requires
+            write access to the store.
 
         Returns
         -------
         The SpatialData object.
+
+        See Also
+        --------
+        spatialdata.read_zarr : The underlying reader; also accepts an open :class:`zarr.Group` and can skip bad files.
         """
         from spatialdata import read_zarr
+
+        if isinstance(file_path, zarr.Group):
+            raise TypeError(
+                "SpatialData.read() requires a path or URL, not an already-open zarr.Group; "
+                "use spatialdata.read_zarr() to read from a zarr.Group."
+            )
 
         if reconsolidate_metadata:
             from spatialdata._io.io_zarr import _write_consolidated_metadata
 
-            if isinstance(file_path, zarr.Group):
-                raise TypeError("Consolidating metadata requires a path, not an already-open zarr group.")
             _write_consolidated_metadata(str(file_path))
 
         return read_zarr(file_path, selection=selection)
@@ -2358,7 +2372,7 @@ class SpatialData:
     def init_from_elements(
         cls,
         elements: dict[str, SpatialElement | AnnData],
-        attrs: Mapping[Any, Any] | None = None,
+        attrs: Mapping[str, JSONValue] | None = None,
     ) -> SpatialData:
         """
         Create a SpatialData object from a dict of named elements and an optional table.
@@ -2550,12 +2564,16 @@ class SpatialData:
         getattr(self, element_type).__delitem__(key)
 
     @property
-    def attrs(self) -> dict[Any, Any]:
+    def attrs(self) -> dict[str, JSONValue]:
         """
         Dictionary of global attributes on this SpatialData object.
 
         Notes
         -----
+        The attrs must be JSON-serializable, since they are stored as Zarr attributes; writing a SpatialData
+        object whose attrs contain a non-JSON-serializable value (e.g. a numpy array, a set, a DataFrame) raises
+        a `TypeError`.
+
         Operations on SpatialData objects such as `subset()`, `query()`, ..., will pass the `.attrs` by
         reference. If you want to modify the `.attrs` without affecting the original object, you should
         either use `copy.deepcopy(sdata.attrs)` or eventually copy the SpatialData object using
@@ -2564,7 +2582,7 @@ class SpatialData:
         return self._attrs
 
     @attrs.setter
-    def attrs(self, value: Mapping[Any, Any]) -> None:
+    def attrs(self, value: Mapping[str, JSONValue]) -> None:
         """
         Set the global attributes on this SpatialData object.
 

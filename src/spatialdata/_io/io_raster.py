@@ -264,6 +264,40 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
     return nodes
 
 
+def _get_raster_element_group(
+    raster_type: Literal["image", "labels"], group: zarr.Group, element_name: str
+) -> zarr.Group:
+    """Get the Zarr group holding a raster element that has just been written.
+
+    Labels are nested one level deeper than images: ome-zarr writes them inside a "labels" group, so for them the
+    group of the element is `group/labels/{element_name}`, while for images it is `group` itself.
+
+    Parameters
+    ----------
+    raster_type
+        Whether the element is an image or a labels element.
+    group
+        The Zarr group the element has been written to.
+    element_name
+        The name of the raster element.
+
+    Returns
+    -------
+    The Zarr group of the raster element.
+    """
+    if raster_type != "labels":
+        return group
+    labels_group = group["labels"]
+    if not isinstance(labels_group, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
+    element_group = labels_group[element_name]
+    if not isinstance(element_group, zarr.Group):
+        raise TypeError(
+            f"Expected a zarr group holding the label {element_name!r}, got {type(element_group).__name__}."
+        )
+    return element_group
+
+
 def _write_raster(
     raster_type: Literal["image", "labels"],
     raster_data: DataArray | DataTree,
@@ -332,14 +366,7 @@ def _write_raster(
     else:
         raise ValueError("Not a valid labels object")
 
-    if raster_type == "labels":
-        labels_group = group["labels"]
-        if not isinstance(labels_group, zarr.Group):
-            raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
-        label_group = labels_group[name]
-        if not isinstance(label_group, zarr.Group):
-            raise TypeError(f"Expected a zarr group holding the label {name!r}, got {type(label_group).__name__}.")
-        group = label_group
+    group = _get_raster_element_group(raster_type, group, name)
     if raster_type == "image":
         # ome-zarr-py >= 0.18 no longer writes the omero channel metadata, so we write it ourselves.
         overwrite_channel_names(group, raster_data)
@@ -495,17 +522,7 @@ def _write_raster_dataarray(
         **metadata,
     )
 
-    if raster_type == "labels":
-        labels_group = group["labels"]
-        if not isinstance(labels_group, zarr.Group):
-            raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
-        trans_group = labels_group[element_name]
-        if not isinstance(trans_group, zarr.Group):
-            raise TypeError(
-                f"Expected a zarr group holding the label {element_name!r}, got {type(trans_group).__name__}."
-            )
-    else:
-        trans_group = group
+    trans_group = _get_raster_element_group(raster_type, group, element_name)
     overwrite_coordinate_transformations_raster(
         group=trans_group,
         transformations=transformations,
@@ -590,17 +607,7 @@ def _write_raster_datatree(
     # This workaround should not be needed once https://github.com/ome/ome-zarr-py/issues/580 is fixed.
     group = zarr.open_group(store=group.store, path=group.path, mode="r+", use_consolidated=False)
 
-    if raster_type == "labels":
-        labels_group = group["labels"]
-        if not isinstance(labels_group, zarr.Group):
-            raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
-        trans_group = labels_group[element_name]
-        if not isinstance(trans_group, zarr.Group):
-            raise TypeError(
-                f"Expected a zarr group holding the label {element_name!r}, got {type(trans_group).__name__}."
-            )
-    else:
-        trans_group = group
+    trans_group = _get_raster_element_group(raster_type, group, element_name)
     overwrite_coordinate_transformations_raster(
         group=trans_group,
         transformations=transformations,
