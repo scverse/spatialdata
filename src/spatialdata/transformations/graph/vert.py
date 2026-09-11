@@ -70,16 +70,19 @@ class Axis:
             if `model` doesn't have a name, has a type other than "channel" or "space", or has a unit
             that isn't a string or None
         """
+
         name = model.name
         if name is None:
             raise AxisParsingException("Axis doesn't have a name")
-        if model.type != "channel" and model.type != "space":
+        if model.type is None:
+            raise AxisParsingException("Axis doesn't have a type")
+        if model.type not in ("channel", "space"):
             raise AxisParsingException(f"Can't handle axis of type {model.type}")
         if not isinstance(model.unit, (str, type(None))):
             raise AxisParsingException("Can't handle axis unit")
         return Axis(
             name=name,
-            type=model.type,
+            type=model.type,  # type: ignore[arg-type]
             unit=model.unit,
             long_name=model.longName,
         )
