@@ -34,7 +34,7 @@ from spatialdata._io.format import (
     RasterFormatType,
     get_ome_zarr_format,
 )
-from spatialdata._types import ELEMENT_TYPE, ELEMENT_TYPE_RASTER, GROUP_NAME
+from spatialdata._types import ELEMENT_TYPE, ELEMENT_TYPE_RASTER
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
@@ -44,7 +44,7 @@ from spatialdata.transformations._utils import (
     _set_transformations,
     compute_coordinates,
 )
-from spatialdata.transformations.graph.edge import BaseTransfEdge, parse_ngff_transf
+from spatialdata.transformations.graph.edge import BaseTransformationEdge, parse_ngff_transf
 from spatialdata.transformations.graph.vert import Axis, CoordSystem
 
 
@@ -168,20 +168,20 @@ def _prepare_storage_options(
     return prepared_options
 
 
-def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTransfEdge]]:
+def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTransformationEdge]]:
     multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store))
     assert isinstance(multiscale, oz.OMEZarrMultiscale)  # disambiguate from OMEZarrLabel
     return try_parse_ngff06_multiscale(multiscale)
 
 
-def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataTree, Sequence[BaseTransfEdge]]:
+def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataTree, Sequence[BaseTransformationEdge]]:
     """Parse an OMEZarMultiscale into a DataTree and collects Multiscale-level transforms."""
     name_to_cs: dict[str, CoordSystem] = {}
     for cs in multiscale.metadata.coordinateSystems or ():
         parsed_cs = CoordSystem.try_from_model(cs)
         name_to_cs[cs.name] = parsed_cs
 
-    parsed_transfs: list[BaseTransfEdge] = []
+    parsed_transfs: list[BaseTransformationEdge] = []
     for transf in multiscale.metadata.coordinateTransformations or ():
         in_cs_id = transf.input
         out_cs_ref = transf.output
@@ -364,9 +364,7 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
     return nodes
 
 
-def _get_raster_element_group(
-    raster_type: ELEMENT_TYPE_RASTER, group: zarr.Group, element_name: str
-) -> zarr.Group:
+def _get_raster_element_group(raster_type: ELEMENT_TYPE_RASTER, group: zarr.Group, element_name: str) -> zarr.Group:
     """Get the Zarr group holding a raster element that has just been written.
 
     Labels are nested one level deeper than images: ome-zarr writes them inside a "labels" group, so for them the
@@ -385,7 +383,7 @@ def _get_raster_element_group(
     -------
     The Zarr group of the raster element.
     """
-    if raster_type != "labels":
+    if raster_type != ELEMENT_TYPE.LABELS:
         return group
     labels_group = group["labels"]
     if not isinstance(labels_group, zarr.Group):
