@@ -4,7 +4,7 @@ from abc import abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import dask.dataframe as dd
 import numpy as np
@@ -450,8 +450,7 @@ def _dict_query_dispatcher(
         | SpatialData
         | Mapping[str, slice]
         | list[Mapping[str, slice]]
-        | list[DataArray]
-        | list[DataTree]
+        | list[SpatialElement | None]
         | None,
     ],
     **kwargs: Any,
@@ -466,6 +465,14 @@ def _dict_query_dispatcher(
         if target_coordinate_system in d:
             result = query_function(element, **kwargs)
             if result is not None:
+                if isinstance(result, list):
+                    # the query returns a list when queried with multiple (batched) bounding boxes; querying a
+                    # `SpatialData` object this way is not supported yet since it would require returning multiple
+                    # `SpatialData` objects (one per box) instead of a single one
+                    raise NotImplementedError(
+                        "Querying a `SpatialData` object with multiple (batched) bounding boxes is not supported. "
+                        "Please query each element individually instead of the `SpatialData` object."
+                    )
                 # query returns None if it is empty
                 assert isinstance(result, DataArray | DataTree | GeoDataFrame | DaskDataFrame)
                 queried_elements[key] = result
@@ -484,13 +491,7 @@ def bounding_box_query(
     filter_table: bool = True,
     **kwargs: Any,
 ) -> (
-    SpatialElement
-    | SpatialData
-    | Mapping[str, slice]
-    | list[Mapping[str, slice]]
-    | list[DataArray]
-    | list[DataTree]
-    | None
+    SpatialElement | SpatialData | Mapping[str, slice] | list[Mapping[str, slice]] | list[SpatialElement | None] | None
 ):
     """
     Query a SpatialData object or SpatialElement within a bounding box.
@@ -955,27 +956,24 @@ def _(
     target_coordinate_system: str,
     return_request_only: bool = False,
     **kwargs: Any,
-) -> (
-    DataArray
-    | DataTree
-    | GeoDataFrame
-    | DaskDataFrame
-    | SpatialData
-    | Mapping[str, slice]
-    | list[Mapping[str, slice]]
-    | list[DataArray]
-    | list[DataTree]
-    | None
-):
+) -> DataArray | DataTree | Mapping[str, slice] | None:
+    # this always delegates to `bounding_box_query` with a single box (derived from `polygon`'s bounds), so unlike
+    # `bounding_box_query` itself, this can never return a batched (list) result, nor a GeoDataFrame/DaskDataFrame/
+    # SpatialData
     gdf = GeoDataFrame(geometry=[polygon])
     min_x, min_y, max_x, max_y = gdf.bounds.to_numpy().flatten().tolist()
-    return bounding_box_query(
-        image,
-        min_coordinate=[min_x, min_y],
-        max_coordinate=[max_x, max_y],
-        axes=("x", "y"),
-        target_coordinate_system=target_coordinate_system,
-        return_request_only=return_request_only,
+    # `bounding_box_query`'s declared return type is broader than what a single-box call can actually produce; narrow
+    # it back down for mypy (see the comment above for why the broader cases cannot occur here)
+    return cast(
+        "DataArray | DataTree | Mapping[str, slice] | None",
+        bounding_box_query(
+            image,
+            min_coordinate=[min_x, min_y],
+            max_coordinate=[max_x, max_y],
+            axes=("x", "y"),
+            target_coordinate_system=target_coordinate_system,
+            return_request_only=return_request_only,
+        ),
     )
 
 

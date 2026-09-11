@@ -436,6 +436,26 @@ def test_query_polygons(is_bb_3d: bool, with_polygon_query: bool, multiple_boxes
         assert polygons_result.index[0] == 3
 
 
+@pytest.mark.xfail(
+    reason="Batched (multiple) bounding box queries are not supported when querying a `SpatialData` object, only "
+    "when querying a `SpatialElement` directly; see `_dict_query_dispatcher`.",
+    raises=NotImplementedError,
+)
+def test_query_sdata_with_multiple_boxes_not_supported():
+    centroids = np.array([[10, 10], [10, 80], [80, 20], [70, 60]])
+    half_widths = [6] * 4
+    sd_polygons = _make_squares(centroid_coordinates=centroids, half_widths=half_widths)
+    sdata = SpatialData(shapes={"squares": sd_polygons})
+
+    bounding_box_query(
+        sdata,
+        axes=("y", "x"),
+        target_coordinate_system="global",
+        min_coordinate=np.array([[40, 40], [50, 50]]),
+        max_coordinate=np.array([[100, 100], [110, 110]]),
+    )
+
+
 @pytest.mark.parametrize("is_bb_3d", [True, False])
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 def test_query_circles(is_bb_3d: bool, with_polygon_query: bool):

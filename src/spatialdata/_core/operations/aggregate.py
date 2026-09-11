@@ -208,7 +208,7 @@ def aggregate(
     # create a SpatialData object with the aggregated table and the "by" shapes
     shapes_name = by if isinstance(by, str) else "by"
     assert isinstance(by_, GeoDataFrame | DataArray | DataTree)
-    return _create_sdata_from_table_and_shapes(
+    return _create_sdata_from_table_and_regions(
         table=adata,
         table_name=table_name,
         shapes_name=shapes_name,
@@ -219,7 +219,7 @@ def aggregate(
     )
 
 
-def _create_sdata_from_table_and_shapes(
+def _create_sdata_from_table_and_regions(
     table: ad.AnnData,
     table_name: str,
     shapes: GeoDataFrame | DataArray | DataTree,
