@@ -9,7 +9,7 @@ Note that to run code, your current working directory should be the SpatialData 
 The benchmarks use the [airspeed velocity](https://asv.readthedocs.io/en/stable/) (asv) framework. Install it with the `benchmark` option:
 
 ```
-pip install -e . --group dev --group test --group docs --group benchmark
+pip install -e . --group dev --group test --group doc --group benchmark
 ```
 
 ## Usage

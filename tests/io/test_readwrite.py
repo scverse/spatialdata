@@ -1299,9 +1299,11 @@ def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
     sdata_from_upath = SpatialData.read(UPath(sdata_path))
     assert sdata_from_upath.path == sdata_path
 
-    # path as zarr Group
+    # an already-open zarr Group is only accepted by read_zarr(), not by SpatialData.read()
     zarr_group = zarr.open_group(sdata_path, mode="r")
-    sdata_from_zarr_group = SpatialData.read(zarr_group)
+    with pytest.raises(TypeError, match="requires a path or URL"):
+        SpatialData.read(zarr_group)  # type: ignore[arg-type]
+    sdata_from_zarr_group = read_zarr(zarr_group)
     assert sdata_from_zarr_group.path == sdata_path
 
     # Assert all read methods produce identical SpatialData objects

@@ -1,10 +1,16 @@
 # Temp files
 .DS_Store
 *~
+buck-out/
 .dmypy.json
+temp/
 
 # Compiled files
+.venv/
+uv.lock
+pixi.lock
 __pycache__/
+.*cache/
 
 # Distribution / packaging
 /build/
@@ -12,26 +18,22 @@ __pycache__/
 /*.egg-info/
 
 # Tests and coverage
-/.pytest_cache/
-/.cache/
 /data/
+/node_modules/
+/.coverage*
+/coverage.xml
 
 # docs
-docs/_build
-!docs/api/.md
-docs/**/generated
+/docs/generated/
+/docs/_build/
+docs/**/generated/
 docs/_static/datasets_data.js
 
 # IDEs
 /.idea/
-.vscode
 
 # data
 *.zarr/
-
-# temp files
-temp/
-
 
 # symlinks (luca) for extending the refactoring to satellite projects
 napari-spatialdata
@@ -52,12 +54,3 @@ _version.py
 # benchmarking and profiling
 .asv/
 profile.speedscope.json
-
-# other
-node_modules/
-
-.mypy_cache
-.ruff_cache
-uv.lock
-pixi.lock
-

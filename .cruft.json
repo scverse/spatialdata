@@ -1,0 +1,44 @@
+{
+  "template": "https://github.com/scverse/cookiecutter-scverse",
+  "commit": "eb4523fde2e18bcfc121ff2cd722c9037ff8b910",
+  "checkout": "main",
+  "context": {
+    "cookiecutter": {
+      "project_name": "spatialdata",
+      "package_name": "spatialdata",
+      "project_description": "Spatial data format.",
+      "author_full_name": "scverse",
+      "author_email": "luca.marconato@scverse.org",
+      "github_user": "scverse",
+      "github_repo": "spatialdata",
+      "license": "BSD 3-Clause License",
+      "ide_integration": true,
+      "issue_categorization": "labels",
+      "_copy_without_render": [
+        ".github/workflows/build.yaml",
+        ".github/workflows/test.yaml",
+        "docs/_templates/autosummary/**.rst"
+      ],
+      "_exclude_on_template_update": [
+        "CHANGELOG.md",
+        "LICENSE",
+        "README.md",
+        "docs/api.md",
+        "docs/index.md",
+        "docs/notebooks/example.ipynb",
+        "docs/references.bib",
+        "docs/references.md",
+        "src/**",
+        "tests/**"
+      ],
+      "_render_devdocs": false,
+      "_jinja2_env_vars": {
+        "lstrip_blocks": true,
+        "trim_blocks": true
+      },
+      "_template": "https://github.com/scverse/cookiecutter-scverse",
+      "_commit": "eb4523fde2e18bcfc121ff2cd722c9037ff8b910"
+    }
+  },
+  "directory": null
+}

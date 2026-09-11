@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from typing import Any
 
 import anndata as ad
@@ -177,6 +178,8 @@ def aggregate(
             values_[ONES_KEY] = 1
             value_key = ONES_KEY
 
+        assert isinstance(by_, GeoDataFrame)
+        assert isinstance(values_, GeoDataFrame | DaskDataFrame)
         adata = _aggregate_shapes(
             values=values_,
             by=by_,
@@ -195,6 +198,8 @@ def aggregate(
     if by_type is Labels2DModel and values_type is Image2DModel:
         if fractions is True:
             raise NotImplementedError("fractions = True is not yet supported for raster aggregation")
+        assert isinstance(values_, DataArray | DataTree)
+        assert isinstance(by_, DataArray | DataTree)
         adata = _aggregate_image_by_labels(values=values_, by=by_, agg_func=agg_func, **kwargs)
 
     if adata is None:
@@ -202,7 +207,8 @@ def aggregate(
 
     # create a SpatialData object with the aggregated table and the "by" shapes
     shapes_name = by if isinstance(by, str) else "by"
-    return _create_sdata_from_table_and_shapes(
+    assert isinstance(by_, GeoDataFrame | DataArray | DataTree)
+    return _create_sdata_from_table_and_regions(
         table=adata,
         table_name=table_name,
         shapes_name=shapes_name,
@@ -213,7 +219,7 @@ def aggregate(
     )
 
 
-def _create_sdata_from_table_and_shapes(
+def _create_sdata_from_table_and_regions(
     table: ad.AnnData,
     table_name: str,
     shapes: GeoDataFrame | DataArray | DataTree,
@@ -237,10 +243,15 @@ def _create_sdata_from_table_and_shapes(
 
     # labels case, needs conversion from str to int
     if isinstance(shapes, DataArray | DataTree):
-        table.obs[instance_key] = table.obs[instance_key].astype(int)
+        obs = table.obs
+        if not isinstance(obs, pd.DataFrame):
+            raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+        obs[instance_key] = obs[instance_key].astype(int)
 
     if deepcopy:
-        shapes = _deepcopy(shapes)
+        copied = _deepcopy(shapes)
+        assert isinstance(copied, GeoDataFrame | DataArray | DataTree)
+        shapes = copied
 
     return SpatialData.init_from_elements({shapes_name: shapes, table_name: table})
 
@@ -271,28 +282,39 @@ def _aggregate_image_by_labels(
     AnnData of shape `(by.shape[0], len(agg_func)]`.
     """
     from scipy import sparse
-    from xrspatial import zonal_stats
+    from xrspatial.zonal import stats as zonal_stats
 
     if isinstance(by, DataTree):
-        assert len(by["scale0"]) == 1
-        by = next(iter(by["scale0"].values()))
+        by_scale0 = by["scale0"]
+        assert isinstance(by_scale0, DataTree)
+        assert len(by_scale0) == 1
+        by_variable = next(iter(by_scale0.values()))
+        assert isinstance(by_variable, DataArray)
+        by = by_variable
     if isinstance(values, DataTree):
-        assert len(values["scale0"]) == 1
-        values = next(iter(values["scale0"].values()))
+        values_scale0 = values["scale0"]
+        assert isinstance(values_scale0, DataTree)
+        assert len(values_scale0) == 1
+        values_variable = next(iter(values_scale0.values()))
+        assert isinstance(values_variable, DataArray)
+        values = values_variable
 
     agg_func = [agg_func] if isinstance(agg_func, str) else agg_func
     outs = []
 
-    for i, c in enumerate(values.coords["c"].values):
+    for i, c in enumerate(values.coords["c"].to_numpy()):
         with warnings.catch_warnings():  # ideally fix upstream
             warnings.filterwarnings(
                 "ignore",
                 message=".*unknown divisions.*",
             )
-            out = zonal_stats(by, values[i, ...], stats_funcs=agg_func, **kwargs).compute()
+            zonal = zonal_stats(by, values[i, ...], stats_funcs=list(agg_func), **kwargs)
+        out = zonal.compute() if isinstance(zonal, ddf.DataFrame) else zonal
+        if not isinstance(out, pd.DataFrame):
+            raise TypeError(f"Expected the zonal statistics to be a data frame, got {type(out).__name__}.")
         out.columns = [f"channel_{c}_{col}" if col != "zone" else col for col in out.columns]
         out = out.loc[out["zone"] != 0].copy()
-        zones: ArrayLike = out["zone"].values
+        zones: ArrayLike = out["zone"].to_numpy()
         outs.append(out.drop(columns=["zone"]))  # remove the 0 (background)
     df = pd.concat(outs, axis=1)
 
@@ -310,7 +332,7 @@ def _aggregate_image_by_labels(
 
 
 def _aggregate_shapes(
-    values: gpd.GeoDataFrame,
+    values: gpd.GeoDataFrame | ddf.DataFrame,
     by: gpd.GeoDataFrame,
     values_sdata: SpatialData | None = None,
     values_element_name: str | None = None,
@@ -436,6 +458,7 @@ def _aggregate_shapes(
     if fractions:
         fractions_of_values = joined.geometry.area / joined[AREAS_COLUMN]
 
+    aggregated_values: ArrayLike
     if categorical:
         # we only allow the aggregation of one categorical column at the time, because each categorical column would
         # give a different table as result of the aggregation, and we only support single tables
@@ -443,13 +466,18 @@ def _aggregate_shapes(
         vk = value_key[0]
         if fractions_of_values is not None:
             joined[ONES_COLUMN] = fractions_of_values
-        aggregated = joined.groupby([INDEX, vk], observed=False)[ONES_COLUMN].agg(agg_func).reset_index()
-        aggregated_values = aggregated[ONES_COLUMN].values
+        grouped = joined.groupby([INDEX, vk], observed=False)[ONES_COLUMN]
+        if isinstance(agg_func, str):
+            aggregated = grouped.agg(agg_func).reset_index()
+        else:
+            agg_funcs: list[Callable[..., Any] | str | np.ufunc] = list(agg_func)
+            aggregated = grouped.agg(agg_funcs).reset_index()
+        aggregated_values = aggregated[ONES_COLUMN].to_numpy()
     else:
         if fractions_of_values is not None:
             joined[value_key] = joined[value_key].to_numpy() * fractions_of_values.to_numpy().reshape(-1, 1)
         aggregated = joined.groupby([INDEX])[value_key].agg(agg_func).reset_index()
-        aggregated_values = aggregated[value_key].values
+        aggregated_values = aggregated[value_key].to_numpy()
 
     # Here we prepare some variables to construct a sparse matrix in the coo format (edges + nodes)
     rows_categories = by.index.tolist()

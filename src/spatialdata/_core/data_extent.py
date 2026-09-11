@@ -6,6 +6,7 @@ from functools import singledispatch
 
 import numpy as np
 import pandas as pd
+from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
@@ -106,7 +107,7 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: list[str] | None = None,  # noqa: UP007 # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
+    elements: list[str] | None = None,  # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -207,6 +208,7 @@ def _(
         consider_element = (len(elements) == 0) or (element_name in elements)
         consider_element = consider_element and (element_type in include_spatial_elements)
         if consider_element:
+            assert not isinstance(element_obj, AnnData)
             transformations = get_transformation(element_obj, get_all=True)
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
@@ -302,7 +304,10 @@ def _(e: DataArray, coordinate_system: str = "global") -> BoundingBoxDescription
 @get_extent.register
 def _(e: DataTree, coordinate_system: str = "global") -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
-    xdata = next(iter(e["scale0"].values()))
+    scale0 = e["scale0"]
+    assert isinstance(scale0, DataTree)
+    xdata = next(iter(scale0.values()))
+    assert isinstance(xdata, DataArray)
     return _get_extent_of_data_array(xdata, coordinate_system=coordinate_system)
 
 
