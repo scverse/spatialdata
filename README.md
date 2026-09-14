@@ -3,7 +3,6 @@
 # SpatialData: an open and universal framework for processing spatial omics data.
 
 [![Tests][badge-tests]][link-tests]
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/scverse/spatialdata/main.svg)](https://results.pre-commit.ci/latest/github/scverse/spatialdata/main)
 [![codecov](https://codecov.io/gh/scverse/spatialdata/branch/main/graph/badge.svg?token=X19DRSIMCU)](https://codecov.io/gh/scverse/spatialdata)
 [![documentation badge](https://readthedocs.org/projects/scverse-spatialdata/badge/?version=latest)](https://spatialdata.scverse.org/en/latest/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20056407.svg)](https://doi.org/10.5281/zenodo.20056407)
@@ -70,10 +69,6 @@ Update Feb 2025: `spatialdata` cannot be currently be installed via `conda` beca
 ```bash
 mamba install -c conda-forge spatialdata napari-spatialdata spatialdata-io spatialdata-plot
 ```
-
-## Limitations
-
-- Code only manually tested for Windows machines. Currently the framework is being developed using Linux, macOS and Windows machines, but it is automatically tested only for Linux and macOS machines.
 
 ## Contact
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, TypeGuard, cast
+from typing import Any, Literal, TypeGuard
 
 import dask.array as da
 import numpy as np
@@ -73,26 +73,26 @@ def _is_regular_dask_chunk_grid(chunk_grid: Sequence[Sequence[int]]) -> bool:
     --------
     Triggers ``continue`` on the first ``if`` (single or empty axis):
 
-    >>> _is_regular_dask_chunk_grid([(4,)])   # single chunk → True
+    >>> _is_regular_dask_chunk_grid([(4,)])  # single chunk → True
     True
-    >>> _is_regular_dask_chunk_grid([()])     # empty axis → True
+    >>> _is_regular_dask_chunk_grid([()])  # empty axis → True
     True
 
     Triggers the first ``return False`` (non-uniform interior chunks):
 
-    >>> _is_regular_dask_chunk_grid([(4, 4, 3, 4)])   # interior sizes differ → False
+    >>> _is_regular_dask_chunk_grid([(4, 4, 3, 4)])  # interior sizes differ → False
     False
 
     Triggers the second ``return False`` (last chunk larger than the first):
 
-    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 5)])   # last > first → False
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 5)])  # last > first → False
     False
 
     Exits with ``return True``:
 
-    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 4)])   # all equal → True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 4)])  # all equal → True
     True
-    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1)])   # last < first → True
+    >>> _is_regular_dask_chunk_grid([(4, 4, 4, 1)])  # last < first → True
     True
 
     Empty grid (loop never executes) → True:
@@ -193,6 +193,10 @@ def _read_multiscale(
 
     node = nodes[0]
     loaded_node = node.load(Multiscales)
+    if not isinstance(loaded_node, Multiscales):
+        raise TypeError(
+            f"Expected {image_loc.basename()} to hold a multiscales node, got {type(loaded_node).__name__}."
+        )
     datasets, multiscales = (
         loaded_node.datasets,
         loaded_node.zarr.root_attrs["multiscales"],
@@ -200,7 +204,7 @@ def _read_multiscale(
     # This works for all versions as in zarr v3 the level of the 'ome' key is taken as root_attrs.
     omero_metadata = loaded_node.zarr.root_attrs.get("omero")
     # TODO: check if below is still valid
-    legacy_channels_metadata = node.load(Multiscales).zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
+    legacy_channels_metadata = loaded_node.zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
     assert len(multiscales) == 1
     # checking for multiscales[0]["coordinateTransformations"] would make fail
     # something that doesn't have coordinateTransformations in top level
@@ -217,12 +221,12 @@ def _read_multiscale(
             channels = [d["label"] for d in omero_metadata["channels"]]
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
-        arrays = [node.load(Multiscales).array(resolution=d) for d in datasets]
+        arrays = [loaded_node.array(resolution=d) for d in datasets]
         msi = dask_arrays_to_datatree(arrays, dims=axes, channels=channels)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
 
-    data = node.load(Multiscales).array(resolution=datasets[0])
+    data = loaded_node.array(resolution=datasets[0])
     si = DataArray(
         data,
         name="image",
@@ -260,6 +264,40 @@ def _get_multiscale_nodes(image_nodes: list[Node], nodes: list[Node]) -> list[No
     return nodes
 
 
+def _get_raster_element_group(
+    raster_type: Literal["image", "labels"], group: zarr.Group, element_name: str
+) -> zarr.Group:
+    """Get the Zarr group holding a raster element that has just been written.
+
+    Labels are nested one level deeper than images: ome-zarr writes them inside a "labels" group, so for them the
+    group of the element is `group/labels/{element_name}`, while for images it is `group` itself.
+
+    Parameters
+    ----------
+    raster_type
+        Whether the element is an image or a labels element.
+    group
+        The Zarr group the element has been written to.
+    element_name
+        The name of the raster element.
+
+    Returns
+    -------
+    The Zarr group of the raster element.
+    """
+    if raster_type != "labels":
+        return group
+    labels_group = group["labels"]
+    if not isinstance(labels_group, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding the labels, got {type(labels_group).__name__}.")
+    element_group = labels_group[element_name]
+    if not isinstance(element_group, zarr.Group):
+        raise TypeError(
+            f"Expected a zarr group holding the label {element_name!r}, got {type(element_group).__name__}."
+        )
+    return element_group
+
+
 def _write_raster(
     raster_type: Literal["image", "labels"],
     raster_data: DataArray | DataTree,
@@ -269,7 +307,7 @@ def _write_raster(
     storage_options: JSONDict | list[JSONDict] | None = None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
     label_metadata: JSONDict | None = None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> None:
     """Write raster data to disk.
 
@@ -328,13 +366,16 @@ def _write_raster(
     else:
         raise ValueError("Not a valid labels object")
 
-    group = group["labels"][name] if raster_type == "labels" else group
+    group = _get_raster_element_group(raster_type, group, name)
     if raster_type == "image":
         # ome-zarr-py >= 0.18 no longer writes the omero channel metadata, so we write it ourselves.
         overwrite_channel_names(group, raster_data)
     if ATTRS_KEY not in group.attrs:
         group.attrs[ATTRS_KEY] = {}
-    attrs = group.attrs[ATTRS_KEY]
+    stored_attrs = group.attrs[ATTRS_KEY]
+    if not isinstance(stored_attrs, Mapping):
+        raise TypeError(f"Expected {ATTRS_KEY} to be a JSON object, got {type(stored_attrs).__name__}.")
+    attrs = dict(stored_attrs)
     attrs["version"] = raster_format.spatialdata_format_version
     # triggers the write operation
     group.attrs[ATTRS_KEY] = attrs
@@ -356,10 +397,10 @@ def _build_v3_codec(
 
 
 def _apply_compression(
-    storage_options: JSONDict | list[JSONDict],
+    storage_options: JSONDict | list[JSONDict] | None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
-    zarr_format: Literal[2, 3] = 3,
-) -> JSONDict | list[JSONDict]:
+    zarr_format: int = 3,
+) -> JSONDict | list[JSONDict] | None:
     """Apply compression settings to storage options.
 
     Parameters
@@ -377,6 +418,8 @@ def _apply_compression(
     """
     if not raster_compressor:
         return storage_options
+    if zarr_format not in (2, 3):
+        raise ValueError(f"Unsupported zarr format {zarr_format}; expected 2 or 3.")
 
     ((compression, compression_level),) = raster_compressor.items()
 
@@ -427,7 +470,7 @@ def _write_raster_dataarray(
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> None:
     """Write raster data of type DataArray to disk.
 
@@ -455,13 +498,11 @@ def _write_raster_dataarray(
     data = raster_data.data
     transformations = _get_transformations(raster_data)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
-    input_axes: tuple[str, ...] = tuple(raster_data.dims)
+    input_axes: tuple[str, ...] = tuple(str(dim) for dim in raster_data.dims)
     parsed_axes = _get_valid_axes(axes=list(input_axes), fmt=raster_format)
     storage_options = _prepare_storage_options(storage_options)
     # Apply compression if specified
-    storage_options = _apply_compression(
-        storage_options, raster_compressor, zarr_format=cast(Literal[2, 3], raster_format.zarr_format)
-    )
+    storage_options = _apply_compression(storage_options, raster_compressor, zarr_format=raster_format.zarr_format)
 
     # Explicitly disable pyramid generation for single-scale rasters. Recent ome-zarr versions default
     # write_image()/write_labels() to scale_factors=(2, 4, 8, 16), which would otherwise write s0, s1, ...
@@ -481,7 +522,7 @@ def _write_raster_dataarray(
         **metadata,
     )
 
-    trans_group = group["labels"][element_name] if raster_type == "labels" else group
+    trans_group = _get_raster_element_group(raster_type, group, element_name)
     overwrite_coordinate_transformations_raster(
         group=trans_group,
         transformations=transformations,
@@ -498,7 +539,7 @@ def _write_raster_datatree(
     raster_format: RasterFormatType,
     storage_options: JSONDict | list[JSONDict] | None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> zarr.Group:
     """Write raster data of type DataTree to disk.
 
@@ -529,7 +570,9 @@ def _write_raster_datatree(
     # saving only the transformations of the first scale
     d = dict(raster_data["scale0"])
     assert len(d) == 1
-    xdata = d.values().__iter__().__next__()
+    xdata = next(iter(d.values()))
+    if not isinstance(xdata, DataArray):
+        raise TypeError(f"Expected the first scale to hold a DataArray, got {type(xdata).__name__}.")
     transformations = _get_transformations_xarray(xdata)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
@@ -564,7 +607,7 @@ def _write_raster_datatree(
     # This workaround should not be needed once https://github.com/ome/ome-zarr-py/issues/580 is fixed.
     group = zarr.open_group(store=group.store, path=group.path, mode="r+", use_consolidated=False)
 
-    trans_group = group["labels"][element_name] if raster_type == "labels" else group
+    trans_group = _get_raster_element_group(raster_type, group, element_name)
     overwrite_coordinate_transformations_raster(
         group=trans_group,
         transformations=transformations,
@@ -581,7 +624,7 @@ def write_image(
     element_format: RasterFormatType = CurrentRasterFormat(),
     storage_options: JSONDict | list[JSONDict] | None = None,
     raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
-    **metadata: str | JSONDict | list[JSONDict],
+    **metadata: Any,
 ) -> None:
     if element_format.zarr_format == 2:
         warnings.warn(

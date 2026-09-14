@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from shapely import get_coordinate_dimension
 from shapely.geometry import MultiPolygon, Point, Polygon
+from shapely.geometry.base import BaseGeometry
 from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
@@ -122,7 +124,7 @@ def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
 
 
 @singledispatch
-def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
+def get_axes_names(e: SpatialElement | pd.DataFrame) -> tuple[str, ...]:
     """
     Get the dimensions of a SpatialElement.
 
@@ -140,9 +142,9 @@ def get_axes_names(e: SpatialElement) -> tuple[str, ...]:
 
 @get_axes_names.register(DataArray)
 def _(e: DataArray) -> tuple[str, ...]:
-    dims = e.dims
+    dims = tuple(str(dim) for dim in e.dims)
     _validate_dims(dims)
-    return dims  # type: ignore[no-any-return]
+    return dims
 
 
 @get_axes_names.register(DataTree)
@@ -150,10 +152,13 @@ def _(e: DataTree) -> tuple[str, ...]:
     if "scale0" in e:
         # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
 
-        assert len(e["scale0"].values()) == 1
-        xdata = e["scale0"].values().__iter__().__next__()
-        dims_data = xdata.dims
-        assert isinstance(dims_data, tuple)
+        scale0 = e["scale0"]
+        if not isinstance(scale0, DataTree):
+            raise TypeError(f"Expected `scale0` to be a DataTree node, got {type(scale0).__name__}.")
+        variables = list(scale0.values())
+        assert len(variables) == 1
+        xdata = variables[0]
+        dims_data = tuple(str(dim) for dim in xdata.dims)
 
         _validate_dims(dims_data)
         return dims_data
@@ -163,7 +168,7 @@ def _(e: DataTree) -> tuple[str, ...]:
 @get_axes_names.register(GeoDataFrame)
 def _(e: GeoDataFrame) -> tuple[str, ...]:
     all_dims = (X, Y, Z)
-    n = e.geometry.iloc[0]._ndim
+    n = get_coordinate_dimension(e.geometry.iloc[0])
     dims = all_dims[:n]
     if Z not in dims and Z in e.columns:
         dims += (Z,)
@@ -325,11 +330,12 @@ def force_2d(gdf: GeoDataFrame) -> None:
         GeoDataFrame with 2D or 3D geometries
 
     """
-    new_shapes = []
+    new_shapes: list[BaseGeometry] = []
     any_3d = False
     for shape in gdf.geometry:
         if shape.has_z:
             any_3d = True
+            new_shape: BaseGeometry
             if isinstance(shape, Point):
                 new_shape = Point(shape.x, shape.y)
             elif isinstance(shape, Polygon):

@@ -11,9 +11,10 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from pandas import CategoricalDtype
-from scipy.sparse import issparse
+from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 from torch.utils.data import Dataset
 from xarray import DataArray, DataTree
 
@@ -38,7 +39,7 @@ from spatialdata.transformations import BaseTransformation, get_transformation, 
 __all__ = ["ImageTilesDataset"]
 
 
-class ImageTilesDataset(Dataset):
+class ImageTilesDataset(Dataset[Any]):
     """
     :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData` object.
 
@@ -186,6 +187,8 @@ class ImageTilesDataset(Dataset):
 
             # check that the coordinate systems are valid for the elements
             cs = regions_to_coordinate_systems[region_name]
+            assert not isinstance(region_elem, AnnData)
+            assert not isinstance(image_elem, AnnData)
             region_trans = get_transformation(region_elem, get_all=True)
             image_trans = get_transformation(image_elem, get_all=True)
             assert isinstance(region_trans, dict)
@@ -203,6 +206,7 @@ class ImageTilesDataset(Dataset):
                 if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
                     indices = get_element_instances(region_elem).tolist()
                 else:
+                    assert isinstance(region_elem, GeoDataFrame | DaskDataFrame)
                     indices = region_elem.index.tolist()
                 table = self.sdata.tables[table_name]
                 if not isinstance(self.sdata.tables[table_name].obs[region_key].dtype, CategoricalDtype):
@@ -241,7 +245,9 @@ class ImageTilesDataset(Dataset):
         dims_l = []
         tables_l = []
         for cs, region_name, image_name in self._cs_region_image:
-            circles = to_circles(self.sdata[region_name])
+            region_element = self.sdata[region_name]
+            assert not isinstance(region_element, AnnData)
+            circles = to_circles(region_element)
             dims_l.append(get_axes_names(circles))
 
             tile_coords = _get_tile_coords(
@@ -255,14 +261,18 @@ class ImageTilesDataset(Dataset):
                 # Pre-compute all per-tile slice selections in a single vectorized call.
                 # Passing 2-D min/max arrays triggers the multi-box path in bounding_box_query,
                 # which returns a list of {axis: slice} dicts — one per tile.
-                tile_coords["selection"] = bounding_box_query(
-                    self.sdata[image_name],
+                image_element = self.sdata[image_name]
+                assert not isinstance(image_element, AnnData)
+                selections = bounding_box_query(
+                    image_element,
                     ("x", "y"),
-                    min_coordinate=tile_coords[["minx", "miny"]].values,
-                    max_coordinate=tile_coords[["maxx", "maxy"]].values,
+                    min_coordinate=tile_coords[["minx", "miny"]].to_numpy(),
+                    max_coordinate=tile_coords[["maxx", "maxy"]].to_numpy(),
                     target_coordinate_system=cs,
                     return_request_only=True,
                 )
+                assert isinstance(selections, list)
+                tile_coords["selection"] = pd.Series(selections, index=tile_coords.index, dtype=object)
             tile_coords_df.append(tile_coords)
 
             inst = circles.index.values
@@ -283,6 +293,7 @@ class ImageTilesDataset(Dataset):
                     match_rows="left",
                 )
                 # get index dictionary, with `instance_id`, `cs`, `region`, and `image`
+                assert table is not None
                 tables_l.append(table)
 
         # concatenate and assign to self
@@ -309,7 +320,7 @@ class ImageTilesDataset(Dataset):
     def _return_function(
         idx: int,
         tile: Any,
-        dataset_table: AnnData,
+        dataset_table: AnnData | None,
         dataset_index: pd.DataFrame,
         table_name: str | None,
         return_annot: str | list[str] | None,
@@ -320,12 +331,17 @@ class ImageTilesDataset(Dataset):
             # where return_table can be a single column or a list of columns
             return_annot = [return_annot] if isinstance(return_annot, str) else return_annot
             # return tuple of (tile, table)
-            if np.all([i in dataset_table.obs for i in return_annot]):
-                return tile, dataset_table.obs[return_annot].iloc[idx].values.reshape(1, -1)
+            assert dataset_table is not None
+            obs = dataset_table.obs
+            if not isinstance(obs, pd.DataFrame):
+                raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+            if np.all([i in obs for i in return_annot]):
+                return tile, obs[return_annot].iloc[idx].to_numpy().reshape(1, -1)
             if np.all([i in dataset_table.var_names for i in return_annot]):
-                if issparse(dataset_table.X):
-                    return tile, dataset_table[idx, return_annot].X.A
-                return tile, dataset_table[idx, return_annot].X
+                x = dataset_table[idx, return_annot].X
+                if isinstance(x, csr_matrix | csc_matrix | csr_array | csc_array):
+                    return tile, np.asarray(x.todense())
+                return tile, x
             raise ValueError(
                 f"If `return_annot` is a `str`, it must be a column name in the table or a variable name in the table. "
                 f"If it is a `list` of `str`, each element should be as above, and they should all be entirely in obs "
@@ -333,6 +349,7 @@ class ImageTilesDataset(Dataset):
             )
         # return spatialdata consisting of the image tile and, if available, the associated table
         if table_name:
+            assert dataset_table is not None
             table_row = dataset_table[idx].copy()
             # let's reset the target annotation metadata to avoid a warning when constructing the SpatialData object
             if TableModel.ATTRS_KEY in table_row.uns:
@@ -370,12 +387,13 @@ class ImageTilesDataset(Dataset):
         t_coords = self.tiles_coords.iloc[idx]
 
         image = self.sdata[row["image"]]
+        assert isinstance(image, DataArray | DataTree)
         if self._rasterize:
             tile = self._crop_image(
                 image,
                 axes=tuple(self.dims),
-                min_coordinate=t_coords[[f"min{i}" for i in self.dims]].values,
-                max_coordinate=t_coords[[f"max{i}" for i in self.dims]].values,
+                min_coordinate=t_coords[[f"min{i}" for i in self.dims]].to_numpy(),
+                max_coordinate=t_coords[[f"max{i}" for i in self.dims]].to_numpy(),
                 target_coordinate_system=row["cs"],
             )
         else:
@@ -481,8 +499,10 @@ def _get_tile_coords(
     transform(circles, to_coordinate_system=cs)
     if tile_dim_in_units is not None:
         circles.radius = tile_dim_in_units / 2
-    else:
+    elif tile_scale is not None:
         circles.radius *= tile_scale
+    else:
+        raise ValueError("One of `tile_scale` and `tile_dim_in_units` must be given.")
     # if rasterize is True, the tile dim is determined from the diameter of the circles in cs; else we need to
     # transform the circles to the intrinsic coordinate system of the element
     if not rasterize:

@@ -114,9 +114,7 @@ class BaseTransformation(ABC):
 
         Returns
         -------
-        BaseTransformation
-            A new transformation that is the inverse of this one, such that applying
-            both in sequence yields the identity transformation.
+        A new transformation that is the inverse of this one, such that applying both in sequence yields the identity transformation.
         """
         pass
 
@@ -138,9 +136,8 @@ class BaseTransformation(ABC):
 
         Returns
         -------
-        ArrayLike
-            A homogeneous affine matrix of shape ``(len(output_axes) + 1, len(input_axes) + 1)``.
-            The last row is always ``[0, 0, ..., 1]`` (homogeneity).
+        A homogeneous affine matrix of shape ``(len(output_axes) + 1, len(input_axes) + 1)``.
+        The last row is always ``[0, 0, ..., 1]`` (homogeneity).
         """
         pass
 

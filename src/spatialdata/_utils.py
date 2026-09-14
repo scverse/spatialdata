@@ -131,19 +131,23 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
                 # always optimize later
                 d = dict(unpadded["scale0"])
                 assert len(d) == 1
-                xdata = d.values().__iter__().__next__()
+                xdata = next(iter(d.values()))
+                assert isinstance(xdata, DataArray)
 
                 left_pad, right_pad = _compute_paddings(data=xdata, axis=ax)
                 unpadded = unpadded.sel({ax: slice(left_pad, right_pad)})
                 translation_axes.append(ax)
                 translation_values.append(left_pad)
-        d = {}
+        subtrees = {}
         for k, v in unpadded.items():
-            assert len(v.values()) == 1
-            xdata = v.values().__iter__().__next__()
+            assert isinstance(v, DataTree)
+            variables = list(v.values())
+            assert len(variables) == 1
+            xdata = variables[0]
+            assert isinstance(xdata, DataArray)
             if 0 not in xdata.shape:
-                d[k] = Dataset({"image": xdata})
-        unpadded = DataTree.from_dict(d)
+                subtrees[k] = Dataset({"image": xdata})
+        unpadded = DataTree.from_dict(subtrees)
     else:
         raise TypeError(f"Unsupported type: {type(raster)}")
 
@@ -200,20 +204,23 @@ def iterate_pyramid_levels(
     -------
     A generator to iterate over the pyramid levels.
     """
-    names = data["scale0"].ds.keys()
-    name: str = next(iter(names))
+    scale0 = data["scale0"]
+    assert isinstance(scale0, DataTree)
+    name = str(next(iter(scale0.ds.keys())))
     for scale in data:
-        yield data[scale][name] if attr is None else getattr(data[scale][name], attr)
+        node = data[scale]
+        assert isinstance(node, DataTree)
+        yield node[name] if attr is None else getattr(node[name], attr)
 
 
-def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: AnnData) -> None:
+def _inplace_fix_subset_categorical_obs(subset_adata: AnnData | None, original_adata: AnnData) -> None:
     """
     Fix categorical obs columns of subset_adata to match the categories of original_adata.
 
     Parameters
     ----------
     subset_adata
-        The subset AnnData object
+        The subset AnnData object, or None when the subset is empty
     original_adata
         The original AnnData object
 
@@ -221,9 +228,14 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData, original_adata: A
     -----
     See discussion here: https://github.com/scverse/anndata/issues/997
     """
+    if subset_adata is None:
+        return
     if not hasattr(subset_adata, "obs") or not hasattr(original_adata, "obs"):
         return
-    obs = pd.DataFrame(subset_adata.obs)
+    subset_obs = subset_adata.obs
+    if not isinstance(subset_obs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(subset_obs).__name__}.")
+    obs = pd.DataFrame(subset_obs)
     for column in obs.columns:
         is_categorical = isinstance(obs[column].dtype, pd.CategoricalDtype)
         if is_categorical:

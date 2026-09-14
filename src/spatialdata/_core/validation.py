@@ -36,7 +36,7 @@ class ValidationError(ValueError):
         )
 
 
-def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:
+def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series | list[str]) -> None:
     """
     Check region and region_key column symmetry.
 

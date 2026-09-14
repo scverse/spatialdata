@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
+from typing import Any
 
 import zarr
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import read_parquet
-from ome_zarr.format import Format
+from zarr.storage import LocalStore
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
@@ -14,7 +15,7 @@ from spatialdata._io._utils import (
     overwrite_coordinate_transformations_non_raster,
 )
 from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
-from spatialdata._io.format import CurrentPointsFormat, PointsFormats, _parse_version
+from spatialdata._io.format import CurrentPointsFormat, PointsFormats, PointsFormatType, _parse_version
 from spatialdata.models import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -27,19 +28,27 @@ def _read_points(
 ) -> DaskDataFrame:
     """Read points from a zarr store."""
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    if not isinstance(f, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding a points element, got {type(f).__name__}.")
 
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     points_format = PointsFormats[version]
 
-    store_root = f.store_path.store.root
+    element_store = f.store_path.store
+    if not isinstance(element_store, LocalStore):
+        raise TypeError(f"Reading a points element requires a local zarr store, got {type(element_store).__name__}.")
+    store_root = element_store.root
     path = store_root / f.path / "points.parquet"
     # cache on remote file needed for parquet reader to work
     # TODO: allow reading in the metadata without caching all the data
     points = read_parquet("simplecache::" + str(path) if str(path).startswith("http") else path)
     assert isinstance(points, DaskDataFrame)
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    ngff_transformations = f.attrs.asdict()["coordinateTransformations"]
+    if not isinstance(ngff_transformations, list):
+        raise TypeError(f"Expected coordinateTransformations to be a list, got {type(ngff_transformations).__name__}.")
+    transformations = _get_transformations_from_ngff_dict(ngff_transformations)
     _set_transformations(points, transformations)
 
     attrs = points_format.attrs_from_dict(f.attrs.asdict())
@@ -52,7 +61,7 @@ def write_points(
     points: DaskDataFrame,
     group: zarr.Group,
     group_type: str = "ngff:points",
-    element_format: Format = CurrentPointsFormat(),
+    element_format: PointsFormatType = CurrentPointsFormat(),
 ) -> None:
     """Write a points element to a zarr store.
 
@@ -75,7 +84,10 @@ def write_points(
     transformations = _get_transformations(points)
     assert transformations is not None  # mypy: validate_element() in _write_element guarantees this
 
-    store_root = group.store_path.store.root
+    element_store = group.store_path.store
+    if not isinstance(element_store, LocalStore):
+        raise TypeError(f"Writing a points element requires a local zarr store, got {type(element_store).__name__}.")
+    store_root = element_store.root
     path = store_root / group.path / "points.parquet"
 
     # The following code iterates through all columns in the 'points' DataFrame. If the column's datatype is
@@ -93,7 +105,7 @@ def write_points(
     del points_without_transform.attrs["transform"]
     points_without_transform.to_parquet(path)
 
-    attrs = element_format.attrs_to_dict(points.attrs)
+    attrs: dict[str, Any] = dict(element_format.attrs_to_dict(points.attrs))
     attrs["version"] = element_format.spatialdata_format_version
 
     _write_metadata(

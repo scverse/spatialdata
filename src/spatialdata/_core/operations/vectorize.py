@@ -3,13 +3,16 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
-import dask
 import numpy as np
 import pandas as pd
 import shapely
+from dask.base import compute as dask_compute
 from dask.dataframe import DataFrame as DaskDataFrame
+from dask.delayed import delayed
 from geopandas import GeoDataFrame
+from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 from shapely import MultiPolygon, Point, Polygon
+from shapely.geometry.base import BaseGeometry
 from xarray import DataArray, DataTree
 
 if TYPE_CHECKING:
@@ -75,7 +78,10 @@ def _(element: DataArray | DataTree, **kwargs: Any) -> GeoDataFrame:
 
     # reduce to the single scale case
     if isinstance(element, DataTree):
-        element_single_scale = element["scale0"].values().__iter__().__next__()
+        scale0 = element["scale0"]
+        assert isinstance(scale0, DataTree)
+        element_single_scale = next(iter(scale0.values()))
+        assert isinstance(element_single_scale, DataArray)
     else:
         element_single_scale = element
     shape = element_single_scale.shape
@@ -85,8 +91,12 @@ def _(element: DataArray | DataTree, **kwargs: Any) -> GeoDataFrame:
     model = Image3DModel if "z" in axes else Image2DModel
     ones = model.parse(np.ones((1,) + shape), dims=("c",) + axes)
     aggregated = aggregate(values=ones, by=element_single_scale, agg_func="sum")["table"]
-    areas = aggregated.X.todense().A1.reshape(-1)
+    x = aggregated.X
+    assert x is not None
+    areas = np.asarray(x.todense() if isinstance(x, csr_matrix | csc_matrix | csr_array | csc_array) else x).reshape(-1)
     aobs = aggregated.obs
+    if not isinstance(aobs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(aobs).__name__}.")
     aobs["areas"] = areas
     aobs["radius"] = np.sqrt(areas / np.pi)
 
@@ -139,7 +149,8 @@ def _get_centroids(element: SpatialElement) -> pd.DataFrame:
     d[INTRINSIC_COORDINATE_SYSTEM] = Identity()
     centroids = get_centroids(element, coordinate_system=INTRINSIC_COORDINATE_SYSTEM).compute()
     del d[INTRINSIC_COORDINATE_SYSTEM]
-    return centroids
+    computed_centroids: pd.DataFrame = centroids
+    return computed_centroids
 
 
 def _make_circles(element: DataArray | DataTree | GeoDataFrame, obs: pd.DataFrame) -> GeoDataFrame:
@@ -166,7 +177,7 @@ def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> G
     For example, you can set this configuration with:
 
     >>> import dask
-    >>> dask.config.set(scheduler='processes')
+    >>> dask.config.set(scheduler="processes")
 
     Parameters
     ----------
@@ -198,7 +209,10 @@ def _(
 
     # reduce to the single scale case
     if isinstance(element, DataTree):
-        element_single_scale = element["scale0"].values().__iter__().__next__()
+        scale0 = element["scale0"]
+        assert isinstance(scale0, DataTree)
+        element_single_scale = next(iter(scale0.values()))
+        assert isinstance(element_single_scale, DataArray)
     else:
         element_single_scale = element
 
@@ -211,12 +225,12 @@ def _(
         return gdf
 
     tasks = [
-        dask.delayed(_vectorize_chunk)(chunk, sum(chunk_sizes[0][:iy]), sum(chunk_sizes[1][:ix]))
+        delayed(_vectorize_chunk)(chunk, sum(chunk_sizes[0][:iy]), sum(chunk_sizes[1][:ix]))
         for iy, row in enumerate(element_single_scale.data.to_delayed())
         for ix, chunk in enumerate(row)
     ]
 
-    results = dask.compute(*tasks)
+    results = dask_compute(*tasks)
     gdf = pd.concat(results)
     gdf = GeoDataFrame([_dissolve_on_overlaps(*item) for item in gdf.groupby("label")], columns=["label", "geometry"])
     gdf.index = gdf["label"]
@@ -262,11 +276,11 @@ def _vectorize_mask(
     )
 
 
-def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> GeoDataFrame:
+def _dissolve_on_overlaps(label: int, group: GeoDataFrame) -> tuple[int, BaseGeometry]:
     if len(group) == 1:
         return (label, group.geometry.iloc[0])
     if len(np.unique(group["chunk-location"])) == 1:
-        return (label, MultiPolygon(list(group.geometry)))
+        return (label, MultiPolygon(list(group.geometry.array)))
     return (label, group.dissolve().geometry.iloc[0])
 
 
