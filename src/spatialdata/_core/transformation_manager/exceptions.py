@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from spatialdata._types import ArrayLike
+from spatialdata.transformations.graph.vert import Axis, CoordSystem
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 
@@ -227,3 +229,65 @@ class TransformationManagerWarning(UserWarning):
     """Base warning category for TransformationManager."""
 
     pass
+
+
+class IncompatibleCoordSystemsError(Exception):
+    def __init__(self, input: CoordSystem, output: CoordSystem, message: str | None = None) -> None:
+        self.input = input
+        self.output = output
+        super().__init__(message or "Output axes can't be mapped to input axes")
+
+
+class MissingAxisError(Exception):
+    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
+        self.axis = axis
+        self.cs = cs
+        super().__init__(f"Axis {axis.name} is not in coordinate system {cs.name}")
+
+
+class UnexpectedShapeError(Exception):
+    def __init__(
+        self,
+        *,
+        array_shape: tuple[int, ...],
+        expected_shape: tuple[int, ...] | str | None = None,
+        array_name: str | None = None,
+    ) -> None:
+        self.array_shape = array_shape
+        self.expected_shape = expected_shape
+        message = "Unexpected array shape"
+        if array_name is not None:
+            message += f"for '{array_name}'"
+        message += f": {array_shape}"
+        if expected_shape is not None:
+            message += f" instead of {expected_shape}"
+        super().__init__(message)
+
+
+class DeterminantDifferentFromOne(Exception):
+    def __init__(self, matrix: ArrayLike) -> None:
+        self.matrix = matrix
+        super().__init__("Matrix does not have det(M) == 1")
+
+
+class NotOrthonormalError(Exception):
+    def __init__(self, matrix: ArrayLike) -> None:
+        self.matrix = matrix
+        super().__init__("Matrix is not orthonormal")
+
+
+class EmptyTransformSequenceError(Exception):
+    def __init__(self) -> None:
+        super().__init__("Empty sequence of transformations")
+
+
+class AxisRedefinitionError(Exception):
+    def __init__(self, axis: Axis) -> None:
+        super().__init__(f"Axis {axis.name} is defined multiple times")
+
+
+class UnmappedAxisError(Exception):
+    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
+        self.axis = axis
+        self.cs = cs
+        super().__init__(f"Axis {axis.name} from coordinate system {cs.name} is not mapped to anything")

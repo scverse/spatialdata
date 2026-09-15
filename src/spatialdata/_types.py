@@ -7,15 +7,15 @@ import numpy as np
 from xarray import DataArray, DataTree
 
 __all__ = [
+    "ELEMENT_TYPE",
+    "ELEMENT_TYPE_RASTER",
+    "ELEMENT_TYPE_VECTOR",
+    "GROUP_NAME",
     "ArrayLike",
     "ColorLike",
     "DTypeLike",
     "JSONValue",
     "Raster_T",
-    "ELEMENT_TYPE",
-    "ELEMENT_TYPE_RASTER",
-    "ELEMENT_TYPE_VECTOR",
-    "GROUP_NAME",
 ]
 
 from numpy.typing import DTypeLike, NDArray
@@ -31,6 +31,7 @@ ListOrNDArrayFloating = list[Number] | ArrayLike
 
 type Raster_T = DataArray | DataTree
 ColorLike = tuple[float, ...] | str
+
 
 # A value that survives a round-trip through JSON, which is the invariant that `SpatialData.attrs` must satisfy: the
 # attrs are persisted with `zarr.Group.attrs.put()`, which rejects anything that is not JSON-serializable (e.g. numpy

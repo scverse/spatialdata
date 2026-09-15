@@ -69,3 +69,14 @@ plans/
 .coverage
 htmlcov/
 
+# local hatch config
+hatch.toml
+
+# Kilo and plans
+.kilo/
+plans/
+
+# test coverage
+.coverage
+htmlcov/
+
