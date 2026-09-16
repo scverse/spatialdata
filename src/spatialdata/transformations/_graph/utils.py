@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from spatialdata.models import SpatialElement, get_axes_names
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 
 def get_default_coordinate_system(

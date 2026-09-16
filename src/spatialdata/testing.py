@@ -11,8 +11,7 @@ from xarray.testing import assert_equal
 
 from spatialdata import SpatialData
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
-from spatialdata.models import PointsModel
-from spatialdata.models._utils import SpatialElement
+from spatialdata.models import PointsModel, SpatialElement
 from spatialdata.transformations.operations import get_transformation
 
 _Elements = Images | Labels | Shapes | Points | Tables

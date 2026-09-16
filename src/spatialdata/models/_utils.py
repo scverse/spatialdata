@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import warnings
-from enum import StrEnum
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
@@ -18,36 +17,14 @@ from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
 from spatialdata._utils import _check_match_length_channels_c_dim
+from spatialdata.models.literals import C, X, Y, Z
+from spatialdata.models.types import MappingToCoordinateSystem_t, SpatialElement, ValidAxis_t
 from spatialdata.transformations.transformations import BaseTransformation
-
-type SpatialElement = DataArray | DataTree | GeoDataFrame | DaskDataFrame
-TRANSFORM_KEY = "transform"
-DEFAULT_COORDINATE_SYSTEM = "global"
-ValidAxis_t = str
-MappingToCoordinateSystem_t = dict[str, BaseTransformation]
-C = "c"
-Z = "z"
-Y = "y"
-X = "x"
-
-
-class NgffAxisType(StrEnum):
-    SPACE = "space"
-    CHANNEL = "channel"
-
-
-axis_type_mapping_ngff = {
-    C: NgffAxisType.CHANNEL,
-    X: NgffAxisType.SPACE,
-    Y: NgffAxisType.SPACE,
-    Z: NgffAxisType.SPACE,
-}
-
 
 if TYPE_CHECKING:
     from anndata import AnnData
 
-    from spatialdata.models.models import RasterSchema
+    from spatialdata.models import RasterSchema
 
 
 # mypy says that we can't do isinstance(something, SpatialElement),
@@ -379,7 +356,7 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
     -------
     The raster model corresponding to the dimensions of the data.
     """
-    from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
+    from spatialdata.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
 
     if not set(dims).issubset({C, Z, Y, X}):
         raise ValueError(f"Invalid dimensions: {dims}")
@@ -390,7 +367,7 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
 
 
 def convert_region_column_to_categorical(table: AnnData) -> None:
-    from spatialdata.models.models import TableModel
+    from spatialdata.models import TableModel
 
     if TableModel.ATTRS_KEY in table.uns:
         region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]

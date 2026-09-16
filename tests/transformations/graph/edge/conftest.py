@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations._graph import Axis, CoordSystem
 
 x_axis = Axis(name="x", type="space", unit="micrometer")
 y_axis = Axis(name="y", type="space", unit="micrometer")

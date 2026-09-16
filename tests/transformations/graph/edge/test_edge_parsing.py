@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
-from spatialdata.transformations.graph.edge import (
+from spatialdata.transformations._graph import (
     AffineEdge,
     ByDimensionEdge,
     CsGen,
@@ -24,7 +24,7 @@ from spatialdata.transformations.graph.edge import (
     parse_sequence,
     parse_translation,
 )
-from tests.transformations.edge.conftest import (
+from tests.transformations.graph.edge.conftest import (
     xy_cs,
     xyz_cs,
     yx_cs,
