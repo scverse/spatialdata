@@ -349,6 +349,15 @@ class MapAxisEdge(BaseTransformationEdge):
         ------
         IncompatibleCoordSystemsError
             if `input` and `output` don't have the number of axes
+        MissingAxisError
+            if an axis specified among keys of `input_to_output` is not in `input`
+            or
+            if an axis specified among values of `input_to_output` is not in `output`
+        UnmappedAxisError
+            if an axis specified in `input` is not a key of `input_to_output`
+            or
+            if an axis specified in `output` is not a value of `input_to_output`
+
         """
 
         if input.num_axes != output.num_axes:

@@ -6,7 +6,7 @@ from typing import Final
 
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
 
-from spatialdata.models._utils import NgffAxisType
+from spatialdata.models._utils import NgffAxisType, axis_type_mapping_ngff
 
 
 class AxisParsingException(Exception):
@@ -72,6 +72,10 @@ class Axis:
             unit=model.unit,
             long_name=model.longName,
         )
+
+    @classmethod
+    def from_spatialdata_axis_name(cls, axis_name: str, unit: None = None) -> Axis:
+        return cls(name=axis_name, type=axis_type_mapping_ngff[axis_name], unit=unit)
 
 
 class CoordSystemParsingException(Exception):

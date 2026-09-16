@@ -9,13 +9,18 @@ import scipy
 import xarray as xr
 from xarray import DataArray
 
-from spatialdata._types import ArrayLike
-from spatialdata.models._utils import axis_type_mapping_ngff
+from spatialdata._core.transformation_manager.exceptions import (
+    IncompatibleCoordSystemsError,
+    MissingAxisError,
+    NGFFCompatibilityError,
+    UnmappedAxisError,
+)
 from spatialdata.transformations.graph.edge import (
     AffineEdge,
     BaseTransformationEdge,
     CsGen,
     IdentityEdge,
+    MapAxisEdge,
     ScaleEdge,
     SequenceEdge,
     TranslationEdge,
@@ -116,7 +121,7 @@ class BaseTransformation(ABC):
 
         output_axes_names = self._get_resulting_output_axes(input_coordinate_system.axes_names)
 
-        output_axes = tuple(Axis(name=name, type=axis_type_mapping_ngff[name]) for name in output_axes_names)
+        output_axes = tuple(Axis.from_spatialdata_axis_name(name) for name in output_axes_names)
         return CoordSystem(name=output_coordinate_system_name, axes=output_axes, virtual=False)
 
     def _get_default_coordinate_system(
@@ -434,10 +439,28 @@ class MapAxis(BaseTransformation):
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
 
-        # MapAxisEdge currently is a mixture of projectAxis and MapAxis of NGFF 0.6,
-        # but does not allow renaming the axes, which is possible in NGFF
-        # see warning above the definition of the current class
-        raise NotImplementedError()
+        output_coordinate_system = self._get_ngff_output_coordinate_system(
+            input_coordinate_system=input_coordinate_system,
+            output_coordinate_system_name=output_coordinate_system_name,
+        )
+
+        input_to_output_axes_mapping = {
+            Axis.from_spatialdata_axis_name(input_axis_name): Axis.from_spatialdata_axis_name(output_axis_name)
+            for output_axis_name, input_axis_name in self.map_axis.items()
+        }
+
+        try:
+            map_axis_edge = MapAxisEdge(
+                input=input_coordinate_system,
+                output=output_coordinate_system,
+                name=transformation_edge_name,
+                input_to_output=input_to_output_axes_mapping,
+            )
+        except (IncompatibleCoordSystemsError, MissingAxisError, UnmappedAxisError) as e:
+            raise NGFFCompatibilityError(
+                f"Cannot map the following transformation to an NGFF transformation Edge.\n{repr(self)}"
+            ) from e
+        return map_axis_edge
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, MapAxis) and self.map_axis == other.map_axis
