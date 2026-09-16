@@ -969,12 +969,31 @@ class CsGen:
         super().__init__()
 
     def get_unique_name(self) -> str:
+        """
+        Generate a unique name for a coordinate system, based on self._base_name and self._cs_count.
+
+        Returns
+        -------
+        A unique name string.
+        """
 
         unique_name = f"{self._base_name}{self._cs_count}"
         self._cs_count += 1
         return unique_name
 
     def generate(self, *, num_axes: int) -> CoordSystem:
+        """
+        Generate a coordinate system with the specified number of axes.
+
+        Parameters
+        ----------
+        num_axes
+            The number of axes for the coordinate system.
+
+        Returns
+        -------
+        A CoordSystem with the specified number of axes.
+        """
         return CoordSystem(
             name=self.get_unique_name(),
             axes=tuple(
@@ -988,6 +1007,18 @@ class CsGen:
         )
 
     def generate_with_axes(self, *, axes: tuple[Axis]) -> CoordSystem:
+        """
+        Generate a coordinate system with the specified axes.
+
+        Parameters
+        ----------
+        axes
+            The axes to use for the coordinate system.
+
+        Returns
+        -------
+        A CoordSystem with the specified axes.
+        """
 
         return CoordSystem(
             name=self.get_unique_name(),
@@ -996,6 +1027,18 @@ class CsGen:
         )
 
     def generate_like(self, other: CoordSystem) -> CoordSystem:
+        """
+        Generate a coordinate system similar to another coordinate system.
+
+        Parameters
+        ----------
+        other
+            The coordinate system to use as a template.
+
+        Returns
+        -------
+        A CoordSystem with the same axes as the template but a unique name.
+        """
         return CoordSystem(
             name=self.get_unique_name(),
             axes=tuple(
