@@ -9,8 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from spatialdata.transformations.graph.edge import AffineEdge, ScaleEdge, TranslationEdge
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations._graph import AffineEdge, Axis, CoordSystem, ScaleEdge, TranslationEdge
 
 
 def get_coord_system(cs_name: str) -> CoordSystem:

@@ -8,13 +8,14 @@ from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 
 from spatialdata._logging import logger
+from spatialdata.models import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
 if TYPE_CHECKING:
     import networkx as nx
 
     from spatialdata._core.spatialdata import SpatialData
-    from spatialdata.models._utils import SpatialElement
+    from spatialdata.models import SpatialElement
     from spatialdata.transformations.transformations import Affine, BaseTransformation
 
 
@@ -49,7 +50,6 @@ def set_transformation(
         to the SpatialData object, and the SpatialData object needs to be backed.
 
     """
-    from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
     from spatialdata.transformations import BaseTransformation
 
     if write_to_sdata is None:
@@ -112,7 +112,6 @@ def get_transformation(
     The transformation, if `to_coordinate_system` is not None, otherwise a dictionary of transformations to all
     the coordinate systems.
     """
-    from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 
     transformations = _get_transformations(element)
     assert isinstance(transformations, dict)
@@ -159,7 +158,6 @@ def remove_transformation(
         If not None, the element needs to belong to the SpatialData object,
         and the SpatialData object needs to be backed.
     """
-    from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
 
     if write_to_sdata is None:
         if remove_all is False:

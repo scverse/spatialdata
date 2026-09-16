@@ -36,16 +36,15 @@ from spatialdata._io.format import (
 )
 from spatialdata._types import ELEMENT_TYPE, ELEMENT_TYPE_RASTER
 from spatialdata._utils import get_pyramid_levels
-from spatialdata.models.models import ATTRS_KEY
+from spatialdata.models.literals import ATTRS_KEY
 from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
+from spatialdata.transformations._graph import Axis, BaseTransformationEdge, CoordSystem, parse_ngff_transf
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,
     _set_transformations,
     compute_coordinates,
 )
-from spatialdata.transformations.graph.edge import BaseTransformationEdge, parse_ngff_transf
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
 
 
 def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
