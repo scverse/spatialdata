@@ -2,11 +2,6 @@ from __future__ import annotations
 
 from spatialdata._core.validation import check_target_region_column_symmetry
 from spatialdata.models._utils import (
-    C,
-    SpatialElement,
-    X,
-    Y,
-    Z,
     force_2d,
     get_axes_names,
     get_channel_names,
@@ -17,18 +12,31 @@ from spatialdata.models._utils import (
     validate_axes,
     validate_axis_name,
 )
+from spatialdata.models.literals import (
+    ATTRS_KEY,
+    DEFAULT_COORDINATE_SYSTEM,
+    TRANSFORM_KEY,
+    C,
+    NgffAxisType,
+    X,
+    Y,
+    Z,
+    axis_type_mapping_ngff,
+)
 from spatialdata.models.models import (
     Image2DModel,
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
+    RasterSchema,
     ShapesModel,
     TableModel,
     get_model,
     get_table_keys,
     validate_element,
 )
+from spatialdata.models.types import MappingToCoordinateSystem_t, SpatialElement, ValidAxis_t
 
 __all__ = [
     "Labels2DModel",
@@ -37,6 +45,7 @@ __all__ = [
     "Image3DModel",
     "ShapesModel",
     "PointsModel",
+    "RasterSchema",
     "TableModel",
     "get_model",
     "SpatialElement",
@@ -56,4 +65,11 @@ __all__ = [
     "get_channel_names",
     "set_channel_names",
     "force_2d",
+    "NgffAxisType",
+    "axis_type_mapping_ngff",
+    "DEFAULT_COORDINATE_SYSTEM",
+    "TRANSFORM_KEY",
+    "ValidAxis_t",
+    "ATTRS_KEY",
+    "MappingToCoordinateSystem_t",
 ]

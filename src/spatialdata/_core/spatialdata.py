@@ -22,7 +22,7 @@ from xarray import DataArray, DataTree
 from zarr.errors import GroupNotFoundError
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
-from spatialdata._core.transformation_manager._transformation_graph import TransformationGraph
+from spatialdata._core.transformation_manager.transformations_facade import TransformationsFacade
 from spatialdata._core.validation import (
     check_all_keys_case_insensitively_unique,
     check_target_region_column_symmetry,
@@ -40,16 +40,14 @@ from spatialdata.models import (
     Labels3DModel,
     PointsModel,
     ShapesModel,
+    SpatialElement,
     TableModel,
+    get_axes_names,
     get_model,
     get_table_keys,
-)
-from spatialdata.models._utils import (
-    SpatialElement,
-    convert_region_column_to_categorical,
-    get_axes_names,
     set_channel_names,
 )
+from spatialdata.models._utils import convert_region_column_to_categorical
 
 if TYPE_CHECKING:
     from pandas._typing import DtypeObj
@@ -133,7 +131,7 @@ class SpatialData:
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
         self.attrs = attrs if attrs else {}  # type: ignore[assignment]
-        self.transformation_graph = TransformationGraph()  # Initialize the TransformationManager
+        self.transformation_facade = TransformationsFacade()
 
         element_names = list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
 

@@ -13,13 +13,11 @@ from spatialdata._types import ArrayLike
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
-    from spatialdata.models import SpatialElement
-    from spatialdata.models._utils import MappingToCoordinateSystem_t
+    from spatialdata.models import TRANSFORM_KEY, MappingToCoordinateSystem_t, SpatialElement
     from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
 
 
 def _get_transformations_from_dict_container(dict_container: Any) -> MappingToCoordinateSystem_t | None:
-    from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in dict_container:
         d = dict_container[TRANSFORM_KEY]
@@ -38,7 +36,6 @@ def _get_transformations(e: SpatialElement) -> MappingToCoordinateSystem_t | Non
 
 
 def _set_transformations_to_dict_container(dict_container: Any, transformations: MappingToCoordinateSystem_t) -> None:
-    from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY not in dict_container:
         dict_container[TRANSFORM_KEY] = {}
@@ -48,7 +45,6 @@ def _set_transformations_to_dict_container(dict_container: Any, transformations:
 
 
 def _set_transformations_to_element(element: Any, transformations: MappingToCoordinateSystem_t) -> None:
-    from spatialdata.models._utils import TRANSFORM_KEY
 
     attrs = element.attrs
     if TRANSFORM_KEY not in attrs:
@@ -134,7 +130,6 @@ def _(e: DataArray) -> MappingToCoordinateSystem_t | None:
 
 @_get_transformations.register(DataTree)
 def _(e: DataTree) -> MappingToCoordinateSystem_t | None:
-    from spatialdata.models._utils import TRANSFORM_KEY
 
     if TRANSFORM_KEY in e.attrs:
         raise ValueError(

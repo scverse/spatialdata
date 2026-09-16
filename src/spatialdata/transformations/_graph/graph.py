@@ -5,7 +5,8 @@ from typing import Any, override
 
 import networkx as nx
 
-from spatialdata._core.transformation_manager.exceptions import (
+from spatialdata.transformations._graph.edge import BaseTransformationEdge, SequenceEdge
+from spatialdata.transformations._graph.exceptions import (
     CannotRemoveCoordinateSystemError,
     CoordinateSystemAlreadyExistsError,
     CoordinateSystemHasElementsError,
@@ -21,9 +22,8 @@ from spatialdata._core.transformation_manager.exceptions import (
     TransformationPathNotFoundError,
     TransformationPathNotSimple,
 )
-from spatialdata._core.transformation_manager.types import TRANSFORM_KEY
-from spatialdata.transformations.graph.edge import BaseTransformationEdge, SequenceEdge
-from spatialdata.transformations.graph.vert import CoordSystem
+from spatialdata.transformations._graph.literals import TRANSFORM_KEY
+from spatialdata.transformations._graph.vert import CoordSystem
 
 
 class TransformationGraph:

@@ -9,7 +9,9 @@ from typing import Final
 import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
-from spatialdata._core.transformation_manager.exceptions import (
+from spatialdata._types import ArrayLike
+from spatialdata.models import NgffAxisType
+from spatialdata.transformations._graph.exceptions import (
     AxisRedefinitionError,
     DeterminantDifferentFromOne,
     EmptyTransformSequenceError,
@@ -19,9 +21,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     UnexpectedShapeError,
     UnmappedAxisError,
 )
-from spatialdata._types import ArrayLike
-from spatialdata.models._utils import NgffAxisType
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 
 class BaseTransformationEdge(ABC):

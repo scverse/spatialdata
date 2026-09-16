@@ -18,7 +18,7 @@ from spatialdata._core.query.relational_query import (
     get_element_annotators,
     join_spatialelement_table,
 )
-from spatialdata.models.models import TableModel
+from spatialdata.models import TableModel
 from spatialdata.testing import assert_anndata_equal, assert_geodataframe_equal
 
 

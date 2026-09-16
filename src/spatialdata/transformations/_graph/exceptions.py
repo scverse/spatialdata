@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import override
 
 from spatialdata._types import ArrayLike
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 
 class CoordinateSystemNotFoundError(ValueError):

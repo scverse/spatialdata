@@ -26,7 +26,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
-from spatialdata.models import ShapesModel, get_axes_names
+from spatialdata.models import TRANSFORM_KEY, ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
@@ -187,8 +187,6 @@ def _write_shapes_v02_v03(
         Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
         details.
     """
-    from spatialdata.models._utils import TRANSFORM_KEY
-
     element_store = group.store_path.store
     if not isinstance(element_store, LocalStore):
         raise TypeError(f"Writing a shapes element requires a local zarr store, got {type(element_store).__name__}.")

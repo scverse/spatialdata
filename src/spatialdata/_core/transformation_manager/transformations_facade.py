@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from spatialdata._core.transformation_manager._transformation_graph import TransformationGraph
-from spatialdata._core.transformation_manager.exceptions import CoordinateSystemNotFoundError
 from spatialdata.models import SpatialElement
 from spatialdata.transformations import BaseTransformation
-from spatialdata.transformations.graph.edge import BaseTransformationEdge
-from spatialdata.transformations.graph.utils import get_default_coordinate_system
+from spatialdata.transformations._graph import (
+    BaseTransformationEdge,
+    CoordinateSystemNotFoundError,
+    TransformationGraph,
+    get_default_coordinate_system,
+)
 
 
 class TransformationsFacade:
