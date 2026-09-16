@@ -23,6 +23,7 @@ from spatialdata._core.query.spatial_query import (
 )
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import (
+    ATTRS_KEY,
     Image2DModel,
     Image3DModel,
     Labels2DModel,
@@ -31,7 +32,6 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
-from spatialdata.models.models import ATTRS_KEY
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations import Identity, MapAxis, set_transformation
 from tests.conftest import _make_points, _make_squares

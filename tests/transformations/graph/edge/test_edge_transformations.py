@@ -5,28 +5,26 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from spatialdata._core.transformation_manager.exceptions import (
+from spatialdata.transformations._graph import (
+    AffineEdge,
     AxisRedefinitionError,
+    ByDimensionEdge,
     DeterminantDifferentFromOne,
     EmptyTransformSequenceError,
+    IdentityEdge,
     IncompatibleCoordSystemsError,
+    MapAxisEdge,
     MissingAxisError,
     NotOrthonormalError,
-    UnexpectedShapeError,
-    UnmappedAxisError,
-)
-from spatialdata.transformations.graph.edge import (
-    AffineEdge,
-    ByDimensionEdge,
-    IdentityEdge,
-    MapAxisEdge,
     ProjectAxisEdge,
     RotationEdge,
     ScaleEdge,
     SequenceEdge,
     TranslationEdge,
+    UnexpectedShapeError,
+    UnmappedAxisError,
 )
-from tests.transformations.edge.conftest import (
+from tests.transformations.graph.edge.conftest import (
     a_axis,
     abc_cs,
     b_axis,

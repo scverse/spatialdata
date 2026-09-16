@@ -14,9 +14,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata.models import get_axes_names
-from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import PointsModel
+from spatialdata.models import PointsModel, SpatialElement, get_axes_names
 from spatialdata.transformations.operations import get_transformation
 
 BoundingBoxDescription = dict[str, tuple[float, float]]

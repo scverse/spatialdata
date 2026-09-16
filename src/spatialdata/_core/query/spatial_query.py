@@ -21,15 +21,16 @@ from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike, ListOrNDArrayFloating, Raster_T
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
+    ATTRS_KEY,
     PointsModel,
     ShapesModel,
     SpatialElement,
+    ValidAxis_t,
     get_axes_names,
+    get_spatial_axes,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
 )
-from spatialdata.models._utils import ValidAxis_t, get_spatial_axes
-from spatialdata.models.models import ATTRS_KEY
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,

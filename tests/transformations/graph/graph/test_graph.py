@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
-
-"""
-Unit tests for the TransformationManager class in _core/transformation_manager/__init__.py.
-
-This module tests all the functionality of the TransformationManager class to achieve 100% coverage.
-"""
-
 from __future__ import annotations
 
 import pytest
 
-from spatialdata._core.transformation_manager import TRANSFORM_KEY
-from spatialdata._core.transformation_manager._transformation_graph import TransformationGraph
-from spatialdata._core.transformation_manager.exceptions import (
+from spatialdata.transformations._graph import (
+    TRANSFORM_KEY,
+    BaseTransformationEdge,
     CannotRemoveCoordinateSystemError,
     CoordinateSystemAlreadyExistsError,
     CoordinateSystemNotFoundError,
     ElementAlreadyExistsError,
     ElementNotRegisteredToAnyCoordinateSystemError,
     InvalidPathError,
+    SequenceEdge,
+    TransformationGraph,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
     TransformationPathAmbiguousMultipleEdgeExpectedError,
@@ -26,7 +21,6 @@ from spatialdata._core.transformation_manager.exceptions import (
     TransformationPathNotFoundError,
     TransformationPathNotSimple,
 )
-from spatialdata.transformations.graph.edge import BaseTransfEdge, SequenceEdge
 
 
 def test_initialization():
@@ -323,7 +317,7 @@ def test_remove_specific_transformation_between_coordinate_systems_non_existent(
 
 
 def assert_sequences_equivalent(
-    result_sequences: list[SequenceEdge], expected_transform_lists: list[list[BaseTransfEdge]]
+    result_sequences: list[SequenceEdge], expected_transform_lists: list[list[BaseTransformationEdge]]
 ):
 
     assert len(result_sequences) == len(expected_transform_lists)

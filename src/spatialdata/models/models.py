@@ -32,18 +32,16 @@ from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
 from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.config import settings
-from spatialdata.models import C, X, Y, Z, get_axes_names
+from spatialdata.models import C, SpatialElement, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
-    DEFAULT_COORDINATE_SYSTEM,
-    TRANSFORM_KEY,
-    MappingToCoordinateSystem_t,
-    SpatialElement,
     _validate_mapping_to_coordinate_system_type,
     convert_region_column_to_categorical,
 )
 from spatialdata.models.chunks_utils import Chunks_t
+from spatialdata.models.literals import ATTRS_KEY, DEFAULT_COORDINATE_SYSTEM, TRANSFORM_KEY
 from spatialdata.models.pyramids_utils import ScaleFactors_t  # ozp -> ome-zarr-py
 from spatialdata.models.pyramids_utils import to_multiscale as to_multiscale_ozp
+from spatialdata.models.types import MappingToCoordinateSystem_t
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,
@@ -55,8 +53,6 @@ if TYPE_CHECKING:
     from pandas._typing import DtypeObj
 
 __all__ = ["Chunks_t", "ScaleFactors_t"]
-
-ATTRS_KEY = "spatialdata_attrs"
 
 
 def _parse_transformations(element: SpatialElement, transformations: MappingToCoordinateSystem_t | None = None) -> None:

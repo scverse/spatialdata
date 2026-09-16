@@ -9,23 +9,23 @@ import scipy
 import xarray as xr
 from xarray import DataArray
 
-from spatialdata._core.transformation_manager.exceptions import (
-    IncompatibleCoordSystemsError,
-    MissingAxisError,
-    NGFFCompatibilityError,
-    UnmappedAxisError,
-)
-from spatialdata.transformations.graph.edge import (
+from spatialdata.transformations._graph import (
     AffineEdge,
+    Axis,
     BaseTransformationEdge,
+    CoordSystem,
     CsGen,
     IdentityEdge,
+    IncompatibleCoordSystemsError,
     MapAxisEdge,
+    MissingAxisError,
+    NGFFCompatibilityError,
     ScaleEdge,
     SequenceEdge,
     TranslationEdge,
+    UnmappedAxisError,
 )
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem, _get_spatial_axes
 from spatialdata.transformations.ngff.ngff_transformations import (
     NgffAffine,
@@ -39,8 +39,7 @@ from spatialdata.transformations.ngff.ngff_transformations import (
 
 if TYPE_CHECKING:
     from spatialdata._types import ArrayLike, ListOrNDArrayFloating
-    from spatialdata.models import SpatialElement
-    from spatialdata.models._utils import ValidAxis_t
+    from spatialdata.models import DEFAULT_COORDINATE_SYSTEM, SpatialElement, ValidAxis_t
 
 TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]] = {}
 
@@ -55,7 +54,7 @@ class BaseTransformation(ABC):
         This function is to allow to call validate_axes() from this file
         in multiple places while avoiding circular imports.
         """
-        from spatialdata.models._utils import validate_axes
+        from spatialdata.models import validate_axes
 
         validate_axes(axes)
 
@@ -173,7 +172,6 @@ class BaseTransformation(ABC):
         name: str | None = None,
         default_to_global: bool = False,
     ) -> NgffCoordinateSystem:
-        from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 
         cs = get_default_coordinate_system(axes)
         if unit is not None:
@@ -183,8 +181,6 @@ class BaseTransformation(ABC):
         if name is not None:
             cs.name = name
         elif default_to_global:
-            from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
-
             cs.name = DEFAULT_COORDINATE_SYSTEM
         return cs
 

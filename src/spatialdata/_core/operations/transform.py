@@ -20,9 +20,15 @@ from xarray import DataArray, Dataset, DataTree
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import disable_dask_tune_optimization
-from spatialdata.models import SpatialElement, get_axes_names, get_model
-from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM, get_channel_names
-from spatialdata.models.models import RasterSchema
+from spatialdata.models import (
+    DEFAULT_COORDINATE_SYSTEM,
+    TRANSFORM_KEY,
+    RasterSchema,
+    SpatialElement,
+    get_axes_names,
+    get_channel_names,
+    get_model,
+)
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:
@@ -356,7 +362,6 @@ def _(
     schema = get_model(data)
     assert issubclass(schema, RasterSchema)
     from spatialdata.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
-    from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import get_transformation, set_transformation
     from spatialdata.transformations.transformations import Identity, Sequence
 
@@ -441,7 +446,6 @@ def _(
     to_coordinate_system: str | None = None,
 ) -> DaskDataFrame:
     from spatialdata.models import PointsModel
-    from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import Identity, get_transformation
 
     transformation, to_coordinate_system = _validate_target_coordinate_systems(
@@ -519,7 +523,6 @@ def _(
     to_coordinate_system: str | None = None,
 ) -> GeoDataFrame:
     from spatialdata.models import ShapesModel
-    from spatialdata.models._utils import TRANSFORM_KEY
     from spatialdata.transformations import Identity, get_transformation
 
     axes = get_axes_names(data)
