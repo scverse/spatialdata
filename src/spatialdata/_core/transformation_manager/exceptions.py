@@ -309,3 +309,9 @@ class UnmappedAxisError(Exception):
 
 class AxisParsingException(Exception):
     pass
+
+
+class NGFFCompatibilityError(Exception):
+    def __init__(self, msg: str):
+        self.msg = msg
+        super().__init__(msg)
