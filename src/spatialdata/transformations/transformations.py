@@ -82,6 +82,18 @@ class BaseTransformation(ABC):
 
     @abstractmethod
     def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+        """
+        Get the resulting output axes for the transformation, given a tuple of input axes.
+
+        Parameters
+        ----------
+        input_axes
+            The input axes.
+
+        Returns
+        -------
+        The output axes after applying the transformation.
+        """
         pass
 
     @classmethod
@@ -113,11 +125,41 @@ class BaseTransformation(ABC):
         output_coordinate_system_name: str,
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
+        """
+        Convert the transformation to an NGFF transformation edge.
+
+        Parameters
+        ----------
+        input_coordinate_system
+            The input coordinate system.
+        output_coordinate_system_name
+            The name for the output coordinate system.
+        transformation_edge_name
+            Optional name for the transformation edge.
+
+        Returns
+        -------
+        A subclass of BaseTransformationEdge representing an equivalent NGFF coordinate transformation.
+        """
         pass
 
     def _get_ngff_output_coordinate_system(
         self, input_coordinate_system: CoordSystem, output_coordinate_system_name: str
     ) -> CoordSystem:
+        """
+        Get the NGFF output coordinate system for a transformation.
+
+        Parameters
+        ----------
+        input_coordinate_system
+            The input coordinate system.
+        output_coordinate_system_name
+            The name for the output coordinate system.
+
+        Returns
+        -------
+        The output coordinate system.
+        """
 
         output_axes_names = self._get_resulting_output_axes(input_coordinate_system.axes_names)
 

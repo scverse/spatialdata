@@ -138,10 +138,6 @@ def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
     return tuple(ax for ax in axes if ax in [X, Y, Z])
 
 
-def get_axes_types(e: SpatialElement) -> tuple[NgffAxisType, ...]:
-    return tuple(axis_type_mapping_ngff[x] for x in get_axes_names(e))
-
-
 @singledispatch
 def get_axes_names(e: SpatialElement | pd.DataFrame) -> tuple[str, ...]:
     """
