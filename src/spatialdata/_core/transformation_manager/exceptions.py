@@ -312,6 +312,15 @@ class AxisParsingException(Exception):
 
 
 class NGFFCompatibilityError(Exception):
+    """
+    Exception raised when a transformation cannot be mapped to an NGFF transformation edge.
+
+    Attributes
+    ----------
+    msg : str
+        The error message describing the compatibility issue.
+    """
+
     def __init__(self, msg: str):
         self.msg = msg
         super().__init__(msg)

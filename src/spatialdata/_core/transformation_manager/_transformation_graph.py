@@ -28,7 +28,12 @@ from spatialdata.transformations.graph.vert import CoordSystem
 
 class TransformationGraph:
     def __init__(self) -> None:
-        """Initialize a TransformationManager with empty graph and mappings."""
+        """
+        Initialize a TransformationManager with empty graph and mappings.
+
+        The TransformationManager maintains a graph of coordinate systems and transformations between them,
+        as well as a mapping of element names to their respective coordinate systems.
+        """
         self._graph: nx.MultiDiGraph[CoordSystem, dict[str, Any], dict[str, BaseTransformationEdge]] = nx.MultiDiGraph()
         # MultiDiGraph with CoordSystem objects as nodes and BaseTransformationEdge as edge attributes
         self._element_to_cs_mapping: dict[str, CoordSystem] = {}
@@ -45,7 +50,7 @@ class TransformationGraph:
 
         Raises
         ------
-        ElementNotFoundError
+        ElementNotRegisteredToAnyCoordinateSystemError
             If the element does not exist.
         """
         if element_name not in self._element_to_cs_mapping:
@@ -53,7 +58,7 @@ class TransformationGraph:
 
     def assert_element_does_not_exist(self, element_name: str) -> None:
         """
-        Assert than an element doesn't exist in the transformation manager.
+        Assert that an element doesn't exist in the transformation manager.
 
         Parameters
         ----------
@@ -115,8 +120,7 @@ class TransformationGraph:
         target_cs
             The output coordinate system.
         edge_key
-            If specified, asserts that the specific edge exists between coordinate systems
-
+            If specified, asserts that the specific edge exists between coordinate systems.
 
         Raises
         ------
@@ -161,12 +165,12 @@ class TransformationGraph:
         Parameters
         ----------
         cs
-            The coordinate system to check
+            The coordinate system to check.
 
         Raises
         ------
         CoordinateSystemHasElementsError
-            if the coordinate system has elements belonging to it.
+            If the coordinate system has elements belonging to it.
         """
         elements = self._get_elements_belonging_to_cs(cs)
         # also checks if cs exists
@@ -202,12 +206,11 @@ class TransformationGraph:
         Raises
         ------
         CoordinateSystemNotFoundError
-            If the coordinate system is not found
+            If the coordinate system is not found.
         CannotRemoveCoordinateSystemError
             If the coordinate system cannot be removed.
-            Caused by
-                CoordinateSystemHasTransformationsError or
-                CoordinateSystemHasElementsError when the system has dependencies.
+            Caused by CoordinateSystemHasTransformationsError or
+            CoordinateSystemHasElementsError when the system has dependencies.
         """
         try:
             self.assert_coordinate_system_has_no_transformations(cs)
@@ -259,7 +262,7 @@ class TransformationGraph:
 
         Returns
         -------
-        The coordinate system
+        The coordinate system.
 
         Raises
         ------
@@ -272,7 +275,20 @@ class TransformationGraph:
     def get_outgoing_edges(
         self, element_name: str, target_coordinate_system_names: Sequence[str] | None
     ) -> list[BaseTransformationEdge]:
+        """
+        Get outgoing transformation edges from an element's coordinate system.
 
+        Parameters
+        ----------
+        element_name
+            The name of the element.
+        target_coordinate_system_names
+            Optional list of target coordinate system names to filter by.
+
+        Returns
+        -------
+        List of outgoing transformation edges from the element's coordinate system.
+        """
         element_coordinate_system = self.get_element_coordinate_system(element_name)
         outgoing_edges: list[BaseTransformationEdge] = []
 
@@ -312,11 +328,12 @@ class TransformationGraph:
         Parameters
         ----------
         edge
+            The transformation edge to encode.
 
         Returns
         -------
         edge_key
-            str, the encoded edge identifier
+            str, the encoded edge identifier.
         """
         return str(id(edge))
 
@@ -422,7 +439,7 @@ class TransformationGraph:
         CoordinateSystemNotFoundError
             If either coordinate system does not exist.
         TransformationNotFoundError
-            If no transformation exists between the coordiante systems
+            If no transformation exists between the coordinate systems.
         """
         self.assert_coordinate_system_exists(source_cs)
         self.assert_coordinate_system_exists(target_cs)
@@ -446,19 +463,19 @@ class TransformationGraph:
 
         Parameters
         ----------
-        paths:
-            sequence of list of nodes
-        expected_intermediate_edges:
-            list of edges, for use when multiple edges are found between two coordinate systems in a path
+        paths
+            Sequence of list of nodes.
+        expected_intermediate_edges
+            List of edges, for use when multiple edges are found between two coordinate systems in a path.
 
         Returns
         -------
-            list of transformation edges, each an instance of the transformation class Sequence
+        List of transformation edges, each an instance of the transformation class Sequence.
 
         Raises
         ------
-            TransformationPathNotSimple
-                if any path in `paths` is not simple, i.e., has recurring coordinate systems
+        TransformationPathNotSimple
+            If any path in `paths` is not simple, i.e., has recurring coordinate systems.
         """
         for path in paths:
             if len(set(path)) != len(path):
@@ -520,7 +537,7 @@ class TransformationGraph:
         target_cs
             The target coordinate system.
         expected_intermediate_edges
-            list of intermediate edges expected.
+            List of intermediate edges expected.
             Used to choose an edge when multiple edges are found between the same coordinate systems.
 
         Returns
@@ -568,7 +585,7 @@ class TransformationGraph:
         target_cs
             The target coordinate system.
         expected_intermediate_edges
-            list of intermediate edges expected.
+            List of intermediate edges expected.
             Used to choose an edge when multiple edges are found between the same coordinate systems.
 
         Returns

@@ -75,6 +75,20 @@ class Axis:
 
     @classmethod
     def from_spatialdata_axis_name(cls, axis_name: str, unit: None = None) -> Axis:
+        """
+        Create an Axis from a spatialdata axis name.
+
+        Parameters
+        ----------
+        axis_name
+            The name of the axis (e.g., 'x', 'y', 'z', 'c').
+        unit
+            Optional unit for the axis.
+
+        Returns
+        -------
+        An Axis object with the specified name and corresponding type.
+        """
         return cls(name=axis_name, type=axis_type_mapping_ngff[axis_name], unit=unit)
 
 
