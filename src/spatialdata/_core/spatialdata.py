@@ -22,7 +22,7 @@ from xarray import DataArray, DataTree
 from zarr.errors import GroupNotFoundError
 
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
-from spatialdata._core.transformation_manager.transformations_facade import TransformationsFacade
+from spatialdata._core.transformation_manager import TransformationsFacade
 from spatialdata._core.validation import (
     check_all_keys_case_insensitively_unique,
     check_target_region_column_symmetry,
@@ -34,6 +34,7 @@ from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, JSONValue, Raster_T
 from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
+    DEFAULT_COORDINATE_SYSTEM,
     Image2DModel,
     Image3DModel,
     Labels2DModel,
@@ -48,6 +49,7 @@ from spatialdata.models import (
     set_channel_names,
 )
 from spatialdata.models._utils import convert_region_column_to_categorical
+from spatialdata.transformations import get_transformation
 
 if TYPE_CHECKING:
     from pandas._typing import DtypeObj
@@ -57,6 +59,7 @@ if TYPE_CHECKING:
         SpatialDataContainerFormatType,
         SpatialDataFormatType,
     )
+    from spatialdata.transformations._graph import BaseTransformationEdge
 
 
 class SpatialData:
@@ -131,7 +134,7 @@ class SpatialData:
         self._shapes: Shapes = Shapes(shared_keys=self._shared_keys)
         self._tables: Tables = Tables(shared_keys=self._shared_keys)
         self.attrs = attrs if attrs else {}  # type: ignore[assignment]
-        self.transformation_facade = TransformationsFacade()
+        self.transformations = TransformationsFacade()
 
         element_names = list(chain.from_iterable([e.keys() for e in [images, labels, points, shapes] if e is not None]))
 
@@ -151,26 +154,42 @@ class SpatialData:
                     with collect_error(location=("images", k)):
                         self.images[k] = image
 
+                        self._initialize_coordinate_transforms_from_element_attrs(new_element=image, new_element_key=k)
+
             if labels is not None:
                 for k, labels_element in labels.items():
                     with collect_error(location=("labels", k)):
                         self.labels[k] = labels_element
+
+                        self._initialize_coordinate_transforms_from_element_attrs(
+                            new_element=labels_element, new_element_key=k
+                        )
 
             if shapes is not None:
                 for k, shapes_element in shapes.items():
                     with collect_error(location=("shapes", k)):
                         self.shapes[k] = shapes_element
 
+                        self._initialize_coordinate_transforms_from_element_attrs(
+                            new_element=shapes_element, new_element_key=k
+                        )
+
             if points is not None:
                 for k, points_element in points.items():
                     with collect_error(location=("points", k)):
                         self.points[k] = points_element
+
+                        self._initialize_coordinate_transforms_from_element_attrs(
+                            new_element=points_element, new_element_key=k
+                        )
 
             if tables is not None:
                 for k, table in tables.items():
                     with collect_error(location=("tables", k)):
                         self.validate_table_in_spatialdata(table)
                         self.tables[k] = table
+
+                        # transformation data is not stored in AnnData.attrs
 
     def validate_table_in_spatialdata(self, table: AnnData) -> None:
         """
@@ -736,6 +755,21 @@ class SpatialData:
             tables = self.tables
 
         return tables
+
+    def _initialize_coordinate_transforms_from_element_attrs(
+        self, new_element: SpatialElement, new_element_key: str
+    ) -> list[BaseTransformationEdge]:
+        transforms = get_transformation(new_element)
+
+        if not isinstance(transforms, dict):
+            transforms = {DEFAULT_COORDINATE_SYSTEM: transforms}
+
+        self.transformations._add_new_element_to_graph_creating_default_cs(
+            new_element=new_element, new_element_key=new_element_key
+        )
+        return self.transformations.set_element_transformations(
+            element_name=new_element_key, transformations_config=transforms
+        )
 
     def rename_coordinate_systems(self, rename_dict: dict[str, str]) -> None:
         """
@@ -2524,6 +2558,8 @@ class SpatialData:
         """
         Add the element to the SpatialData object.
 
+        Also create a "default" coordinate system for the element and link the element to it.
+
         Parameters
         ----------
         key
@@ -2536,18 +2572,24 @@ class SpatialData:
         if schema in (Image2DModel, Image3DModel):
             assert isinstance(value, DataArray | DataTree)
             self.images[key] = value
+            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
         elif schema in (Labels2DModel, Labels3DModel):
             assert isinstance(value, DataArray | DataTree)
             self.labels[key] = value
+            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
         elif schema == PointsModel:
             assert isinstance(value, DaskDataFrame)
             self.points[key] = value
+            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
         elif schema == ShapesModel:
             assert isinstance(value, GeoDataFrame)
             self.shapes[key] = value
+            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
         elif schema == TableModel:
             assert isinstance(value, AnnData)
+            self.validate_table_in_spatialdata(value)
             self.tables[key] = value
+            # transformation data is not stored in AnnData.attrs
         else:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")
 
