@@ -133,7 +133,7 @@ def get_raster_format_for_read(
 
 def read_zarr(
     store: str | Path | UPath | zarr.Group,
-    selection: None | tuple[str] = None,
+    selection: tuple[Literal["images", "labels", "points", "shapes", "tables"], ...] | None = None,
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN] = BadFileHandleMethod.ERROR,
 ) -> SpatialData:
     """
@@ -150,8 +150,8 @@ def read_zarr(
         Path, URL, or zarr.Group to the zarr store (on-disk or remote).
 
     selection
-        List of elements to read from the zarr store (images, labels, points, shapes, tables). If None, all elements are
-        read.
+        Tuple of element types to read from the zarr store: ``"images"``, ``"labels"``, ``"points"``, ``"shapes"``,
+        or ``"tables"``. If None or empty, all element types are read. Invalid values raise a :class:`ValueError`.
 
     on_bad_files
         Specifies what to do upon encountering a bad file, e.g. corrupted, invalid or missing files.
@@ -172,6 +172,14 @@ def read_zarr(
     spatialdata.SpatialData.read : Convenience wrapper that reads from a path and can reconsolidate the metadata.
     """
     from spatialdata._io._utils import _resolve_zarr_store
+
+    allowed_selection = {"images", "labels", "points", "shapes", "tables"}
+    if isinstance(selection, str) or (selection is not None and not set(selection).issubset(allowed_selection)):
+        raise ValueError(
+            f"Invalid selection: {selection!r}. Expected a tuple containing only {sorted(allowed_selection)}, "
+            "or None to read all element types."
+        )
+    selector: set[str] = allowed_selection if not selection else set(selection)
 
     resolved_store = _resolve_zarr_store(store)
     root_group = zarr.open_group(resolved_store, mode="r")
@@ -199,7 +207,6 @@ def read_zarr(
     shapes: dict[str, GeoDataFrame] = {}
     tables: dict[str, AnnData] = {}
 
-    selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
     logger.debug(f"Reading selection {selector}")
 
     # we could make this more readable. One can get lost when looking at this dict and iteration over the items
