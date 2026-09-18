@@ -179,7 +179,7 @@ def read_zarr(
             f"Invalid selection: {selection!r}. Expected a tuple containing only {sorted(allowed_selection)}, "
             "or None to read all element types."
         )
-    selector = allowed_selection if not selection else set(selection)
+    selector: set[str] = allowed_selection if not selection else set(selection)
 
     resolved_store = _resolve_zarr_store(store)
     root_group = zarr.open_group(resolved_store, mode="r")
