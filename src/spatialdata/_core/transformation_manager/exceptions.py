@@ -267,13 +267,13 @@ class UnexpectedShapeError(Exception):
 class DeterminantDifferentFromOne(Exception):
     def __init__(self, matrix: ArrayLike) -> None:
         self.matrix = matrix
-        super().__init__("Matrix does not have det(M) == 1")
+        super().__init__(f"Matrix does not have det(M) == 1:\n{matrix}")
 
 
 class NotOrthonormalError(Exception):
     def __init__(self, matrix: ArrayLike) -> None:
         self.matrix = matrix
-        super().__init__("Matrix is not orthonormal")
+        super().__init__(f"Matrix is not orthonormal:\n{matrix}")
 
 
 class EmptyTransformSequenceError(Exception):
