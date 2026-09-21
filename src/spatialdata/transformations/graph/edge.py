@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Final
+from warnings import warn
 
 import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
@@ -231,6 +232,13 @@ class AffineEdge(BaseTransformationEdge):
         )
 
     def inverse(self, name: str | None = None) -> BaseTransformationEdge | None:
+        cond = np.linalg.cond(self.affine)
+        if cond > 1e10:
+            warn(
+                f"Inverting an affine matrix with large condition number ({cond:.2e})",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         try:
             # FIXME: I think there are more efficient/precise ways to invert a matrix
             inv = np.linalg.inv(self.affine)
