@@ -129,20 +129,6 @@ class CoordSystem:
             virtual=False,
         )
 
-    @classmethod
-    def try_from_model_or_default[T](cls, model: ozm06ct.CoordinateSystem | None, *, default: T) -> CoordSystem | T:
-        """
-        Parse a `CoordSystem` from `model`, or return `default` if `model` is None.
-
-        Raises
-        ------
-        AxisParsingException
-            if `model` is not None and any of its axes fails to parse
-        """
-        if model is not None:
-            return CoordSystem.try_from_model(model)
-        return default
-
     @property
     def num_axes(self) -> int:
         return len(self.axes)
