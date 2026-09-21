@@ -53,7 +53,7 @@ dependencies = [
   "universal-pathlib>=0.2.6",
   "xarray>=2024.10",
   "xarray-spatial>=0.3.5",
-  "zarr>=3",
+  "zarr>=3.1.2",
 ]
 optional-dependencies.extra = [
   "napari-spatialdata[all]",
@@ -140,6 +140,7 @@ envs.hatch-test.overrides.matrix.deps.env-vars = [
 envs.hatch-test.overrides.matrix.deps.extra-dependencies = [
   { value = "dask==2026.3.0", if = [ "min" ] },
   { value = "distributed==2026.3.0", if = [ "min" ] },
+  { value = "zarr==3.1.2", if = [ "min" ] },
 ]
 envs.hatch-test.dependency-groups = [ "dev", "test" ]
 envs.hatch-check-fmt.dependencies = [ "prek" ]
@@ -151,7 +152,7 @@ envs.hatch-check-code.scripts.lint-fix = "prek run -a --no-group=format --no-gro
 envs.hatch-check-types.scripts.check = [ "mypy" ]
 envs.hatch-check-types.dependency-groups = [ "typecheck", "test" ]
 # Not part of the CI matrix; run locally with `hatch run test-anndata-pandas:test`.
-envs.test-anndata-pandas.extra-dependencies = [ "zarr>=3" ]
+envs.test-anndata-pandas.extra-dependencies = [ "zarr>=3.1.2" ]
 envs.test-anndata-pandas.scripts.test = [ "pip list|grep anndata && pip list|grep pandas && pytest {args}" ]
 envs.test-anndata-pandas.scripts.test-all = [ "pip list|grep anndata && pip list|grep pandas && pytest ." ]
 envs.test-anndata-pandas.scripts.test-readwrite = [
