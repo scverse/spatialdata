@@ -52,7 +52,7 @@ dependencies = [
   "spatial-image>=1.2.3",
   "typing-extensions>=4.8",
   "universal-pathlib>=0.2.6",
-  "xarray>=2024.10",
+  "xarray>=2025.4",
   "xarray-spatial>=0.3.5",
   "zarr>=3",
 ]
