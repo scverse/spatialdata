@@ -8,6 +8,7 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
+from scipy.sparse import issparse
 
 from spatialdata import aggregate, to_polygons
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
@@ -357,6 +358,30 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
 
     out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3]).tables["table"]
     assert len(out) == 3
+
+
+@pytest.mark.parametrize("multiscale_values", [False, True])
+@pytest.mark.parametrize("multiscale_by", [False, True])
+def test_aggregate_image_by_labels_multiscale(labels_blobs, *, multiscale_values, multiscale_by) -> None:
+    """Multiscale `values` and `by` aggregate like their single-scale counterparts."""
+    image = RNG.normal(size=(3,) + labels_blobs.shape)
+    scale_factors = [2]
+
+    single = aggregate(
+        values=Image2DModel.parse(image),
+        by=Labels2DModel.parse(labels_blobs),
+        agg_func="mean",
+    ).tables["table"]
+    out = aggregate(
+        values=Image2DModel.parse(image, scale_factors=scale_factors if multiscale_values else None),
+        by=Labels2DModel.parse(labels_blobs, scale_factors=scale_factors if multiscale_by else None),
+        agg_func="mean",
+    ).tables["table"]
+
+    assert len(out) + 1 == len(np.unique(labels_blobs))
+    np.testing.assert_array_equal(out.obs_names, single.obs_names)
+    x, x_single = (a.toarray() if issparse(a) else a for a in (out.X, single.X))
+    np.testing.assert_allclose(x, x_single)
 
 
 @pytest.mark.parametrize("values", ["blobs_image", "blobs_points", "blobs_circles", "blobs_polygons"])
