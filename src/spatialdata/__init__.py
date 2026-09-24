@@ -61,6 +61,8 @@ _LAZY_IMPORTS: dict[str, str] = {
     "SpatialData": "spatialdata._core.spatialdata",
     # _io._utils
     "get_dask_backing_files": "spatialdata._io._utils",
+    # _io.exceptions
+    "TableWriteOptionsError": "spatialdata._io.exceptions",
     # _io.format
     "SpatialDataFormatType": "spatialdata._io.format",
     # _io.io_zarr
@@ -119,6 +121,8 @@ __all__ = [
     "SpatialData",
     # _io._utils
     "get_dask_backing_files",
+    # _io.exceptions
+    "TableWriteOptionsError",
     # _io.format
     "SpatialDataFormatType",
     # _io.io_zarr
@@ -210,6 +214,9 @@ if TYPE_CHECKING:
 
     # _io._utils
     from spatialdata._io._utils import get_dask_backing_files
+
+    # _io.exceptions
+    from spatialdata._io.exceptions import TableWriteOptionsError
 
     # _io.format
     from spatialdata._io.format import SpatialDataFormatType
