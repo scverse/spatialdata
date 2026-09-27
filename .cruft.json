@@ -13,7 +13,7 @@
       "github_repo": "spatialdata",
       "license": "BSD 3-Clause License",
       "ide_integration": true,
-      "issue_categorization": "labels",
+      "issue_categorization": "issue types",
       "_copy_without_render": [
         ".github/workflows/build.yaml",
         ".github/workflows/test.yaml",

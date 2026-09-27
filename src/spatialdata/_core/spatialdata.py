@@ -2427,8 +2427,8 @@ class SpatialData:
         ----------
         element_names
             The names of the element_names to subset. If the element_name is the name of a table, this table would be
-            completely included in the subset even if filter_table is True.
-        filter_table
+            completely included in the subset even if `filter_tables` is True.
+        filter_tables
             If True (default), the table is filtered to only contain rows that are annotating regions
             contained within the element_names.
         include_orphan_tables
