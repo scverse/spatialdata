@@ -84,7 +84,7 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     -------
     The unpadded raster.
     """
-    from spatialdata.models import get_axes_names
+    from spatialdata.transformations._graph.utils import get_axes_names
     from spatialdata.transformations._utils import compute_coordinates
 
     def _compute_paddings(data: DataArray, axis: str) -> tuple[int, int]:

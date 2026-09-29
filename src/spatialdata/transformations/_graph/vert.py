@@ -6,8 +6,8 @@ from typing import Final
 
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
 
-from spatialdata.models import NgffAxisType, axis_type_mapping_ngff
 from spatialdata.transformations._graph.exceptions import AxisParsingException
+from spatialdata.transformations._graph.literals import NgffAxisType, axis_type_mapping_ngff
 
 
 @dataclass(frozen=True)

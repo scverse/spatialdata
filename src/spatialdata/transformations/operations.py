@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 
 from spatialdata._logging import logger
-from spatialdata.models import DEFAULT_COORDINATE_SYSTEM
+from spatialdata.transformations._graph.literals import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.transformations._utils import _get_transformations, _set_transformations
 
 if TYPE_CHECKING:
@@ -86,6 +86,19 @@ def set_transformation(
         for location in located:
             element_type, element_name = location.split("/")
             write_to_sdata.write_transformations(element_name=element_name)
+
+
+# these signatures help the static type checker understand the correct return type based on the inputs
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: Literal[False] = False
+) -> BaseTransformation: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: None = None, get_all: Literal[True] = True
+) -> dict[str, BaseTransformation]: ...
 
 
 def get_transformation(
@@ -379,7 +392,7 @@ def get_transformation_between_landmarks(
     from skimage.transform import estimate_transform
 
     from spatialdata import transform
-    from spatialdata.models import get_axes_names
+    from spatialdata.transformations._graph.utils import get_axes_names
     from spatialdata.transformations.transformations import Affine, Sequence
 
     assert get_axes_names(references_coords) == ("x", "y")

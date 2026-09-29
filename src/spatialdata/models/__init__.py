@@ -3,25 +3,13 @@ from __future__ import annotations
 from spatialdata._core.validation import check_target_region_column_symmetry
 from spatialdata.models._utils import (
     force_2d,
-    get_axes_names,
     get_channel_names,
-    get_spatial_axes,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
     set_channel_names,
-    validate_axes,
-    validate_axis_name,
 )
 from spatialdata.models.literals import (
     ATTRS_KEY,
-    DEFAULT_COORDINATE_SYSTEM,
-    TRANSFORM_KEY,
-    C,
-    NgffAxisType,
-    X,
-    Y,
-    Z,
-    axis_type_mapping_ngff,
 )
 from spatialdata.models.models import (
     Image2DModel,
@@ -36,7 +24,7 @@ from spatialdata.models.models import (
     get_table_keys,
     validate_element,
 )
-from spatialdata.models.types import MappingToCoordinateSystem_t, SpatialElement, ValidAxis_t
+from spatialdata.models.types import MappingToCoordinateSystem_t, SpatialElement
 
 __all__ = [
     "Labels2DModel",
@@ -49,14 +37,6 @@ __all__ = [
     "TableModel",
     "get_model",
     "SpatialElement",
-    "get_spatial_axes",
-    "validate_axes",
-    "validate_axis_name",
-    "X",
-    "Y",
-    "Z",
-    "C",
-    "get_axes_names",
     "points_geopandas_to_dask_dataframe",
     "points_dask_dataframe_to_geopandas",
     "check_target_region_column_symmetry",
@@ -65,11 +45,6 @@ __all__ = [
     "get_channel_names",
     "set_channel_names",
     "force_2d",
-    "NgffAxisType",
-    "axis_type_mapping_ngff",
-    "DEFAULT_COORDINATE_SYSTEM",
-    "TRANSFORM_KEY",
-    "ValidAxis_t",
     "ATTRS_KEY",
     "MappingToCoordinateSystem_t",
 ]

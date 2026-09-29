@@ -10,10 +10,11 @@ from geopandas import GeoDataFrame
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
+from spatialdata.transformations._graph import TRANSFORM_KEY
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
-    from spatialdata.models import TRANSFORM_KEY, MappingToCoordinateSystem_t, SpatialElement
+    from spatialdata.models import MappingToCoordinateSystem_t, SpatialElement
     from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
 
 
@@ -80,7 +81,7 @@ def _(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
 
 @_set_transformations.register(DataTree)
 def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
-    from spatialdata.models import get_axes_names
+    from spatialdata.transformations._graph.utils import get_axes_names
 
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
     dims = get_axes_names(e)
@@ -118,7 +119,7 @@ def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
 
 @_set_transformations.register(GeoDataFrame)
 @_set_transformations.register(DaskDataFrame)
-def _(e: GeoDataFrame | GeoDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
+def _(e: GeoDataFrame | DaskDataFrame, transformations: MappingToCoordinateSystem_t) -> None:
     _set_transformations_to_element(e, transformations)
     # _set_transformations_to_dict_container(e.attrs, transformations)
 
@@ -207,7 +208,7 @@ def _(data: DataArray) -> DataArray:
 
 @compute_coordinates.register(DataTree)
 def _(data: DataTree) -> DataTree:
-    from spatialdata.models import get_axes_names
+    from spatialdata.transformations._graph.utils import get_axes_names
 
     spatial_coords = [ax for ax in get_axes_names(data) if ax in ["x", "y", "z"]]
     img_name = list(data["scale0"].data_vars.keys())[0]

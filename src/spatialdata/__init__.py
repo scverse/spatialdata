@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import spatialdata.models._accessor
 
+# Import registers Dask .attrs accessor, enabling metadata handling on Dask collections
+
 __version__ = version("spatialdata")
 
 _submodules = {

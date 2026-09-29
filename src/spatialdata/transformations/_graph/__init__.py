@@ -24,6 +24,7 @@ from spatialdata.transformations._graph.edge import (
     parse_translation,
 )
 from spatialdata.transformations._graph.exceptions import (
+    AxisParsingException,
     AxisRedefinitionError,
     CannotRemoveCoordinateSystemError,
     CoordinateSystemAlreadyExistsError,
@@ -47,8 +48,17 @@ from spatialdata.transformations._graph.exceptions import (
     UnmappedAxisError,
 )
 from spatialdata.transformations._graph.graph import TransformationGraph
-from spatialdata.transformations._graph.literals import TRANSFORM_KEY
-from spatialdata.transformations._graph.utils import get_default_coordinate_system
+from spatialdata.transformations._graph.literals import (
+    DEFAULT_COORDINATE_SYSTEM,
+    TRANSFORM_KEY,
+    C,
+    NgffAxisType,
+    X,
+    Y,
+    Z,
+    axis_type_mapping_ngff,
+)
+from spatialdata.transformations._graph.utils import get_instrinsic_coordinate_system
 from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 __all__ = [
@@ -75,6 +85,7 @@ __all__ = [
     "parse_sequence",
     "parse_translation",
     # from exceptions
+    "AxisParsingException",
     "AxisRedefinitionError",
     "CannotRemoveCoordinateSystemError",
     "CoordinateSystemAlreadyExistsError",
@@ -99,9 +110,16 @@ __all__ = [
     # from graph
     "TransformationGraph",
     # from literals
+    "DEFAULT_COORDINATE_SYSTEM",
     "TRANSFORM_KEY",
+    "X",
+    "Y",
+    "Z",
+    "C",
+    "NgffAxisType",
+    "axis_type_mapping_ngff",
     # from utils
-    "get_default_coordinate_system",
+    "get_instrinsic_coordinate_system",
     # from vert
     "Axis",
     "CoordSystem",

@@ -27,10 +27,9 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     SpatialElement,
-    get_axes_names,
     get_model,
 )
-from spatialdata.models._utils import get_spatial_axes
+from spatialdata.transformations._graph.utils import get_axes_names, get_spatial_axes
 from spatialdata.transformations._utils import _get_scale, compute_coordinates
 from spatialdata.transformations.operations import get_transformation, remove_transformation, set_transformation
 from spatialdata.transformations.transformations import (
