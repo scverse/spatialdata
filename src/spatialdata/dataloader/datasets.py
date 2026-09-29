@@ -30,11 +30,11 @@ from spatialdata.models import (
     Labels3DModel,
     PointsModel,
     TableModel,
-    get_axes_names,
     get_model,
     get_table_keys,
 )
 from spatialdata.transformations import BaseTransformation, get_transformation, set_transformation
+from spatialdata.transformations._graph.utils import get_axes_names
 
 __all__ = ["ImageTilesDataset"]
 

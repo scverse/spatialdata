@@ -16,7 +16,7 @@ from spatialdata._io._utils import (
 )
 from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import CurrentPointsFormat, PointsFormats, PointsFormatType, _parse_version
-from spatialdata.models import get_axes_names
+from spatialdata.transformations._graph.utils import get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,

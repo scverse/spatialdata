@@ -16,7 +16,8 @@ from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import disable_dask_tune_optimization, unpad_raster
-from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
+from spatialdata.models import Image2DModel, PointsModel, ShapesModel
+from spatialdata.transformations._graph.utils import get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,

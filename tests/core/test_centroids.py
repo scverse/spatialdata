@@ -10,8 +10,9 @@ from numpy.random import default_rng
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances
-from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, TableModel, get_axes_names
+from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, TableModel
 from spatialdata.transformations import Affine, Identity, get_transformation, set_transformation
+from spatialdata.transformations._graph.utils import get_axes_names
 
 RNG = default_rng(42)
 

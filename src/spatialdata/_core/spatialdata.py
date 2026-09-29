@@ -34,7 +34,6 @@ from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, JSONValue, Raster_T
 from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
-    DEFAULT_COORDINATE_SYSTEM,
     Image2DModel,
     Image3DModel,
     Labels2DModel,
@@ -43,13 +42,13 @@ from spatialdata.models import (
     ShapesModel,
     SpatialElement,
     TableModel,
-    get_axes_names,
     get_model,
     get_table_keys,
     set_channel_names,
 )
 from spatialdata.models._utils import convert_region_column_to_categorical
-from spatialdata.transformations import get_transformation
+from spatialdata.transformations import BaseTransformation, get_transformation
+from spatialdata.transformations._graph.utils import get_axes_names
 
 if TYPE_CHECKING:
     from pandas._typing import DtypeObj
@@ -154,34 +153,20 @@ class SpatialData:
                     with collect_error(location=("images", k)):
                         self.images[k] = image
 
-                        self._initialize_coordinate_transforms_from_element_attrs(new_element=image, new_element_key=k)
-
             if labels is not None:
                 for k, labels_element in labels.items():
                     with collect_error(location=("labels", k)):
                         self.labels[k] = labels_element
-
-                        self._initialize_coordinate_transforms_from_element_attrs(
-                            new_element=labels_element, new_element_key=k
-                        )
 
             if shapes is not None:
                 for k, shapes_element in shapes.items():
                     with collect_error(location=("shapes", k)):
                         self.shapes[k] = shapes_element
 
-                        self._initialize_coordinate_transforms_from_element_attrs(
-                            new_element=shapes_element, new_element_key=k
-                        )
-
             if points is not None:
                 for k, points_element in points.items():
                     with collect_error(location=("points", k)):
                         self.points[k] = points_element
-
-                        self._initialize_coordinate_transforms_from_element_attrs(
-                            new_element=points_element, new_element_key=k
-                        )
 
             if tables is not None:
                 for k, table in tables.items():
@@ -189,7 +174,13 @@ class SpatialData:
                         self.validate_table_in_spatialdata(table)
                         self.tables[k] = table
 
-                        # transformation data is not stored in AnnData.attrs
+        # to be deleted later, when cleaning up parts that rely on transformation info in attrs
+        for element_set in (images, labels, shapes, points):
+            if element_set is not None:
+                for element_key, element in element_set.items():
+                    self._initialize_coordinate_transforms_from_element_attrs(
+                        new_element=element, new_element_key=element_key
+                    )
 
     def validate_table_in_spatialdata(self, table: AnnData) -> None:
         """
@@ -759,10 +750,7 @@ class SpatialData:
     def _initialize_coordinate_transforms_from_element_attrs(
         self, new_element: SpatialElement, new_element_key: str
     ) -> list[BaseTransformationEdge]:
-        transforms = get_transformation(new_element)
-
-        if not isinstance(transforms, dict):
-            transforms = {DEFAULT_COORDINATE_SYSTEM: transforms}
+        transforms: dict[str, BaseTransformation] = get_transformation(new_element, get_all=True)
 
         self.transformations._add_new_element_to_graph_creating_default_cs(
             new_element=new_element, new_element_key=new_element_key

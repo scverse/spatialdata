@@ -8,7 +8,7 @@ from typing import Any, Self
 import numpy as np
 
 from spatialdata._types import ArrayLike
-from spatialdata.models import C, X, Y, Z
+from spatialdata.transformations._graph import C, X, Y, Z
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 __all__ = [
