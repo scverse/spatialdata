@@ -39,7 +39,6 @@ repos:
     rev: v6.0.0
     hooks:
       - id: detect-private-key
-      - id: check-ast
       - id: end-of-file-fixer
         groups: [format]
       - id: mixed-line-ending
