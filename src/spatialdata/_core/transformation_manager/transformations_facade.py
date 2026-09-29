@@ -8,8 +8,10 @@ from spatialdata.transformations._graph import (
     BaseTransformationEdge,
     CoordinateSystemNotFoundError,
     TransformationGraph,
-    get_default_coordinate_system,
+    get_instrinsic_coordinate_system,
 )
+from spatialdata.transformations._graph.exceptions import IncompatibleTransformationOutputCoordinateSystemError
+from spatialdata.transformations._graph.utils import get_intrinsic_coordinate_system_name
 
 
 class TransformationsFacade:
@@ -47,8 +49,9 @@ class TransformationsFacade:
         new_element_key
             The key/name to use for the new element in the graph.
         """
-        element_cs = get_default_coordinate_system(
-            element_to_be_added_to_graph=new_element, coordinate_system_name=new_element_key
+        element_cs = get_instrinsic_coordinate_system(
+            element_to_be_added_to_graph=new_element,
+            coordinate_system_name=get_intrinsic_coordinate_system_name(new_element_key),
         )
 
         self._graph.add_coordinate_system(element_cs)
@@ -82,6 +85,17 @@ class TransformationsFacade:
             ngff_transformation_edge = t._to_ngff_transformation_edge(
                 input_coordinate_system=element_cs, output_coordinate_system_name=output_coordinate_system_name
             )
+            possible_coordinate_system = self._graph.get_coordinate_system(output_coordinate_system_name)
+            possible_coordinate_system_exists = possible_coordinate_system is not None
+            if not possible_coordinate_system_exists:
+                self._graph.add_coordinate_system(ngff_transformation_edge.output)
+            else:
+                if possible_coordinate_system != ngff_transformation_edge.output:
+                    raise IncompatibleTransformationOutputCoordinateSystemError(
+                        input_coordinate_system_name=element_cs.name,
+                        output_coordinate_system_name=output_coordinate_system_name,
+                        transformation=t,
+                    )
             self._graph.add_transformation_edge(ngff_transformation_edge)
             transformation_edges.append(ngff_transformation_edge)
 

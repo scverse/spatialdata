@@ -39,7 +39,9 @@ from spatialdata.transformations.ngff.ngff_transformations import (
 
 if TYPE_CHECKING:
     from spatialdata._types import ArrayLike, ListOrNDArrayFloating
-    from spatialdata.models import DEFAULT_COORDINATE_SYSTEM, SpatialElement, ValidAxis_t
+    from spatialdata.models import SpatialElement
+    from spatialdata.transformations._graph.literals import DEFAULT_COORDINATE_SYSTEM
+    from spatialdata.transformations._graph.types import ValidAxis_t
 
 TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]] = {}
 
@@ -54,7 +56,7 @@ class BaseTransformation(ABC):
         This function is to allow to call validate_axes() from this file
         in multiple places while avoiding circular imports.
         """
-        from spatialdata.models import validate_axes
+        from spatialdata.transformations._graph.utils import validate_axes
 
         validate_axes(axes)
 
@@ -370,7 +372,7 @@ class MapAxis(BaseTransformation):
 
     def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
         # to avoid circular imports
-        from spatialdata.models import validate_axis_name
+        from spatialdata.transformations._graph.utils import validate_axis_name
 
         assert isinstance(map_axis, dict)
         for des_ax, src_ax in map_axis.items():
@@ -1229,7 +1231,7 @@ class Sequence(BaseTransformation):
 
 
 def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
-    from spatialdata.models import get_axes_names
+    from spatialdata.transformations._graph.utils import get_axes_names
 
     input_axes = get_axes_names(element)
     output_axes = transformation._get_resulting_output_axes(input_axes)

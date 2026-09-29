@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import override
+from typing import TYPE_CHECKING, override
 
-from spatialdata._types import ArrayLike
-from spatialdata.transformations._graph.vert import Axis, CoordSystem
+if TYPE_CHECKING:
+    from spatialdata._types import ArrayLike
+    from spatialdata.transformations import BaseTransformation
 
 
 class CoordinateSystemNotFoundError(ValueError):
@@ -96,10 +97,11 @@ class InvalidPathError(ValueError):
 
     Attributes
     ----------
-    invalid_path : list[CoordSystem]
+    invalid_path :
+        list of coordinate system names
     """
 
-    def __init__(self, invalid_path: list[CoordSystem]) -> None:
+    def __init__(self, invalid_path: list[str]) -> None:
         super().__init__(f"Found an invalid path with less than 2 nodes: {invalid_path}")
 
 
@@ -170,14 +172,17 @@ class TransformationPathNotSimple(ValueError):
     Exception raised when a path represented by a list of coordinate systems is not simple.
 
     A simple path is one in which each coordinate system appears only once
+
+    Attributes
+    ----------
+    path:
+        list of coordinate system names
     """
 
-    def __init__(self, path: list[CoordSystem]) -> None:
-        self.path: list[CoordSystem] = path
-        css_formatted_one_per_line = "\n".join(repr(cs) for cs in path)
+    def __init__(self, path: list[str]) -> None:
+        self.path = path
         super().__init__(
-            "Transformation Path not simple, i.e., some coordinate systems appear multiple times:\n"
-            + f"{css_formatted_one_per_line}"
+            "Transformation Path not simple, i.e., some coordinate systems appear multiple times:\n" + f"{path}"
         )
 
 
@@ -237,13 +242,9 @@ class TransformationManagerWarning(UserWarning):
 class IncompatibleCoordSystemsError(Exception):
     def __init__(
         self,
-        input: CoordSystem,
-        output: CoordSystem,
         transformation_name: str | None = None,
         axes_error_message: str | None = None,
     ) -> None:
-        self.input = input
-        self.output = output
         self.transformation_name = transformation_name
         axes_message = axes_error_message or "Output axes can't be mapped to input axes"
         axes_transformation_message = (
@@ -253,10 +254,10 @@ class IncompatibleCoordSystemsError(Exception):
 
 
 class MissingAxisError(Exception):
-    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
-        self.axis = axis
-        self.cs = cs
-        super().__init__(f"Axis {axis.name} is not in coordinate system {cs.name}")
+    def __init__(self, axis_name: str, cs_name: str) -> None:
+        self.axis_name = axis_name
+        self.cs_name = cs_name
+        super().__init__(f"Axis {axis_name} is not in coordinate system {cs_name}")
 
 
 class UnexpectedShapeError(Exception):
@@ -296,15 +297,16 @@ class EmptyTransformSequenceError(Exception):
 
 
 class AxisRedefinitionError(Exception):
-    def __init__(self, axis: Axis) -> None:
-        super().__init__(f"Axis {axis.name} is defined multiple times")
+    def __init__(self, axis_name: str) -> None:
+        self.axis_name = axis_name
+        super().__init__(f"Axis {axis_name} is defined multiple times")
 
 
 class UnmappedAxisError(Exception):
-    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
-        self.axis = axis
-        self.cs = cs
-        super().__init__(f"Axis {axis.name} from coordinate system {cs.name} is not mapped to anything")
+    def __init__(self, axis_name: str, cs_name: str) -> None:
+        self.axis_name = axis_name
+        self.cs_name = cs_name
+        super().__init__(f"Axis {axis_name} from coordinate system {cs_name} is not mapped to anything")
 
 
 class AxisParsingException(Exception):
@@ -324,3 +326,23 @@ class NGFFCompatibilityError(Exception):
     def __init__(self, msg: str):
         self.msg = msg
         super().__init__(msg)
+
+
+class IncompatibleTransformationOutputCoordinateSystemError(Exception):
+    """
+    Exception raised the expected output coordinate system is incompatible with an input coordinate system and a transformation edge.
+    """
+
+    def __init__(
+        self, input_coordinate_system_name: str, transformation: BaseTransformation, output_coordinate_system_name: str
+    ) -> None:
+
+        self.input_coordinate_system_name = input_coordinate_system_name
+        self.output_coordinate_system_name = output_coordinate_system_name
+        self.transformation = transformation
+        super().__init__(
+            f"Transformation incompatible with input/output coordinate systems: "
+            f"\nInput coordinate system name: {input_coordinate_system_name}"
+            f"\nOutput coordinate system name: {output_coordinate_system_name}"
+            f"\nTransformation: {transformation}"
+        )

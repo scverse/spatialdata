@@ -194,6 +194,22 @@ class TransformationGraph:
         self.assert_coordinate_system_does_not_exist(cs)
         self._graph.add_node(cs)
 
+    def get_coordinate_system(self, cs_name: str) -> CoordSystem | None:
+        """
+        Search for a coordinate system by name, return it if found, else return None
+
+        Parameters
+        ----------
+        cs_name
+            Name of a coordinate system
+        """
+
+        for cs in self.list_coordinate_systems():
+            if cs.name == cs_name:
+                return cs
+
+        return None
+
     def remove_coordinate_system(self, cs: CoordSystem) -> None:
         """
         Remove a coordinate system from the transformation manager.
@@ -479,7 +495,7 @@ class TransformationGraph:
         """
         for path in paths:
             if len(set(path)) != len(path):
-                raise TransformationPathNotSimple(path)
+                raise TransformationPathNotSimple([x.name for x in path])
 
         expected_intermediate_transformation_edge_keys = set[str]()
         if expected_intermediate_edges is not None:
@@ -491,7 +507,7 @@ class TransformationGraph:
         deduplicated_paths = list({repr(x): x for x in paths}.values())
         for path in deduplicated_paths:
             if len(path) <= 1:
-                raise InvalidPathError(path)
+                raise InvalidPathError([x.name for x in path])
 
             transformation_list: list[BaseTransformationEdge] = []
             for i in range(len(path) - 1):
