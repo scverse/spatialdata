@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from spatialdata.transformations._graph.edge import (
+from spatialdata.transformations._graph.edges.exceptions import (
+    AxisRedefinitionError,
+    DeterminantDifferentFromOne,
+    EmptyTransformSequenceError,
+    IncompatibleCoordSystemsError,
+    MissingAxisError,
+    NotOrthonormalError,
+    UnexpectedShapeError,
+    UnmappedAxisError,
+)
+from spatialdata.transformations._graph.edges.ngff_aligned_edges import (
     AffineEdge,
     BaseTransformationEdge,
     ByDimensionEdge,
@@ -25,27 +35,19 @@ from spatialdata.transformations._graph.edge import (
 )
 from spatialdata.transformations._graph.exceptions import (
     AxisParsingException,
-    AxisRedefinitionError,
     CannotRemoveCoordinateSystemError,
     CoordinateSystemAlreadyExistsError,
     CoordinateSystemNotFoundError,
-    DeterminantDifferentFromOne,
     ElementAlreadyExistsError,
     ElementNotRegisteredToAnyCoordinateSystemError,
-    EmptyTransformSequenceError,
-    IncompatibleCoordSystemsError,
     InvalidPathError,
-    MissingAxisError,
     NGFFCompatibilityError,
-    NotOrthonormalError,
     TransformationNotFoundError,
     TransformationPathAmbiguousError,
     TransformationPathAmbiguousMultipleEdgeExpectedError,
     TransformationPathAmbiguousNoEdgeExpectedError,
     TransformationPathNotFoundError,
     TransformationPathNotSimple,
-    UnexpectedShapeError,
-    UnmappedAxisError,
 )
 from spatialdata.transformations._graph.graph import TransformationGraph
 from spatialdata.transformations._graph.literals import (
