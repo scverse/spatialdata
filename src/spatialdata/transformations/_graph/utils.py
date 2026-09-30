@@ -169,3 +169,49 @@ def _validate_dims(dims: tuple[str, ...]) -> None:
             raise ValueError(f"Invalid dimension: {c}")
     if dims not in [(X,), (Y,), (Z,), (C,), (X, Y), (X, Y, Z), (Y, X), (Z, Y, X), (C, Y, X), (C, Z, Y, X)]:
         raise ValueError(f"Invalid dimensions: {dims}")
+
+
+def get_union_of_axes(axes: tuple[Axis, ...]) -> tuple[Axis, ...]:
+    """
+    Produce a union of ``Axis`` objects, dropping duplicates and ordering reverse alphabetically.
+
+    The ordering favors non‑None values for ``unit`` and ``long_name``.
+    Axes that share the same ``name`` **and** ``type`` are considered duplicates;
+    only the first occurrence (according to the sorted order) is retained.
+    """
+    # ------------------------------------------------------------------
+    # Build a DataFrame that holds the original Axis objects together with
+    # their attributes and auxiliary “non‑null” flags.
+    # ------------------------------------------------------------------
+    df = pd.DataFrame(
+        {
+            "axis": pd.Series(axes, dtype="object"),  # original Axis objects
+            "name": pd.Series([ax.name for ax in axes], dtype="string"),
+            "type": pd.Series([ax.type for ax in axes], dtype="object"),
+            "unit": pd.Series([ax.unit for ax in axes], dtype="string"),
+            "long_name": pd.Series([ax.long_name for ax in axes], dtype="string"),
+        }
+    )
+
+    # Boolean columns that indicate the presence of a value.
+    df["unit_not_none"] = df["unit"].notna()
+    df["long_name_not_none"] = df["long_name"].notna()
+
+    # Sort axes in descending (alphabetical) order
+    df = df.sort_values(
+        by=[
+            "name",
+            "type",
+            "unit_not_none",
+            "unit",
+            "long_name_not_none",
+            "long_name",
+        ],
+        ascending=False,
+        kind="mergesort",  # stable sort to preserve order of equal keys
+    )
+
+    # Remove duplicates based on the logical key (name, type).
+    df = df.drop_duplicates(subset=["name", "type"], keep="first")
+
+    return tuple(df["axis"])
