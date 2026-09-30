@@ -58,7 +58,7 @@ from spatialdata.transformations._graph.literals import (
     Z,
     axis_type_mapping_ngff,
 )
-from spatialdata.transformations._graph.utils import get_instrinsic_coordinate_system
+from spatialdata.transformations._graph.utils import get_instrinsic_coordinate_system, get_union_of_axes
 from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 __all__ = [
@@ -120,6 +120,7 @@ __all__ = [
     "axis_type_mapping_ngff",
     # from utils
     "get_instrinsic_coordinate_system",
+    "get_union_of_axes",
     # from vert
     "Axis",
     "CoordSystem",
