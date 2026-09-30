@@ -5,7 +5,7 @@ from typing import Any, override
 
 import networkx as nx
 
-from spatialdata.transformations._graph.edge import BaseTransformationEdge, SequenceEdge
+from spatialdata.transformations._graph.edges.ngff_aligned_edges import BaseTransformationEdge, SequenceEdge
 from spatialdata.transformations._graph.exceptions import (
     CannotRemoveCoordinateSystemError,
     CoordinateSystemAlreadyExistsError,

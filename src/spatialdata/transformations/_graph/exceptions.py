@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
-    from spatialdata._types import ArrayLike
     from spatialdata.transformations import BaseTransformation
 
 
@@ -237,76 +236,6 @@ class TransformationManagerWarning(UserWarning):
     """Base warning category for TransformationManager."""
 
     pass
-
-
-class IncompatibleCoordSystemsError(Exception):
-    def __init__(
-        self,
-        transformation_name: str | None = None,
-        axes_error_message: str | None = None,
-    ) -> None:
-        self.transformation_name = transformation_name
-        axes_message = axes_error_message or "Output axes can't be mapped to input axes"
-        axes_transformation_message = (
-            transformation_name and f"In the context of a `{transformation_name}` transformation, {axes_message}"
-        )
-        super().__init__(axes_transformation_message or axes_message)
-
-
-class MissingAxisError(Exception):
-    def __init__(self, axis_name: str, cs_name: str) -> None:
-        self.axis_name = axis_name
-        self.cs_name = cs_name
-        super().__init__(f"Axis {axis_name} is not in coordinate system {cs_name}")
-
-
-class UnexpectedShapeError(Exception):
-    def __init__(
-        self,
-        *,
-        array_shape: tuple[int, ...],
-        expected_shape: tuple[int, ...] | str | None = None,
-        array_name: str | None = None,
-    ) -> None:
-        self.array_shape = array_shape
-        self.expected_shape = expected_shape
-        message = "Unexpected array shape"
-        if array_name is not None:
-            message += f"for '{array_name}'"
-        message += f": {array_shape}"
-        if expected_shape is not None:
-            message += f" instead of {expected_shape}"
-        super().__init__(message)
-
-
-class DeterminantDifferentFromOne(Exception):
-    def __init__(self, matrix: ArrayLike) -> None:
-        self.matrix = matrix
-        super().__init__(f"Matrix does not have det(M) == 1:\n{matrix}")
-
-
-class NotOrthonormalError(Exception):
-    def __init__(self, matrix: ArrayLike) -> None:
-        self.matrix = matrix
-        super().__init__(f"Matrix is not orthonormal:\n{matrix}")
-
-
-class EmptyTransformSequenceError(Exception):
-    def __init__(self) -> None:
-        super().__init__("Empty sequence of transformations")
-
-
-class AxisRedefinitionError(Exception):
-    def __init__(self, axis_name: str) -> None:
-        self.axis_name = axis_name
-        super().__init__(f"Axis {axis_name} is defined multiple times")
-
-
-class UnmappedAxisError(Exception):
-    def __init__(self, axis_name: str, cs_name: str) -> None:
-        self.axis_name = axis_name
-        self.cs_name = cs_name
-        super().__init__(f"Axis {axis_name} from coordinate system {cs_name} is not mapped to anything")
 
 
 class AxisParsingException(Exception):
