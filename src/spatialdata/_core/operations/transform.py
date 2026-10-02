@@ -360,10 +360,10 @@ def _(
     from spatialdata.transformations import get_transformation, set_transformation
     from spatialdata.transformations.transformations import Identity, Sequence
 
-    # labels need to be preserved after the resizing of the image
+    # labels hold categorical ids, so they must be resampled with nearest neighbour (order=0): interpolating would
+    # create ids that are not present in the input, as for single-scale labels in the DataArray overload above
     if schema in (Labels2DModel, Labels3DModel):
-        # TODO: this should work, test better
-        kwargs = {"prefilter": False}
+        kwargs = {"prefilter": False, "order": 0}
         channel_names = None
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
