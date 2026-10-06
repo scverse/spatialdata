@@ -31,7 +31,7 @@ If you like scverse® and want to support our mission, please consider making a 
 
 The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
-SpatialData is an approved de.NBI service, your feedback helps us improve it. We would appreciate it if you could take a moment to complete [our short user survey][denbi-survey].
+SpatialData is an approved de.NBI service, your feedback helps us improve it. We would appreciate it if you could take a moment to complete [our short user survey][denbi-survey] (2 minutes).
 
 <div align="center">
   <a href="https://numfocus.org/project/scverse">
