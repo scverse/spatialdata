@@ -31,6 +31,8 @@ If you like scverse® and want to support our mission, please consider making a 
 
 The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
+SpatialData is an approved de.NBI service, your feedback helps us improve it. We would appreciate it if you could take a moment to complete [our short user survey][denbi-survey].
+
 <div align="center">
   <a href="https://numfocus.org/project/scverse">
     <img height="60px"
@@ -42,7 +44,6 @@ The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
 ![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
-- **The library is currently under review.** We expect there to be changes as the community provides feedback. We have an announcement channel for communicating these changes, please see the contact section below.
 - The SpatialData storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
 
 ## Getting started
@@ -98,3 +99,4 @@ Marconato, L., Palla, G., Yamauchi, K.A. et al. SpatialData: an open and univers
 [link-notebooks]: https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
+[denbi-survey]: https://de.surveymonkey.com/r/denbi-service?sc=X&tool=Y
