@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 import pooch
 import pytest
 
-from spatialdata import SpatialData
+from spatialdata import SpatialData, read_zarr
 from spatialdata.datasets import _cache_dir, _shipped_registry, blobs, cells, raccoon
 
 
@@ -70,3 +71,23 @@ def test_cells_download(tmp_path) -> None:
     assert len(sdata.shapes["nucleus_boundaries"]) == 94
     assert len(sdata.points["transcripts"].compute()) == 19479
     assert sdata.tables["table"].shape == (94, 5101)
+
+
+@pytest.mark.network
+def test_cells_string_instance_key_dtype(tmp_path) -> None:
+    # Regression: the `cell_boundaries` index is read as the pandas>=3 `str` dtype while the table's `cell_id`
+    # column is read as `object`; both hold string ids, so annotating by `cell_id` must validate and round-trip.
+    sdata = cells(path=str(tmp_path / "cache"))
+    table = sdata.tables["table"]
+    table.obs["region"] = pd.Categorical(["cell_boundaries"] * table.n_obs)
+    sdata.set_table_annotates_spatialelement("table", region="cell_boundaries", instance_key="cell_id")
+    sdata.validate_table_in_spatialdata(table)
+
+    sdata.write(tmp_path / "data.zarr")
+    sdata_read = read_zarr(tmp_path / "data.zarr")
+    assert sdata_read.tables["table"].uns["spatialdata_attrs"]["instance_key"] == "cell_id"
+
+    # a string vs integer mismatch is still an error
+    sdata.set_table_annotates_spatialelement("table", region="cell_boundaries", instance_key="cell_labels")
+    with pytest.raises(TypeError, match="does not match the dtype"):
+        sdata.validate_table_in_spatialdata(table)
