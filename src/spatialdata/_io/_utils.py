@@ -11,15 +11,18 @@ from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from enum import Enum
 from functools import singledispatch
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Literal
 
+import anndata as ad
 import zarr
 from anndata import AnnData
 from dask._task_spec import Task
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from packaging.version import Version
 from upath import UPath
 from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
@@ -611,3 +614,92 @@ def _validate_compressor_args(compressor_dict: dict[Literal["lz4", "zstd"], int]
             )
         if not isinstance(value := list(compressor_dict.values())[0], int) or not (0 <= value <= 9):
             raise ValueError(f"The compression level must be an integer inclusive between 0 and 9. Got: {value}")
+
+
+_MIN_ZARR_FOR_SHARD_BUDGET = Version("3.1.6")
+
+
+def _validate_table_shard_size_bytes(table_shard_size_bytes: int | None, tables_zarr_format: int | None = None) -> None:
+    """Validate `table_shard_size_bytes` against the argument itself and against the active backend.
+
+    Parameters
+    ----------
+    table_shard_size_bytes
+        The requested target size in bytes of uncompressed data for a single zarr shard. `None` disables the
+        validation entirely, since nothing will be requested from the backend.
+    tables_zarr_format
+        The zarr format of the table element format that will be used for the write, if already known. Sharding does
+        not exist in zarr format 2, so a budget cannot be honoured there.
+
+    Raises
+    ------
+    TableWriteOptionsError
+        If the value is not a positive `int`, or if zarr, anndata or the table format cannot honour a shard budget.
+    """
+    if table_shard_size_bytes is None:
+        return
+
+    from spatialdata._io.exceptions import TableWriteOptionsError
+
+    if table_shard_size_bytes <= 0:
+        raise TableWriteOptionsError(
+            f"`table_shard_size_bytes` must be a positive int, got {table_shard_size_bytes!r}."
+        )
+
+    zarr_version = Version(version("zarr"))
+    if zarr_version < _MIN_ZARR_FOR_SHARD_BUDGET:
+        raise TableWriteOptionsError(
+            f"`table_shard_size_bytes` requires zarr >= {_MIN_ZARR_FOR_SHARD_BUDGET}, got {zarr_version}. zarr 3.1.4 "
+            "added `array.target_shard_size_bytes`, but 3.1.4 and 3.1.5 still size the inner chunk with "
+            "max_bytes=1024 where 1 MiB was intended (fixed by zarr-python#3603), which would put ~130k inner chunks "
+            "in a 128 MiB shard."
+        )
+
+    # `anndata.settings` did not exist before anndata 0.10, and `pyproject.toml` pins anndata>=0.9.1, so the attribute
+    # has to be looked up defensively rather than assumed to be there.
+    settings_obj = getattr(ad, "settings", None)
+    if settings_obj is None or not hasattr(settings_obj, "auto_shard_zarr_v3"):
+        raise TableWriteOptionsError(
+            "`table_shard_size_bytes` requires an anndata that supports zarr v3 auto-sharding, got "
+            f"{version('anndata')}."
+        )
+
+    if tables_zarr_format == 2:
+        raise TableWriteOptionsError(
+            "`table_shard_size_bytes` requires a zarr v3 table format, but the table format in use has "
+            "zarr_format=2. Sharding does not exist in zarr format 2."
+        )
+
+
+@contextmanager
+def _table_shard_budget(shard_size_bytes: int | None) -> Generator[None, None, None]:
+    """Scope a zarr shard budget and anndata's zarr v3 auto-sharding around a single table write.
+
+    Sets zarr's `array.target_shard_size_bytes` and overrides anndata's `zarr_write_format=3` and
+    `auto_shard_zarr_v3=True` for the duration of the block, restoring all three on exit. anndata then injects
+    `shards="auto"` itself where that is safe and uses this budget instead of its own 1 GB default. `zarr_write_format`
+    is overridden too because `AnnData.write_zarr` recreates the group with that setting, and at 2 no sharding happens.
+
+    `shards` is deliberately never put into `dataset_kwargs`: it would reach the rank-0 scalars in `uns` and hang zarr
+    (https://github.com/zarr-developers/zarr-python/issues/4304).
+
+    Parameters
+    ----------
+    shard_size_bytes
+        The target size in bytes of uncompressed data for a single zarr shard. If `None`, nothing is set.
+    """
+    if shard_size_bytes is None:
+        yield
+        return
+
+    # anndata only honours the budget when it reads back as an `int` (its `isinstance` check); a float would be
+    # dropped in favour of anndata's own 1 GB default, silently, so normalize instead of leaving that to chance.
+    budget = int(shard_size_bytes)
+
+    # `override` is order-preserving in both anndata implementations, so the zarr write format is set before the
+    # sharding setting, which is required because sharding cannot be enabled while the write format is 2.
+    with (
+        zarr.config.set({"array.target_shard_size_bytes": budget}),
+        ad.settings.override(zarr_write_format=3, auto_shard_zarr_v3=True),
+    ):
+        yield
