@@ -518,6 +518,31 @@ def test_query_spatial_data(full_sdata):
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
+def test_query_filter_table_with_orphan_table(with_polygon_query: bool):
+    circles = ShapesModel.parse(np.array([[10, 10], [20, 20]]), geometry=0, radius=1)
+    table = AnnData(shape=(2, 0))
+    table.obs["region"] = pd.Categorical(["circles", "circles"])
+    table.obs["instance"] = [0, 1]
+    table = TableModel.parse(table, region="circles", region_key="region", instance_key="instance")
+    orphan = AnnData(shape=(2, 0))
+    sdata = SpatialData(shapes={"circles": circles}, tables={"table": table, "orphan": orphan})
+
+    if with_polygon_query:
+        polygon = Polygon([(15, 15), (15, 25), (25, 25), (25, 15)])
+        queried = polygon_query(sdata, polygon=polygon, target_coordinate_system="global", filter_table=True)
+    else:
+        queried = sdata.query.bounding_box(
+            axes=("y", "x"),
+            min_coordinate=np.array([15, 15]),
+            max_coordinate=np.array([25, 25]),
+            filter_table=True,
+            target_coordinate_system="global",
+        )
+    assert set(queried.tables) == {"table"}
+    assert len(queried["table"]) == 1
+
+
+@pytest.mark.parametrize("with_polygon_query", [True, False])
 def test_query_filter_table(with_polygon_query: bool):
     coords0 = np.array([[10, 10], [20, 20]])
     coords1 = np.array([[30, 30]])
