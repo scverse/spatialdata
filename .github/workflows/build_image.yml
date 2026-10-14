@@ -89,7 +89,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         if: ${{ env.skip_build == 'false' }}
         env:
           IMAGE_TAG: ${{ env.REGISTRY }}/scverse/spatialdata:${{ env.IMAGE_TAG_SUFFIX }}
