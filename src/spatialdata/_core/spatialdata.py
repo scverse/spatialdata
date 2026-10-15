@@ -95,9 +95,11 @@ class SpatialData:
         Dict of 2D shapes elements (circles, polygons, multipolygons).
         Shapes are regions, they can't contain annotation, but they can be annotated by a table.
         The following parsers are available: :class:`~spatialdata.ShapesModel`.
-    table
-        AnnData table containing annotations for regions (labels and shapes). The following parsers is
+    tables
+        Dict of AnnData tables containing annotations for regions (labels and shapes). The following parser is
         available: :class:`~spatialdata.TableModel`.
+    attrs
+        Dictionary of global attributes on this SpatialData object.
 
     Notes
     -----
