@@ -333,6 +333,90 @@ def test_affine():
     )
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    "left, right",
+    [
+        pytest.param(
+            Translation([1, 2], axes=("x", "y")),
+            Translation([1, 2, 3], axes=("x", "y", "z")),
+            id="translation",
+        ),
+        pytest.param(Scale([1, 2], axes=("x", "y")), Scale([1, 2, 3], axes=("x", "y", "z")), id="scale"),
+        pytest.param(
+            Affine(np.eye(3), input_axes=("x", "y"), output_axes=("x", "y")),
+            Affine(np.eye(4), input_axes=("x", "y", "z"), output_axes=("x", "y", "z")),
+            id="affine-both-axes",
+        ),
+        pytest.param(
+            Affine(np.eye(3), input_axes=("x", "y"), output_axes=("x", "y")),
+            Affine([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]], input_axes=("x", "y", "z"), output_axes=("x", "y")),
+            id="affine-input-axes",
+        ),
+        pytest.param(
+            Affine(np.eye(3), input_axes=("x", "y"), output_axes=("x", "y")),
+            Affine([[1, 0, 0], [0, 1, 0], [0, 0, 0], [0, 0, 1]], input_axes=("x", "y"), output_axes=("x", "y", "z")),
+            id="affine-output-axes",
+        ),
+    ],
+)
+def test_equality_different_axis_counts(left, right, reverse):
+    if reverse:
+        left, right = right, left
+    assert (left == right) is False
+    assert left != right
+    assert Sequence([left]) != Sequence([right])
+
+
+@pytest.mark.parametrize("transformation_type", [Translation, Scale, Affine])
+@pytest.mark.parametrize("delta, expected", [(0, True), (1e-6, True), (1, False)])
+def test_equality_values(transformation_type, delta, expected):
+    if transformation_type is Affine:
+        left = Affine(np.eye(3), input_axes=("x", "y"), output_axes=("x", "y"))
+        right = Affine(np.diag([1 + delta, 1, 1]), input_axes=("x", "y"), output_axes=("x", "y"))
+    else:
+        left = transformation_type([1, 2], axes=("x", "y"))
+        right = transformation_type([1 + delta, 2], axes=("x", "y"))
+    for first, second in [(left, right), (right, left)]:
+        assert (first == second) == expected
+        assert (first != second) != expected
+
+
+@pytest.mark.parametrize("transformation_type", [Translation, Scale, Affine])
+@pytest.mark.parametrize("axes", [("y", "x"), ("x", "z")])
+def test_equality_axis_labels(transformation_type, axes):
+    if transformation_type is Affine:
+        left = Affine(np.eye(3), input_axes=("x", "y"), output_axes=("x", "y"))
+        others = [
+            Affine(np.eye(3), input_axes=axes, output_axes=("x", "y")),
+            Affine(np.eye(3), input_axes=("x", "y"), output_axes=axes),
+        ]
+    else:
+        left = transformation_type([1, 2], axes=("x", "y"))
+        others = [transformation_type([1, 2], axes=axes)]
+    for right in others:
+        assert (left == right) is False
+        assert (right == left) is False
+        assert left != right
+        assert right != left
+
+
+@pytest.mark.parametrize(
+    "transformation",
+    [
+        Translation([0, 0], axes=("x", "y")),
+        Scale([1, 1], axes=("x", "y")),
+        Affine(np.eye(3), input_axes=("x", "y"), output_axes=("x", "y")),
+    ],
+)
+@pytest.mark.parametrize("other", [Identity(), object()])
+def test_equality_different_types(transformation, other):
+    assert (transformation == other) is False
+    assert (other == transformation) is False
+    assert transformation != other
+    assert other != transformation
+
+
 def test_sequence():
     translation = Translation([1, 2], axes=("x", "y"))
     scale = Scale([3, 2, 1], axes=("y", "x", "z"))

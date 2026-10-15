@@ -443,8 +443,8 @@ class Translation(BaseTransformation):
     def __eq__(self, other: Any) -> bool:
         return (
             isinstance(other, Translation)
-            and np.allclose(self.translation, other.translation)
             and self.axes == other.axes
+            and np.allclose(self.translation, other.translation)
         )
 
 
@@ -524,7 +524,7 @@ class Scale(BaseTransformation):
         return ngff_transformation
 
     def __eq__(self, other: Any) -> bool:
-        return isinstance(other, Scale) and np.allclose(self.scale, other.scale) and self.axes == other.axes
+        return isinstance(other, Scale) and self.axes == other.axes and np.allclose(self.scale, other.scale)
 
 
 class Affine(BaseTransformation):
@@ -823,9 +823,9 @@ class Affine(BaseTransformation):
         if not isinstance(other, Affine):
             return False
         return (
-            np.allclose(self.matrix, other.matrix)
-            and self.input_axes == other.input_axes
+            self.input_axes == other.input_axes
             and self.output_axes == other.output_axes
+            and np.allclose(self.matrix, other.matrix)
         )
 
 
