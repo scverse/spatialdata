@@ -123,6 +123,6 @@ references.md
 [spatialdata-plot-repo]: https://github.com/scverse/spatialdata-plot
 [napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/stable/notebooks/spatialdata.html
 [spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/stable/
-[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/api.html
+[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/
 [spatialdata-r-repo]: https://github.com/HelenaLC/spatialdataR
 [spatialdata-js-repo]: https://github.com/Taylor-CCB-Group/SpatialData.js
