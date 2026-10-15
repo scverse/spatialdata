@@ -96,8 +96,8 @@ class SpatialData:
         Shapes are regions, they can't contain annotation, but they can be annotated by a table.
         The following parsers are available: :class:`~spatialdata.ShapesModel`.
     tables
-        Dict of AnnData tables containing annotations for regions (labels and shapes). The following parser is
-        available: :class:`~spatialdata.TableModel`.
+        Dict of AnnData tables containing annotations for SpatialElements (labels, shapes and points). The
+        following parser is available: :class:`~spatialdata.TableModel`.
     attrs
         Dictionary of global attributes on this SpatialData object.
 
@@ -111,9 +111,8 @@ class SpatialData:
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
             slot.
 
-    The table can annotate regions (shapes or labels) and can be used to store additional information.
-    Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
-    annotation directly.
+    Tables can annotate SpatialElements (labels, shapes or points) and can be used to store additional
+    information. Points can also store annotations directly, as additional dataframe columns.
     """
 
     def __init__(
