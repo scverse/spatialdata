@@ -105,7 +105,7 @@ class SpatialData:
     -----
     The SpatialElements are stored with standard types:
 
-        - images and labels are stored as :class:`xarray.DataArray` or :class:`datatree.DataTree` objects.
+        - images and labels are stored as :class:`xarray.DataArray` or :class:`xarray.DataTree` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
