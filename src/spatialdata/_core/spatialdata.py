@@ -110,8 +110,8 @@ class SpatialData:
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - tables are stored as :class:`anndata.AnnData` objects. Tables have no coordinate system: coordinates
             stored in a table (e.g. in ``obsm["spatial"]``, the squidpy/scanpy convention that several
-            spatialdata-io readers populate) are not transformed or used by spatial queries, and can get out of sync
-            with the SpatialElements the table annotates.
+            spatialdata-io readers populate) are currently not transformed or used by spatial queries, and can get out
+            of sync with the SpatialElements the table annotates.
 
     Tables can annotate SpatialElements (labels, shapes or points) and can be used to store additional
     information. Points can also store annotations directly, as additional dataframe columns.
