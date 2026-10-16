@@ -211,7 +211,7 @@ def get_union_of_axes(axes: tuple[Axis, ...]) -> tuple[Axis, ...]:
         kind="mergesort",  # stable sort to preserve order of equal keys
     )
 
-    # Remove duplicates based on the logical key (name, type).
-    df = df.drop_duplicates(subset=["name", "type"], keep="first")
+    # Remove duplicates based on the logical key (name, type, unit, long_name).
+    df = df.drop_duplicates(subset=["name", "type", "unit", "long_name"], keep="first")
 
     return tuple(df["axis"])

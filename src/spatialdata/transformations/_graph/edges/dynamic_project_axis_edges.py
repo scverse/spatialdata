@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------------
 from __future__ import annotations
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 import numpy as np
 
@@ -14,10 +14,11 @@ from spatialdata.transformations._graph.edges.ngff_aligned_edges import (
     BaseTransformationEdge,
     ProjectAxisEdge,
 )
+from spatialdata.transformations._graph.exceptions import IncompatibleTransformationOutputCoordinateSystemError
 from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 
-class _DynamicAxisEdgeBase(BaseTransformationEdge):
+class _DynamicAxisEdgeBase(BaseTransformationEdge, ABC):
     """
     Base for the “dynamic” project-axis edges.
 
@@ -28,13 +29,18 @@ class _DynamicAxisEdgeBase(BaseTransformationEdge):
       computing the affine matrix and transforming points – lives here.
     """
 
+    @abstractmethod
+    def validate_input_output(self, input: CoordSystem, output: CoordSystem) -> None:
+        """Validate that the input and output for this edge"""
+
     def __init__(
         self,
         *,
+        name: str | None = None,
         input: CoordSystem,
         output: CoordSystem,
-        name: str | None = None,
-    ) -> None:
+    ):
+        self.validate_input_output(input, output)
         super().__init__(name=name, input=input, output=output)
 
     # ------------------------------------------------------------------
@@ -123,7 +129,7 @@ class DynamicCreateAxisEdge(_DynamicAxisEdgeBase):
     @property
     def _created_axes(self) -> set[Axis]:
         # Axes in the output that are not in the input must be created.
-        return {ax for ax in self.output.axes if ax not in self.input.axes}
+        return set(self.output.axes) - set(self.input.axes)
 
     @property
     def _dropped_axes(self) -> set[Axis]:
@@ -136,6 +142,16 @@ class DynamicCreateAxisEdge(_DynamicAxisEdgeBase):
             output=self.input,
             name=name,
         )
+
+    def validate_input_output(self, input: CoordSystem, output: CoordSystem) -> None:
+
+        if not set(input.axes).issubset(output.axes):
+            # if input axes are not a subset of output axes
+            raise IncompatibleTransformationOutputCoordinateSystemError(
+                input_coordinate_system_name=input.name,
+                output_coordinate_system_name=output.name,
+                transformation_class_name=self.__class__.__name__,
+            )
 
 
 # ----------------------------------------------------------------------
@@ -152,7 +168,7 @@ class DynamicDropAxisEdge(_DynamicAxisEdgeBase):
     @property
     def _dropped_axes(self) -> set[Axis]:
         # Axes in the input that are not present in the output are to be dropped.
-        return {ax for ax in self.input.axes if ax not in self.output.axes}
+        return set(self.input.axes) - set(self.output.axes)
 
     def inverse(self, name: str | None = None) -> BaseTransformationEdge:
         return DynamicCreateAxisEdge(
@@ -160,3 +176,12 @@ class DynamicDropAxisEdge(_DynamicAxisEdgeBase):
             output=self.input,
             name=name,
         )
+
+    def validate_input_output(self, input: CoordSystem, output: CoordSystem) -> None:
+        if not set(output.axes).issubset(input.axes):
+            # if output axes are not a subset of input axes
+            raise IncompatibleTransformationOutputCoordinateSystemError(
+                input_coordinate_system_name=input.name,
+                output_coordinate_system_name=output.name,
+                transformation_class_name=self.__class__.__name__,
+            )
