@@ -268,6 +268,49 @@ def test_get_values(sdata_mudata: SpatialData):
         get_values("not_a_key", element=mdata)
 
 
+def _get_two_fov_mudata(prot_cells: list[int]) -> MuData:
+    """Two fields of view whose cells have the same obs names ("0", "1", "2") in both."""
+    obs_names = ["0", "1", "2"] * 2
+    rna = AnnData(np.arange(6, dtype=float)[:, None], obs=pd.DataFrame(index=obs_names))
+    rna.var_names = ["Gene1"]
+    prot = AnnData(
+        100 + np.arange(6, dtype=float)[prot_cells, None], obs=pd.DataFrame(index=[obs_names[i] for i in prot_cells])
+    )
+    prot.var_names = ["CD68"]
+    obsmap = {"rna": np.arange(1, 7, dtype=np.uint32), "prot": np.zeros(6, dtype=np.uint32)}
+    obsmap["prot"][prot_cells] = np.arange(1, len(prot_cells) + 1)
+    obs = pd.DataFrame(
+        {"region": pd.Categorical(["fov_a"] * 3 + ["fov_b"] * 3), "instance_id": [0, 1, 2] * 2}, index=obs_names
+    )
+    mdata = MuData({"rna": rna, "prot": prot}, obs=obs, obsmap=obsmap)
+    return TableModel.parse(mdata, region=["fov_a", "fov_b"], region_key="region", instance_key="instance_id")
+
+
+@pytest.mark.parametrize(
+    ("prot_cells", "expected"),
+    [([0, 1, 2], [100, 101, 102, np.nan, np.nan, np.nan]), ([0, 1, 3, 4], [100, 101, np.nan, 103, 104, np.nan])],
+)
+def test_get_values_repeated_obs_names(prot_cells: list[int], expected: list[float]):
+    mdata = _get_two_fov_mudata(prot_cells)
+    np.testing.assert_array_equal(get_values("CD68", element=mdata)["CD68"].to_numpy(), expected)
+    np.testing.assert_array_equal(get_values("CD68", element=mdata, element_name="fov_b")["CD68"], expected[3:])
+
+
+def test_get_values_bool_with_missing_cells_is_float(sdata_mudata: SpatialData):
+    values = get_values("prot:pbool", sdata=sdata_mudata, element_name="cells", table_name="table")["prot:pbool"]
+    assert values.dtype == np.float64
+    np.testing.assert_array_equal(values, [1.0, 0.0, 1.0, 0.0, np.nan, np.nan])
+    # measured in all the cells: the dtype is kept
+    assert get_values("flag", element=sdata_mudata["table"])["flag"].dtype == bool
+
+
+def test_get_values_obsm_key_also_a_variable(sdata_mudata: SpatialData):
+    mdata = sdata_mudata["table"]
+    mdata.obsm["CD68"] = np.ones((N_CELLS, 2))
+    df = get_values("CD68", element=mdata)
+    assert df.columns.tolist() == ["CD68_0", "CD68_1"]
+
+
 def test_concatenate_tables():
     sdata0 = SpatialData(shapes={"cells0": _get_circles()}, tables={"table": _get_mudata(region="cells0")})
     sdata1 = SpatialData(

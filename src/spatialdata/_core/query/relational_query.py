@@ -1063,8 +1063,15 @@ def _get_mudata_modality_origin(mdata: MuData, value_key: str) -> _ValueOrigin |
 def _get_table_origins(
     element: SpatialElement | Table_T, value_key: str, origins: list[_ValueOrigin]
 ) -> list[_ValueOrigin]:
-    if isinstance(element, MuData) and value_key not in element.obs.columns and value_key not in element.obsm:
-        if (origin := _get_mudata_modality_origin(element, value_key)) is not None:
+    if isinstance(element, MuData):
+        # the global `var_names` of a MuData table only concatenate those of the modalities, so the variables are
+        # looked up in the modalities
+        if value_key in element.obs.columns:
+            is_categorical = isinstance(element.obs[value_key].dtype, pd.CategoricalDtype)
+            origins.append(_ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=value_key))
+        elif value_key in element.obsm:
+            origins.append(_ValueOrigin(origin="obsm", is_categorical=False, value_key=value_key))
+        elif (origin := _get_mudata_modality_origin(element, value_key)) is not None:
             origins.append(origin)
         return origins
     if value_key in element.obs.columns:
@@ -1262,6 +1269,33 @@ def get_values(
     raise ValueError(f"Unknown origin {origin}")
 
 
+def _align_to_global_obs(values: pd.Series, obsmap: NDArray[np.unsignedinteger[Any]]) -> pd.Series:
+    """
+    Align the values of a modality to the global observations of a MuData table, by position.
+
+    `obsmap` gives, for each global observation, its 1-based row in the modality, or 0 if the modality does not
+    measure it. Positions are used rather than the obs names, which may repeat (e.g. per field of view). The dtype is
+    kept when all the observations are measured; otherwise the missing values are NaN, so numerical and boolean values
+    become float (e.g. the mean of a boolean is then the fraction of `True`) and categorical values keep their
+    categories.
+    """
+    measured = obsmap > 0
+    positions = obsmap[measured].astype(np.intp) - 1
+    if measured.all():
+        return pd.Series(values.iloc[positions].to_numpy(), dtype=values.dtype)
+    if isinstance(values.dtype, pd.CategoricalDtype):
+        codes = np.full(len(obsmap), -1, dtype=np.int64)
+        codes[measured] = values.cat.codes.to_numpy(dtype=np.int64)[positions]
+        return pd.Series(pd.Categorical.from_codes(codes, dtype=values.dtype))
+    if pd.api.types.is_numeric_dtype(values.dtype) or pd.api.types.is_bool_dtype(values.dtype):
+        aligned = np.full(len(obsmap), np.nan)
+        aligned[measured] = values.to_numpy(dtype=float)[positions]
+        return pd.Series(aligned)
+    aligned_values = np.full(len(obsmap), np.nan, dtype=object)
+    aligned_values[measured] = values.to_numpy(dtype=object)[positions]
+    return pd.Series(aligned_values)
+
+
 def _get_mudata_values(
     mdata: MuData,
     value_keys: list[str],
@@ -1269,26 +1303,38 @@ def _get_mudata_values(
     table_layer: str | None,
 ) -> pd.DataFrame:
     """
-    Get obs or var values from a MuData table, aligned to its global `obs_names`.
+    Get obs or var values from a MuData table, aligned to its global observations.
 
     Values coming from a modality are missing (NaN) for the observations that are not measured in that modality.
     """
+    # fetch the variables with one subset per modality
+    var_keys: dict[str, list[str]] = defaultdict(list)
+    for location in locations:
+        if location.modality is not None and location.origin == "var":
+            var_keys[location.modality].append(location.value_key)
+    var_values: dict[str, pd.DataFrame] = {}
+    for modality_name, keys in var_keys.items():
+        modality = mdata.mod[modality_name]
+        assert isinstance(modality, AnnData)
+        if table_layer is not None and table_layer not in modality.layers:
+            raise ValueError(f"Layer {table_layer} was not found in modality {modality_name!r}.")
+        var_values[modality_name] = modality[:, list(dict.fromkeys(keys))].to_df(layer=table_layer)
+
     columns: dict[str, pd.Series] = {}
     for value_key, location in zip(value_keys, locations, strict=True):
         if location.modality is None:
-            columns[value_key] = mdata.obs[location.value_key]
+            columns[value_key] = pd.Series(
+                mdata.obs[location.value_key].to_numpy(), dtype=mdata.obs[location.value_key].dtype
+            )
             continue
-        modality = mdata.mod[location.modality]
-        assert isinstance(modality, AnnData)
-        values: pd.Series
-        if location.origin == "obs":
-            values = pd.Series(modality.obs[location.value_key])
+        if location.origin == "var":
+            values = var_values[location.modality][location.value_key]
         else:
-            if table_layer is not None and table_layer not in modality.layers:
-                raise ValueError(f"Layer {table_layer} was not found in modality {location.modality!r}.")
-            values = modality[:, location.value_key].to_df(layer=table_layer)[location.value_key]
-        columns[value_key] = values.reindex(mdata.obs_names)
-    return pd.DataFrame(columns, index=mdata.obs_names)
+            modality = mdata.mod[location.modality]
+            assert isinstance(modality, AnnData)
+            values = pd.Series(modality.obs[location.value_key])
+        columns[value_key] = _align_to_global_obs(values, np.asarray(mdata.obsmap[location.modality]).ravel())
+    return pd.DataFrame(columns)
 
 
 def _mask_block(block: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:
