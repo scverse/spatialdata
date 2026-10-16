@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from spatialdata.transformations._graph.edges.dynamic_project_axis_edges import (
+    DynamicCreateAxisEdge,
+    DynamicDropAxisEdge,
+)
 from spatialdata.transformations._graph.edges.exceptions import (
     AxisRedefinitionError,
     DeterminantDifferentFromOne,
     EmptyTransformSequenceError,
     IncompatibleCoordSystemsError,
     MissingAxisError,
+    NonZeroDroppedAxisError,
     NotOrthonormalError,
     UnexpectedShapeError,
     UnmappedAxisError,
@@ -64,7 +69,7 @@ from spatialdata.transformations._graph.utils import get_instrinsic_coordinate_s
 from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 __all__ = [
-    # from edge
+    # from ngff aligned edge
     "AffineEdge",
     "BaseTransformationEdge",
     "ByDimensionEdge",
@@ -86,6 +91,11 @@ __all__ = [
     "parse_scale",
     "parse_sequence",
     "parse_translation",
+    # dynamic project edges
+    "DynamicDropAxisEdge",
+    "DynamicCreateAxisEdge",
+    # from edge.exceptions
+    "NonZeroDroppedAxisError",
     # from exceptions
     "AxisParsingException",
     "AxisRedefinitionError",
