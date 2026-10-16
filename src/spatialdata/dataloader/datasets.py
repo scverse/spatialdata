@@ -13,6 +13,7 @@ import pandas as pd
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from mudata import MuData
 from pandas import CategoricalDtype
 from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 from torch.utils.data import Dataset
@@ -23,6 +24,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_circles
 from spatialdata._core.query.relational_query import get_element_instances, join_spatialelement_table
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import Table_T
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -187,8 +189,8 @@ class ImageTilesDataset(Dataset[Any]):
 
             # check that the coordinate systems are valid for the elements
             cs = regions_to_coordinate_systems[region_name]
-            assert not isinstance(region_elem, AnnData)
-            assert not isinstance(image_elem, AnnData)
+            assert not isinstance(region_elem, Table_T)
+            assert not isinstance(image_elem, Table_T)
             region_trans = get_transformation(region_elem, get_all=True)
             image_trans = get_transformation(image_elem, get_all=True)
             assert isinstance(region_trans, dict)
@@ -202,6 +204,8 @@ class ImageTilesDataset(Dataset[Any]):
                 )
 
             if table_name is not None:
+                if isinstance(self.sdata.tables[table_name], MuData):
+                    raise TypeError("`ImageTilesDataset` does not support MuData tables, please use an AnnData table.")
                 _, region_key, instance_key = get_table_keys(self.sdata.tables[table_name])
                 if get_model(region_elem) in [Labels2DModel, Labels3DModel]:
                     indices = get_element_instances(region_elem).tolist()
@@ -246,7 +250,7 @@ class ImageTilesDataset(Dataset[Any]):
         tables_l = []
         for cs, region_name, image_name in self._cs_region_image:
             region_element = self.sdata[region_name]
-            assert not isinstance(region_element, AnnData)
+            assert not isinstance(region_element, Table_T)
             circles = to_circles(region_element)
             dims_l.append(get_axes_names(circles))
 
@@ -262,7 +266,7 @@ class ImageTilesDataset(Dataset[Any]):
                 # Passing 2-D min/max arrays triggers the multi-box path in bounding_box_query,
                 # which returns a list of {axis: slice} dicts — one per tile.
                 image_element = self.sdata[image_name]
-                assert not isinstance(image_element, AnnData)
+                assert not isinstance(image_element, Table_T)
                 selections = bounding_box_query(
                     image_element,
                     ("x", "y"),
@@ -301,7 +305,7 @@ class ImageTilesDataset(Dataset[Any]):
         self.dataset_index = pd.concat(index_df).reset_index(drop=True)
         assert len(self.tiles_coords) == len(self.dataset_index)
         if table_name:
-            self.dataset_table = ad.concat(tables_l)
+            self.dataset_table = ad.concat([table for table in tables_l if isinstance(table, AnnData)])
             assert len(self.tiles_coords) == len(self.dataset_table)
 
         dims_ = set(chain(*dims_l))

@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import dask.dataframe as dd
 import numpy as np
@@ -16,6 +16,7 @@ from dask.array import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame, GeoSeries
+from mudata import MuData
 from multiscale_spatial_image import to_multiscale as to_multiscale_msi
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
@@ -29,7 +30,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
-from spatialdata._types import ArrayLike
+from spatialdata._types import ArrayLike, Table_T
 from spatialdata._utils import _check_match_length_channels_c_dim
 from spatialdata.config import settings
 from spatialdata.models import C, X, Y, Z, get_axes_names
@@ -983,14 +984,14 @@ class TableModel:
     ATTRS_KEY = ATTRS_KEY
 
     @classmethod
-    def _validate_set_region_key(cls, data: AnnData, region_key: str | None = None) -> None:
+    def _validate_set_region_key(cls, data: Table_T, region_key: str | None = None) -> None:
         """
         Validate the region key in table.uns or set a new region key as the region key column.
 
         Parameters
         ----------
         data
-            The AnnData table.
+            The AnnData or MuData table.
         region_key
             The region key to be validated and set in table.uns.
 
@@ -1026,7 +1027,7 @@ class TableModel:
             attrs[cls.REGION_KEY_KEY] = region_key
 
     @classmethod
-    def _validate_set_instance_key(cls, data: AnnData, instance_key: str | None = None) -> None:
+    def _validate_set_instance_key(cls, data: Table_T, instance_key: str | None = None) -> None:
         """
         Validate the instance_key in table.uns or set a new instance_key as the instance_key column.
 
@@ -1037,7 +1038,7 @@ class TableModel:
         Parameters
         ----------
         data
-            The AnnData table.
+            The AnnData or MuData table.
 
         instance_key
             The instance_key to be validated and set in table.uns.
@@ -1073,14 +1074,14 @@ class TableModel:
             attrs[cls.INSTANCE_KEY] = instance_key
 
     @classmethod
-    def _validate_table_annotation_metadata(cls, data: AnnData) -> None:
+    def _validate_table_annotation_metadata(cls, data: Table_T) -> None:
         """
         Validate annotation metadata.
 
         Parameters
         ----------
         data
-            The AnnData object containing the table annotation data.
+            The AnnData or MuData object containing the table annotation data.
 
         Raises
         ------
@@ -1144,7 +1145,7 @@ class TableModel:
         expected_regions = attr[cls.REGION_KEY] if isinstance(attr[cls.REGION_KEY], list) else [attr[cls.REGION_KEY]]
         found_regions = data.obs[attr[cls.REGION_KEY_KEY]].unique().tolist()
         if len(set(expected_regions).symmetric_difference(set(found_regions))) > 0:
-            raise ValueError(f"Regions in the AnnData object and `{attr[cls.REGION_KEY_KEY]}` do not match.")
+            raise ValueError(f"Regions in the table metadata and `{attr[cls.REGION_KEY_KEY]}` do not match.")
 
         # Warning for object/string columns with NaN in region_key or instance_key
         instance_key = attr[cls.INSTANCE_KEY]
@@ -1162,10 +1163,10 @@ class TableModel:
                     )
 
     @classmethod
-    def validate(
+    def validate[T: AnnData | MuData](
         cls,
-        data: AnnData,
-    ) -> AnnData:
+        data: T,
+    ) -> T:
         """
         Validate the data.
 
@@ -1177,9 +1178,14 @@ class TableModel:
         Returns
         -------
         The validated data.
+
+        Notes
+        -----
+        For a :class:`mudata.MuData` table, the annotation metadata is stored in the global `mdata.uns` and the region
+        and instance key columns in the global `mdata.obs`, so that every modality annotates the same instances.
         """
-        if not isinstance(data, AnnData):
-            raise TypeError(f"`table` must be `anndata.AnnData`, was {type(data)}.")
+        if not isinstance(data, Table_T):
+            raise TypeError(f"`table` must be `anndata.AnnData` or `mudata.MuData`, was {type(data)}.")
 
         validate_table_attr_keys(data)
         if ATTRS_KEY not in data.uns:
@@ -1210,21 +1216,23 @@ class TableModel:
         return data
 
     @classmethod
-    def parse(
+    def parse[T: AnnData | MuData](
         cls,
-        adata: AnnData,
+        adata: T,
         region: str | list[str] | None = None,
         region_key: str | None = None,
         instance_key: str | None = None,
         overwrite_metadata: bool = False,
-    ) -> AnnData:
+    ) -> T:
         """
-        Parse the :class:`anndata.AnnData` to be compatible with the model.
+        Parse the :class:`anndata.AnnData` or :class:`mudata.MuData` to be compatible with the model.
 
         Parameters
         ----------
         adata
-            The AnnData object.
+            The AnnData or MuData object. For a MuData object, `region_key` and `instance_key` refer to columns of the
+            global `mdata.obs` (use :meth:`mudata.MuData.pull_obs` to copy columns from the modalities), and the
+            metadata is stored in the global `mdata.uns`.
         region
             Region(s) to be used.
         region_key
@@ -1241,7 +1249,7 @@ class TableModel:
         validate_table_attr_keys(adata)
         # Convert view to actual copy to avoid ImplicitModificationWarning when modifying .uns
         if adata.is_view:
-            adata = adata.copy()
+            adata = cast(T, adata.copy())
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
@@ -1267,6 +1275,12 @@ class TableModel:
             raise ValueError(f"`{cls.REGION_KEY_KEY}` must be provided.")
         if instance_key is None:
             raise ValueError("`instance_key` must be provided.")
+
+        if isinstance(adata, MuData) and (missing := [k for k in (region_key, instance_key) if k not in adata.obs]):
+            raise ValueError(
+                f"Column(s) {missing} not found in the global `mdata.obs`. For a MuData table, the region and instance "
+                "key columns must be global columns; use `mdata.pull_obs()` to copy them from the modalities."
+            )
 
         if isinstance(region, np.ndarray):
             region = region.tolist()
@@ -1315,7 +1329,7 @@ type Schema_t = (
 
 
 def get_model(
-    e: SpatialElement | AnnData,
+    e: SpatialElement | Table_T,
     validate: bool = True,
 ) -> Schema_t:
     """
@@ -1350,7 +1364,7 @@ def get_model(
         if validate:
             PointsModel.validate(e)
         return PointsModel
-    if isinstance(e, AnnData):
+    if isinstance(e, Table_T):
         if validate:
             TableModel.validate(e)
         return TableModel
@@ -1374,7 +1388,7 @@ def validate_element(e: SpatialElement) -> None:
     get_model(e, validate=True)
 
 
-def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
+def get_table_keys(table: Table_T) -> tuple[str | list[str], str, str]:
     """
     Get the table keys giving information about what spatial element is annotated.
 
@@ -1385,7 +1399,7 @@ def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
     Parameters
     ----------
     table:
-        AnnData table for which to retrieve the spatialdata_attrs keys.
+        AnnData or MuData table for which to retrieve the spatialdata_attrs keys.
 
     Returns
     -------
@@ -1404,7 +1418,7 @@ def get_table_keys(table: AnnData) -> tuple[str | list[str], str, str]:
     )
 
 
-def _get_region_metadata_from_region_key_column(table: AnnData) -> list[str]:
+def _get_region_metadata_from_region_key_column(table: Table_T) -> list[str]:
     _, region_key, instance_key = get_table_keys(table)
     region_key_column = table.obs[region_key]
     if not isinstance(region_key_column.dtype, CategoricalDtype):

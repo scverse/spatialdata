@@ -20,6 +20,7 @@ from dask._task_spec import Task
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from mudata import MuData
 from upath import UPath
 from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
@@ -29,6 +30,7 @@ from zarr.storage import FsspecStore, LocalStore
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
 from spatialdata._logging import logger
+from spatialdata._types import Table_T
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models._utils import (
     MappingToCoordinateSystem_t,
@@ -265,7 +267,7 @@ def _compare_sdata_on_disk(a: SpatialData, b: SpatialData) -> bool:
 
 
 @singledispatch
-def get_dask_backing_files(element: SpatialData | SpatialElement | AnnData) -> list[str]:
+def get_dask_backing_files(element: SpatialData | SpatialElement | Table_T) -> list[str]:
     """
     Get the backing files that appear in the Dask computational graph of an element/any element of a SpatialData object.
 
@@ -312,8 +314,9 @@ def _(element: DaskDataFrame) -> list[str]:
 
 
 @get_dask_backing_files.register(AnnData)
+@get_dask_backing_files.register(MuData)
 @get_dask_backing_files.register(GeoDataFrame)
-def _(element: AnnData | GeoDataFrame) -> list[str]:
+def _(element: Table_T | GeoDataFrame) -> list[str]:
     return []
 
 
@@ -419,7 +422,7 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
                             )
 
 
-def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | AnnData) -> list[bool]:
+def _backed_elements_contained_in_path(path: Path, object: SpatialData | SpatialElement | Table_T) -> list[bool]:
     """
     Return the list of boolean values indicating if backing files for an object are child directory of a path.
 
@@ -469,7 +472,7 @@ def _is_subfolder(parent: Path, child: Path) -> bool:
 
 
 def _is_element_self_contained(
-    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | AnnData, element_path: Path
+    element: DataArray | DataTree | DaskDataFrame | GeoDataFrame | Table_T, element_path: Path
 ) -> bool:
     if isinstance(element, DaskDataFrame):
         pass

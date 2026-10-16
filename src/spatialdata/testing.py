@@ -1,21 +1,32 @@
 from __future__ import annotations
 
-from anndata import AnnData
 from anndata.tests.helpers import assert_equal as assert_anndata_equal
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe.utils import assert_eq as assert_dask_dataframe_equal
 from geopandas import GeoDataFrame
 from geopandas.testing import assert_geodataframe_equal
+from mudata import MuData
 from xarray import DataArray, DataTree
 from xarray.testing import assert_equal
 
 from spatialdata import SpatialData
 from spatialdata._core._elements import Images, Labels, Points, Shapes, Tables
+from spatialdata._types import Table_T
 from spatialdata.models import PointsModel
 from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations.operations import get_transformation
 
 _Elements = Images | Labels | Shapes | Points | Tables
+
+
+def _assert_mudata_equal(mdata0: MuData, mdata1: MuData) -> None:
+    """Compare two MuData objects: the global attributes and each modality."""
+    assert mdata0.axis == mdata1.axis
+    assert list(mdata0.mod.keys()) == list(mdata1.mod.keys())
+    for attr in ("obs", "var", "obsm", "varm", "obsp", "varp", "uns"):
+        assert_anndata_equal(getattr(mdata0, attr), getattr(mdata1, attr), elem_name=attr)
+    for name in mdata0.mod:
+        assert_anndata_equal(mdata0.mod[name], mdata1.mod[name])
 
 
 def assert_elements_dict_are_identical(
@@ -68,8 +79,8 @@ def assert_elements_dict_are_identical(
 
 
 def assert_elements_are_identical(
-    element0: SpatialElement | AnnData,
-    element1: SpatialElement | AnnData,
+    element0: SpatialElement | Table_T,
+    element1: SpatialElement | Table_T,
     check_transformations: bool = True,
     check_metadata: bool = True,
 ) -> None:
@@ -106,8 +117,8 @@ def assert_elements_are_identical(
         raise ValueError("check_transformations cannot be True if check_metadata is False")
 
     # compare transformations (only for SpatialElements)
-    if not isinstance(element0, AnnData):
-        assert not isinstance(element1, AnnData)
+    if not isinstance(element0, Table_T):
+        assert not isinstance(element1, Table_T)
         transformations0 = get_transformation(element0, get_all=True)
         transformations1 = get_transformation(element1, get_all=True)
         assert isinstance(transformations0, dict)
@@ -120,7 +131,10 @@ def assert_elements_are_identical(
                 )
 
     # compare the elements
-    if isinstance(element0, AnnData):
+    if isinstance(element0, MuData):
+        assert isinstance(element1, MuData)
+        _assert_mudata_equal(element0, element1)
+    elif isinstance(element0, Table_T):
         assert_anndata_equal(element0, element1)
     elif isinstance(element0, DataArray | DataTree):
         assert_equal(element0, element1)

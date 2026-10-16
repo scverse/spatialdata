@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import zarr.storage
-from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from ome_zarr.format import Format
@@ -28,7 +27,7 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
-from spatialdata._types import JSONValue, Raster_T
+from spatialdata._types import JSONValue, Raster_T, Table_T
 
 
 def _read_zarr_group_spatialdata_element(
@@ -39,7 +38,7 @@ def _read_zarr_group_spatialdata_element(
     read_func: Callable[..., Any],
     group_name: Literal["images", "labels", "shapes", "points", "tables"],
     element_type: Literal["image", "labels", "shapes", "points", "tables"],
-    element_container: (dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData]),
+    element_container: (dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, Table_T]),
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
 ) -> None:
     with handle_read_errors(
@@ -197,7 +196,7 @@ def read_zarr(
     labels: dict[str, Raster_T] = {}
     points: dict[str, DaskDataFrame] = {}
     shapes: dict[str, GeoDataFrame] = {}
-    tables: dict[str, AnnData] = {}
+    tables: dict[str, Table_T] = {}
 
     selector = {"images", "labels", "points", "shapes", "tables"} if not selection else set(selection or [])
     logger.debug(f"Reading selection {selector}")
@@ -208,7 +207,7 @@ def read_zarr(
         tuple[
             Callable[..., Any],
             Literal["image", "labels", "shapes", "points", "tables"],
-            dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, AnnData],
+            dict[str, Raster_T] | dict[str, DaskDataFrame] | dict[str, GeoDataFrame] | dict[str, Table_T],
         ],
     ] = {
         # ome-zarr-py needs a kwargs that has "image" has key. So here we have "image" and not "images"

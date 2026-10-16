@@ -6,7 +6,6 @@ from functools import singledispatch
 
 import numpy as np
 import pandas as pd
-from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
@@ -14,6 +13,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import Table_T
 from spatialdata.models import get_axes_names
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import PointsModel
@@ -208,7 +208,7 @@ def _(
         consider_element = (len(elements) == 0) or (element_name in elements)
         consider_element = consider_element and (element_type in include_spatial_elements)
         if consider_element:
-            assert not isinstance(element_obj, AnnData)
+            assert not isinstance(element_obj, Table_T)
             transformations = get_transformation(element_obj, get_all=True)
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())

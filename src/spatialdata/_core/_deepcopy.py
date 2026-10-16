@@ -8,9 +8,11 @@ from dask.array.core import Array as DaskArray
 from dask.array.core import from_array
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from mudata import MuData
 from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import Table_T
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import (
     Image2DModel,
@@ -24,7 +26,7 @@ from spatialdata.models.models import (
 
 
 @singledispatch
-def deepcopy(element: SpatialData | SpatialElement | AnnData) -> SpatialData | SpatialElement | AnnData:
+def deepcopy(element: SpatialData | SpatialElement | Table_T) -> SpatialData | SpatialElement | Table_T:
     """
     Deepcopy a SpatialData or SpatialElement object.
 
@@ -52,7 +54,7 @@ def deepcopy(element: SpatialData | SpatialElement | AnnData) -> SpatialData | S
 # This leads to double copying the data, but since we expect the data to be small, this is acceptable.
 @deepcopy.register(SpatialData)
 def _(sdata: SpatialData) -> SpatialData:
-    elements_dict: dict[str, SpatialElement | AnnData] = {}
+    elements_dict: dict[str, SpatialElement | Table_T] = {}
     for _, element_name, element in sdata.gen_elements():
         copied = deepcopy(element)
         assert not isinstance(copied, SpatialData)
@@ -122,5 +124,6 @@ def _(df: DaskDataFrame) -> DaskDataFrame:
 
 
 @deepcopy.register(AnnData)
-def _(adata: AnnData) -> AnnData:
-    return adata.copy()
+@deepcopy.register(MuData)
+def _(table: Table_T) -> Table_T:
+    return table.copy()

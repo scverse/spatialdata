@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, NamedTuple, cast
 
 if TYPE_CHECKING:
     import pandas as pd
-    from anndata import AnnData
+
+    from spatialdata._types import Table_T
 
 
 class ErrorDetails(NamedTuple):
@@ -36,7 +37,7 @@ class ValidationError(ValueError):
         )
 
 
-def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series | list[str]) -> None:
+def check_target_region_column_symmetry(table: Table_T, region_key: str, target: str | pd.Series | list[str]) -> None:
     """
     Check region and region_key column symmetry.
 
@@ -220,31 +221,36 @@ def check_valid_dataframe_column_name(name: str) -> None:
         raise ValueError("Name cannot be '_index'")
 
 
-def validate_table_attr_keys(data: AnnData, location: tuple[str, ...] = ()) -> None:
+def validate_table_attr_keys(data: Table_T, location: tuple[str, ...] = ()) -> None:
     """
-    Check that all keys of all AnnData attributes have valid names.
+    Check that all keys of all table attributes have valid names.
 
     This checks for AnnData obs, var, obsm, obsp, varm, varp, uns, layers whether their keys fulfill the
-    naming restrictions and raises an error otherwise.
+    naming restrictions and raises an error otherwise. For a MuData table, the global attributes and the names of the
+    modalities are checked, and each modality is checked as an AnnData table.
 
     Parameters
     ----------
     data
-        The AnnData table
+        The AnnData or MuData table
     location
         Tuple of strings identifying the parent element
 
     Raises
     ------
     ValueError
-        If the AnnData contains one or several invalid keys.
+        If the table contains one or several invalid keys.
     """
+    from mudata import MuData
+
+    is_mudata = isinstance(data, MuData)
+    attrs = ("obs", "obsm", "obsp", "var", "varm", "varp", "uns") + (() if is_mudata else ("layers",))
     with raise_validation_errors(
         title="Table contains invalid names.\n"
         "For renaming, please see the discussion here https://github.com/scverse/spatialdata/discussions/707 .",
         exc_type=ValueError,
     ) as collect_error:
-        for attr in ("obs", "obsm", "obsp", "var", "varm", "varp", "uns", "layers"):
+        for attr in attrs:
             attr_path = location + (attr,)
             with collect_error(location=attr_path):
                 check_all_keys_case_insensitively_unique(getattr(data, attr).keys(), location=attr_path)
@@ -257,6 +263,15 @@ def validate_table_attr_keys(data: AnnData, location: tuple[str, ...] = ()) -> N
                         check_valid_dataframe_column_name(key)
                     else:
                         check_valid_name(key)
+        if isinstance(data, MuData):
+            mod_path = location + ("mod",)
+            with collect_error(location=mod_path):
+                check_all_keys_case_insensitively_unique(data.mod.keys(), location=mod_path)
+            for mod_name, modality in data.mod.items():
+                with collect_error(location=mod_path + (mod_name,)):
+                    check_valid_name(mod_name)
+                with collect_error(location=mod_path + (mod_name,)):
+                    validate_table_attr_keys(modality, location=mod_path + (mod_name,))
 
 
 class _ErrorDetailsCollector:

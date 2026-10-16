@@ -30,8 +30,7 @@ Y = "y"
 X = "x"
 
 if TYPE_CHECKING:
-    from anndata import AnnData
-
+    from spatialdata._types import Table_T
     from spatialdata.models.models import RasterSchema
 
 
@@ -374,7 +373,7 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
     return Labels3DModel if Z in dims else Labels2DModel
 
 
-def convert_region_column_to_categorical(table: AnnData) -> None:
+def convert_region_column_to_categorical(table: Table_T) -> None:
     from spatialdata.models.models import TableModel
 
     if TableModel.ATTRS_KEY in table.uns:

@@ -17,11 +17,12 @@ from annsel import AnnselAccessor
 from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from mudata import MuData
 from numpy.typing import NDArray
 from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ArrayLike
+from spatialdata._types import ArrayLike, Table_T
 from spatialdata._utils import _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Image2DModel,
@@ -127,9 +128,9 @@ def _(
     return index
 
 
-def _filter_table_by_elements(table: AnnData | None, elements_dict: dict[str, dict[str, Any]]) -> AnnData | None:
+def _filter_table_by_elements(table: Table_T | None, elements_dict: dict[str, dict[str, Any]]) -> Table_T | None:
     """
-    Filter an AnnData table to keep only the rows annotating elements in elements_dict.
+    Filter a table to keep only the rows annotating elements in elements_dict.
 
     Parameters
     ----------
@@ -264,10 +265,10 @@ def _region_as_str_if_list_of_len_one(region: list[str]) -> str | list[str]:
 
 def _right_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]],
-    table: AnnData,
+    table: Table_T,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     if match_rows == "left":
         warnings.warn(
             "Matching rows 'left' is not supported for 'right_exclusive' join; it will be treated as 'no'.",
@@ -318,10 +319,10 @@ def _right_exclusive_join_spatialelement_table(
 
 def _right_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]],
-    table: AnnData,
+    table: Table_T,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     if match_rows == "left":
         warnings.warn(
             "Matching rows 'left' is not supported for 'right' join; it will be treated as 'no'.",
@@ -370,10 +371,10 @@ def _right_join_spatialelement_table(
 
 def _inner_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]],
-    table: AnnData,
+    table: Table_T,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     regions, region_column_name, instance_key = get_table_keys(table)
     if isinstance(regions, str):
         regions = [regions]
@@ -442,10 +443,10 @@ def _inner_join_spatialelement_table(
 
 def _left_exclusive_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]],
-    table: AnnData,
+    table: Table_T,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     if match_rows == "right":
         warnings.warn(
             "Matching rows 'right' is not supported for 'left_exclusive' join; it will be treated as 'no'.",
@@ -487,10 +488,10 @@ def _left_exclusive_join_spatialelement_table(
 
 def _left_join_spatialelement_table(
     element_dict: dict[str, dict[str, Any]],
-    table: AnnData,
+    table: Table_T,
     match_rows: Literal["left", "no", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     if match_rows == "right":
         warnings.warn(
             "Matching rows 'right' is not supported for 'left' join; it will be treated as 'no'.",
@@ -584,7 +585,7 @@ class JoinTypes(Enum):
     right = member(partial(_right_join_spatialelement_table))
     right_exclusive = member(partial(_right_exclusive_join_spatialelement_table))
 
-    def __call__(self, *args: Any) -> tuple[dict[str, Any], AnnData | None]:
+    def __call__(self, *args: Any) -> tuple[dict[str, Any], Table_T | None]:
         return self.value(*args)
 
 
@@ -610,9 +611,9 @@ def _validate_element_types_for_join(
     sdata: SpatialData | None,
     spatial_element_names: list[str],
     spatial_elements: list[SpatialElement] | None,
-    table: AnnData | None,
+    table: Table_T | None,
 ) -> None:
-    elements_to_check: list[SpatialElement | AnnData] = []
+    elements_to_check: list[SpatialElement | Table_T] = []
     if sdata is not None:
         for name in spatial_element_names:
             elements_to_check.append(sdata[name])
@@ -631,11 +632,11 @@ def join_spatialelement_table(
     spatial_element_names: str | list[str] | None = None,
     spatial_elements: SpatialElement | list[SpatialElement] | None = None,
     table_name: str | None = None,
-    table: AnnData | None = None,
+    table: Table_T | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "left",
     match_rows: Literal["no", "left", "right"] = "no",
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     """
     Join SpatialElement(s) and table together in SQL like manner.
 
@@ -686,7 +687,7 @@ def join_spatialelement_table(
 
     Returns
     -------
-    A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+    A tuple containing the joined elements as a dictionary and the joined table (AnnData or MuData).
 
     Raises
     ------
@@ -767,11 +768,11 @@ def join_spatialelement_table(
 
 def _call_join(
     elements_dict: dict[str, dict[str, Any]],
-    table: AnnData,
+    table: Table_T,
     how: str,
     match_rows: Literal["no", "left", "right"],
     filter_label_pixels: bool | None = None,
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     assert any(key in elements_dict for key in ["labels", "shapes", "points"]), (
         "No valid element to join in spatial_element_name. Must provide at least one of either `labels`, `points` or "
         "`shapes`."
@@ -795,7 +796,7 @@ def _call_join(
     return elements_dict, table
 
 
-def match_table_to_element(sdata: SpatialData, element_name: str, table_name: str = "table") -> AnnData:
+def match_table_to_element(sdata: SpatialData, element_name: str, table_name: str = "table") -> Table_T:
     """
     Filter the table and reorders the rows to match the instances (rows/labels) of the specified SpatialElement.
 
@@ -832,7 +833,7 @@ def match_table_to_element(sdata: SpatialData, element_name: str, table_name: st
 
 def match_element_to_table(
     sdata: SpatialData, element_name: str | list[str], table_name: str
-) -> tuple[dict[str, Any], AnnData | None]:
+) -> tuple[dict[str, Any], Table_T | None]:
     """
     Filter the elements and make the indices match those in the table.
 
@@ -847,7 +848,7 @@ def match_element_to_table(
 
     Returns
     -------
-    A tuple containing the joined elements as a dictionary and the joined table as an AnnData object.
+    A tuple containing the joined elements as a dictionary and the joined table (AnnData or MuData).
 
     Notes
     -----
@@ -868,7 +869,7 @@ def match_element_to_table(
 def match_sdata_to_table(
     sdata: SpatialData,
     table_name: str,
-    table: AnnData | None = None,
+    table: Table_T | None = None,
     how: Literal["left", "left_exclusive", "inner", "right", "right_exclusive"] = "right",
     filter_label_pixels: bool | None = None,
 ) -> SpatialData:
@@ -945,7 +946,8 @@ def filter_by_table_query(
     element_names
         The names of the elements to filter the SpatialData object by.
     obs_expr
-        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs` by.
+        A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.obs` by. For a MuData
+        table, only `obs_expr` and `obs_names_expr` are supported, and they are applied to the global `obs`.
     var_expr
         A Predicate or an iterable of `annsel` `Predicates` to filter :attr:`anndata.AnnData.var` by.
     x_expr
@@ -982,10 +984,23 @@ def filter_by_table_query(
         sdata.subset(element_names=element_names, filter_tables=filter_tables) if element_names else sdata
     )
 
-    # `.an` is registered on AnnData at import time by annsel, so it is reached through the accessor class here.
-    filtered_table: AnnData = AnnselAccessor(sdata_subset.tables[table_name]).filter(
-        obs=obs_expr, var=var_expr, x=x_expr, obs_names=obs_names_expr, var_names=var_names_expr, layer=layer
-    )
+    table = sdata_subset.tables[table_name]
+    filtered_table: Table_T
+    if isinstance(table, MuData):
+        if any(arg is not None for arg in (var_expr, x_expr, var_names_expr, layer)):
+            raise NotImplementedError(
+                "For MuData tables only `obs_expr` and `obs_names_expr` are supported, applied to the global `obs`. "
+                "To filter by the variables of a modality, filter the modality and subset the MuData table with it."
+            )
+        # annsel only supports AnnData (and the global `var_names` of a MuData table are often not unique), so the
+        # filter is applied to an AnnData object holding only the global `obs`
+        obs_only = AnnselAccessor(AnnData(obs=table.obs)).filter(obs=obs_expr, obs_names=obs_names_expr)
+        filtered_table = table[obs_only.obs_names].copy()
+    else:
+        # `.an` is registered on AnnData at import time by annsel, so it is reached through the accessor class here.
+        filtered_table = AnnselAccessor(table).filter(
+            obs=obs_expr, var=var_expr, x=x_expr, obs_names=obs_names_expr, var_names=var_names_expr, layer=layer
+        )
 
     return match_sdata_to_table(
         sdata=sdata_subset,
@@ -1001,24 +1016,57 @@ class _ValueOrigin:
     origin: str
     is_categorical: bool
     value_key: str
+    # for MuData tables: the modality the value comes from, None for the global attributes
+    modality: str | None = None
 
 
 def _get_element(
-    element: SpatialElement | AnnData | None, sdata: SpatialData | None, element_name: str | None
-) -> SpatialElement | AnnData:
+    element: SpatialElement | Table_T | None, sdata: SpatialData | None, element_name: str | None
+) -> SpatialElement | Table_T:
     if element is None:
         assert sdata is not None
         assert element_name is not None
         return sdata[element_name]
     assert sdata is None
-    if not isinstance(element, AnnData):
+    if not isinstance(element, Table_T):
         assert element_name is None
     return element
 
 
+def _get_mudata_modality_origin(mdata: MuData, value_key: str) -> _ValueOrigin | None:
+    """
+    Locate a value in the modalities of a MuData table.
+
+    Following the MuData naming convention, `value_key` can be prefixed with the name of the modality, as in
+    `"<modality>:<key>"`, where `<key>` is a column of the modality `obs` or one of its `var_names`. Without a prefix,
+    `value_key` is looked up in the `var_names` of all the modalities and it must be found in exactly one of them.
+    """
+    modality_name, sep, key = value_key.partition(":")
+    if sep and modality_name in mdata.mod:
+        modality = mdata.mod[modality_name]
+        if key in modality.obs.columns:
+            is_categorical = isinstance(modality.obs[key].dtype, pd.CategoricalDtype)
+            return _ValueOrigin(origin="obs", is_categorical=is_categorical, value_key=key, modality=modality_name)
+        if key in modality.var_names:
+            return _ValueOrigin(origin="var", is_categorical=False, value_key=key, modality=modality_name)
+    found_in = [name for name, modality in mdata.mod.items() if value_key in modality.var_names]
+    if len(found_in) > 1:
+        raise ValueError(
+            f"{value_key!r} is found in the `var_names` of multiple modalities: {found_in}. Please prefix it with "
+            f"the name of the modality, e.g. {f'{found_in[0]}:{value_key}'!r}."
+        )
+    if len(found_in) == 1:
+        return _ValueOrigin(origin="var", is_categorical=False, value_key=value_key, modality=found_in[0])
+    return None
+
+
 def _get_table_origins(
-    element: SpatialElement | AnnData, value_key: str, origins: list[_ValueOrigin]
+    element: SpatialElement | Table_T, value_key: str, origins: list[_ValueOrigin]
 ) -> list[_ValueOrigin]:
+    if isinstance(element, MuData) and value_key not in element.obs.columns and value_key not in element.obsm:
+        if (origin := _get_mudata_modality_origin(element, value_key)) is not None:
+            origins.append(origin)
+        return origins
     if value_key in element.obs.columns:
         value = element.obs[value_key]
         is_categorical = isinstance(value.dtype, pd.CategoricalDtype)
@@ -1033,7 +1081,7 @@ def _get_table_origins(
 
 def _locate_value(
     value_key: str,
-    element: SpatialElement | AnnData | None = None,
+    element: SpatialElement | Table_T | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
@@ -1068,7 +1116,7 @@ def _locate_value(
 
 def get_values(
     value_key: str | list[str],
-    element: SpatialElement | AnnData | None = None,
+    element: SpatialElement | Table_T | None = None,
     sdata: SpatialData | None = None,
     element_name: str | None = None,
     table_name: str | None = None,
@@ -1081,14 +1129,16 @@ def get_values(
     Parameters
     ----------
     value_key
-        Name of the column/channel name to get the values from
+        Name of the column/channel name to get the values from. For a MuData table, besides the global `obs` and
+        `obsm`, values can be taken from the modalities: use `"<modality>:<key>"` for a column of the `obs` or a
+        variable of the modality, or just the variable name if it is found in only one modality.
     element
-        SpatialElement object or AnnData table; either element or (sdata, element_name) must be provided
+        SpatialElement object or AnnData/MuData table; either element or (sdata, element_name) must be provided
     sdata
         SpatialData object; either element or (sdata, element_name) must be provided
     element_name
         Name of the element; either element or (sdata, element_name) must be provided. In case of element being
-        an AnnData table, element_name can also be provided to subset the AnnData table to only include those rows
+        a table, element_name can also be provided to subset the table to only include those rows
         annotating the element_name.
     table_name
         Name of the table to get the values from.
@@ -1106,6 +1156,7 @@ def get_values(
     -----
     - The index of the returned dataframe is the instance_key of the table for the specified element.
     - If the element is a labels, the eventual background (0) is not included in the dataframe of returned values.
+    - For a MuData table, values from a modality are NaN for the instances that are not measured in that modality.
     """
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
     value_keys = [value_key] if isinstance(value_key, str) else value_key
@@ -1145,7 +1196,7 @@ def get_values(
             df = df.compute()
         assert isinstance(df, pd.DataFrame)
         return df
-    if (sdata is not None and table_name is not None) or isinstance(element, AnnData):
+    if (sdata is not None and table_name is not None) or isinstance(element, Table_T):
         if sdata is not None and table_name is not None:
             assert element_name is not None
             matched_table = match_table_to_element(sdata=sdata, element_name=element_name, table_name=table_name)
@@ -1155,7 +1206,7 @@ def get_values(
             assert obs[region_key].nunique() == 1
             assert obs[instance_key].nunique() == len(matched_table)
         else:
-            assert isinstance(element, AnnData)
+            assert isinstance(element, Table_T)
             matched_table = element
             instance_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.INSTANCE_KEY]
             region_key = matched_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
@@ -1165,9 +1216,12 @@ def get_values(
         if not isinstance(obs, pd.DataFrame):
             raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
 
-        if origin == "obs":
+        if isinstance(matched_table, MuData) and origin in ("obs", "var"):
+            df = _get_mudata_values(matched_table, value_keys, locations, table_layer)
+        elif origin == "obs":
             df = obs[value_key_values].copy()
-        if origin == "var":
+        elif origin == "var":
+            assert isinstance(matched_table, AnnData)
             matched_table.obs = pd.DataFrame(obs)
             if table_layer is None:
                 x = matched_table[:, value_key_values].X
@@ -1182,7 +1236,7 @@ def get_values(
             if not isinstance(x, np.ndarray):
                 raise TypeError(f"Expected a dense array of values, got {type(x).__name__}.")
             df = pd.DataFrame(x, columns=value_key_values)
-        if origin == "obsm":
+        elif origin == "obsm":
             data = {}
             for key in value_key_values:
                 data_values = matched_table.obsm[key]
@@ -1206,6 +1260,35 @@ def get_values(
         return df
 
     raise ValueError(f"Unknown origin {origin}")
+
+
+def _get_mudata_values(
+    mdata: MuData,
+    value_keys: list[str],
+    locations: list[_ValueOrigin],
+    table_layer: str | None,
+) -> pd.DataFrame:
+    """
+    Get obs or var values from a MuData table, aligned to its global `obs_names`.
+
+    Values coming from a modality are missing (NaN) for the observations that are not measured in that modality.
+    """
+    columns: dict[str, pd.Series] = {}
+    for value_key, location in zip(value_keys, locations, strict=True):
+        if location.modality is None:
+            columns[value_key] = mdata.obs[location.value_key]
+            continue
+        modality = mdata.mod[location.modality]
+        assert isinstance(modality, AnnData)
+        values: pd.Series
+        if location.origin == "obs":
+            values = pd.Series(modality.obs[location.value_key])
+        else:
+            if table_layer is not None and table_layer not in modality.layers:
+                raise ValueError(f"Layer {table_layer} was not found in modality {location.modality!r}.")
+            values = modality[:, location.value_key].to_df(layer=table_layer)[location.value_key]
+        columns[value_key] = values.reindex(mdata.obs_names)
+    return pd.DataFrame(columns, index=mdata.obs_names)
 
 
 def _mask_block(block: xr.DataArray, ids_to_remove: list[int]) -> xr.DataArray:

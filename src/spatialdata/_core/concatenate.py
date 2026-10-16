@@ -4,16 +4,19 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from copy import copy  # Should probably go up at the top
 from itertools import chain
-from typing import Any
+from typing import Any, cast
 from warnings import warn
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from anndata._core.merge import StrategiesLiteral, resolve_merge_strategy
+from anndata.utils import make_index_unique
+from mudata import MuData
 
 from spatialdata._core._utils import _find_common_table_keys
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import Table_T
 from spatialdata.models import TableModel, get_table_keys
 from spatialdata.transformations import (
     get_transformation,
@@ -27,11 +30,11 @@ __all__ = [
 
 
 def _concatenate_tables(
-    tables: list[AnnData],
+    tables: list[Table_T],
     region_key: str | None = None,
     instance_key: str | None = None,
     **kwargs: Any,
-) -> AnnData:
+) -> Table_T:
     import anndata as ad
 
     if not all(TableModel.ATTRS_KEY in table.uns for table in tables):
@@ -72,7 +75,16 @@ def _concatenate_tables(
             table.obs = obs.rename(columns=rename_dict)
         tables_l.append(table)
 
-    merged_table = ad.concat(tables_l, **kwargs)
+    mudata_tables = [table for table in tables_l if isinstance(table, MuData)]
+    anndata_tables = [table for table in tables_l if isinstance(table, AnnData)]
+    if mudata_tables and anndata_tables:
+        raise TypeError(
+            "Cannot concatenate AnnData tables with MuData tables. Convert the AnnData tables to MuData first, e.g. with "
+            "`mudata.MuData({'<modality>': adata})`, or keep them as separate tables."
+        )
+    merged_table: Table_T = (
+        _concatenate_mudata(mudata_tables, **kwargs) if mudata_tables else ad.concat(anndata_tables, **kwargs)
+    )
     attrs = {
         TableModel.REGION_KEY: merged_table.obs[region_key].unique().tolist(),
         TableModel.REGION_KEY_KEY: region_key,
@@ -80,6 +92,46 @@ def _concatenate_tables(
     }
     merged_table.uns[TableModel.ATTRS_KEY] = attrs
     return TableModel().parse(merged_table)
+
+
+def _concatenate_mudata(tables: list[MuData], **kwargs: Any) -> MuData:
+    """
+    Concatenate MuData tables along the observations, modality by modality.
+
+    `mudata.concat()` is not used because it fails when the variable names are not unique across the modalities (e.g.
+    the gene and the protein CD45), which is common for multimodal data.
+    """
+    import anndata as ad
+
+    obs_names = pd.Index(list(chain.from_iterable(table.obs_names for table in tables)))
+    if not obs_names.is_unique:
+        raise ValueError(
+            "The `obs_names` of the MuData tables to concatenate are not unique. Please make them unique, e.g. by "
+            "passing a dictionary of SpatialData objects to `concatenate()`, which adds a suffix to them."
+        )
+    modality_names = list(dict.fromkeys(chain.from_iterable(table.mod for table in tables)))
+    modalities = {
+        name: ad.concat(cast(list[AnnData], [table.mod[name] for table in tables if name in table.mod]), **kwargs)
+        for name in modality_names
+    }
+    merged = MuData(modalities)
+    # the global attributes are concatenated as AnnData objects without variables, with the same merge strategies used
+    # for the modalities; the boolean masks of the modalities in `obsm` are recomputed by MuData
+    global_attrs = ad.concat(
+        [
+            ad.AnnData(obs=table.obs, obsm={k: v for k, v in table.obsm.items() if k not in table.mod}, uns=table.uns)
+            for table in tables
+        ],
+        **kwargs,
+    )[merged.obs_names]
+    obs = global_attrs.obs
+    if not isinstance(obs, pd.DataFrame):
+        raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+    merged.obs = obs
+    for key, value in global_attrs.obsm.items():
+        merged.obsm[key] = value
+    merged.uns = dict(global_attrs.uns)
+    return merged
 
 
 def concatenate(
@@ -112,7 +164,8 @@ def concatenate(
     concatenate_tables
         Whether to merge the tables in case of having the same element name.
     obs_names_make_unique
-        Whether to make the `obs_names` unique by calling `AnnData.obs_names_make_unique()` on each table of the
+        Whether to make the `obs_names` unique by calling `AnnData.obs_names_make_unique()` (or the equivalent for
+        MuData) on each table of the
         concatenated object. If you passed a dictionary with the suffixes as keys and the `SpatialData` objects as
         values and if `concatenate_tables` is `True`, the `obs_names` will be made unique by adding the corresponding
         suffix instead.
@@ -219,7 +272,12 @@ def concatenate(
     )
     if obs_names_make_unique:
         for table in sdata.tables.values():
-            table.obs_names_make_unique()
+            if isinstance(table, MuData):
+                # `MuData.obs_names_make_unique()` only supports `axis=1`; the `obs_names` setter also renames the
+                # observations of the modalities
+                table.obs_names = make_index_unique(pd.Index(table.obs_names)).tolist()
+            else:
+                table.obs_names_make_unique()
     return sdata
 
 
@@ -270,7 +328,8 @@ def _fix_ensure_unique_element_names(
 
             # fix the obs names
             if rename_obs_names:
-                table.obs.index = table.obs.index.to_series().apply(lambda x, suffix=suffix: f"{x}-{suffix}")
+                # the setter (rather than `table.obs.index`) also renames the observations of the MuData modalities
+                table.obs_names = [f"{x}-{suffix}" for x in table.obs_names]
 
             # fix the table name
             new_name = f"{name}-{suffix}" if rename_tables else name

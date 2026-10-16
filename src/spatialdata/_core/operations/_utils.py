@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from anndata import AnnData
 from xarray import DataArray, DataTree
 
+from spatialdata._types import Table_T
 from spatialdata.models import SpatialElement, get_axes_names, get_spatial_axes
 
 if TYPE_CHECKING:
@@ -109,7 +109,7 @@ def transform_to_data_extent(
         coordinate_system, maintain_positioning=True
     )
 
-    sdata_to_return_elements: dict[str, SpatialElement | AnnData] = {
+    sdata_to_return_elements: dict[str, SpatialElement | Table_T] = {
         **sdata_vector_transformed_inplace.shapes,
         **sdata_vector_transformed_inplace.points,
     }
@@ -136,7 +136,7 @@ def transform_to_data_extent(
     if not maintain_positioning:
         for element_value in sdata_to_return_elements.values():
             # tables carry no transformations
-            if isinstance(element_value, AnnData):
+            if isinstance(element_value, Table_T):
                 continue
             set_transformation(element_value, transformation={coordinate_system: Identity()}, set_all=True)
     for k, v in sdata.tables.items():
@@ -158,7 +158,7 @@ def _parse_element(
     if sdata is not None:
         assert isinstance(element, str)
         looked_up = sdata[element]
-        if isinstance(looked_up, AnnData):
+        if isinstance(looked_up, Table_T):
             raise TypeError(f"Element {element!r} is a table, not a spatial element.")
         return looked_up
     assert not isinstance(element, str)

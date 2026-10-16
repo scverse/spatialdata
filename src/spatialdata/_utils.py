@@ -10,13 +10,12 @@ from typing import Any, TypeVar
 
 import numpy as np
 import pandas as pd
-from anndata import AnnData
 from dask import array as da
 from dask import config
 from dask.array import Array as DaskArray
 from xarray import DataArray, Dataset, DataTree
 
-from spatialdata._types import ArrayLike, ListOrNDArrayFloating
+from spatialdata._types import ArrayLike, ListOrNDArrayFloating, Table_T
 from spatialdata.transformations import Sequence, Translation, get_transformation, set_transformation
 
 RT = TypeVar("RT")
@@ -213,7 +212,7 @@ def iterate_pyramid_levels(
         yield node[name] if attr is None else getattr(node[name], attr)
 
 
-def _inplace_fix_subset_categorical_obs(subset_adata: AnnData | None, original_adata: AnnData) -> None:
+def _inplace_fix_subset_categorical_obs(subset_adata: Table_T | None, original_adata: Table_T) -> None:
     """
     Fix categorical obs columns of subset_adata to match the categories of original_adata.
 

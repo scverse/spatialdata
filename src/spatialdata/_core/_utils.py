@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from anndata import AnnData
+from mudata import MuData
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import Table_T
 
 
 def _find_common_table_keys(sdatas: Iterable[SpatialData]) -> set[str]:
@@ -90,13 +91,14 @@ def sanitize_name(name: str, is_dataframe_column: bool = False) -> str:
     return sanitized or "unnamed"
 
 
-def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
+def sanitize_table(data: Table_T, inplace: bool = True) -> Table_T | None:
     """
-    Sanitize all keys in an AnnData table to comply with SpatialData naming rules.
+    Sanitize all keys in an AnnData or MuData table to comply with SpatialData naming rules.
 
     This function sanitizes all keys in obs, var, obsm, obsp, varm, varp, uns, and layers
     while maintaining case-insensitive uniqueness. It can either modify the table in-place
-    or return a new sanitized copy.
+    or return a new sanitized copy. For a MuData table, the global attributes and every modality are sanitized; the
+    names of the modalities are left unchanged.
 
     See a discussion on the naming rules here:
     https://github.com/scverse/spatialdata/discussions/707
@@ -104,13 +106,13 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
     Parameters
     ----------
     data
-        The AnnData table to sanitize
+        The AnnData or MuData table to sanitize
     inplace
         Whether to modify the table in-place or return a new copy
 
     Returns
     -------
-    If inplace is False, returns a new AnnData object with sanitized keys.
+    If inplace is False, returns a new table with sanitized keys.
     If inplace is True, returns None as the original object is modified.
 
     Examples
@@ -155,12 +157,17 @@ def sanitize_table(data: AnnData, inplace: bool = True) -> AnnData | None:
         new_columns = {old: get_unique_name(old, attr, is_dataframe_column=True) for old in df.columns}
         df.rename(columns=new_columns, inplace=True)
 
-    # Handle other attributes
-    for attr in ("obsm", "obsp", "varm", "varp", "uns", "layers"):
+    # Handle other attributes; MuData has no global layers, they live in the modalities
+    is_mudata = isinstance(sanitized, MuData)
+    for attr in ("obsm", "obsp", "varm", "varp", "uns") + (() if is_mudata else ("layers",)):
         d = getattr(sanitized, attr)
         # None is a valid key in layers (anndata >= 0.13: represents X); skip sanitizing it
         new_keys = {old: get_unique_name(old, attr) for old in d if old is not None}
         new_dict = {(new_keys[old] if old is not None else old): value for old, value in d.items()}
         setattr(sanitized, attr, new_dict)
+
+    if isinstance(sanitized, MuData):
+        for modality in sanitized.mod.values():
+            sanitize_table(modality, inplace=True)
 
     return None if inplace else sanitized

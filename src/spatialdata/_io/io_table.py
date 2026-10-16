@@ -6,9 +6,11 @@ from pathlib import Path
 
 import numpy as np
 import zarr
-from anndata import AnnData
 from anndata import read_zarr as read_anndata_zarr
 from anndata._io.specs import write_elem as write_adata
+from mudata import MuData
+from mudata import read_zarr as read_mudata_zarr
+from mudata import write_zarr as write_mudata_zarr
 from packaging.version import Version
 
 from spatialdata._io._utils import _resolve_zarr_store
@@ -21,18 +23,27 @@ from spatialdata._io.format import (
     TablesFormatV02,
     _parse_version,
 )
+from spatialdata._types import Table_T
 from spatialdata.models import TableModel, get_table_keys
 
+# value of the `encoding-type` attribute that mudata writes to the root group of a MuData object
+MUDATA_ENCODING_TYPE = "MuData"
 
-def _read_table(store: str | Path) -> AnnData:
-    table = read_anndata_zarr(str(store))
 
+def _read_table(store: str | Path) -> Table_T:
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     if not isinstance(f, zarr.Group):
         raise TypeError(f"Expected a zarr group holding a table element, got {type(f).__name__}.")
     version = _parse_version(f, expect_attrs_key=False)
     assert version is not None
     table_format = TablesFormats[version]
+
+    table: Table_T
+    if f.attrs.get("encoding-type") == MUDATA_ENCODING_TYPE:
+        # pass the store of the group instead of a str, for the same reason as above
+        table = read_mudata_zarr(f.store)
+    else:
+        table = read_anndata_zarr(str(store))
 
     f.store.close()
 
@@ -57,7 +68,7 @@ def _read_table(store: str | Path) -> AnnData:
 
 
 def write_table(
-    table: AnnData,
+    table: Table_T,
     group: zarr.Group,
     name: str,
     group_type: str = "ngff:regions_table",
@@ -70,7 +81,7 @@ def write_table(
     Parameters
     ----------
     table
-        The table to write.
+        The table to write, either an AnnData or a MuData object.
     group
         The table will be written into a subgroup of this group
     name
@@ -100,7 +111,13 @@ def write_table(
     if element_format not in TablesFormats.values():
         raise FormatVersionUnknownError(element_type="table", version_encountered=element_format)
 
-    if element_format.zarr_format == 3 and Version(version("anndata")) >= Version("0.13"):
+    if isinstance(table, MuData):
+        if convert_strings_to_categoricals:
+            table.strings_to_categoricals()
+        # mudata always converts the strings of the modalities to categoricals when writing
+        write_mudata_zarr(_resolve_zarr_store(table_group), table, zarr_format=element_format.zarr_format)
+
+    elif element_format.zarr_format == 3 and Version(version("anndata")) >= Version("0.13"):
         # `write_zarr` in anndata v0.13 and above can only write to zarr v3
         # solution of passing resolved store directly roughly based on:
         # https://github.com/scverse/anndata/issues/1548#issuecomment-2199801855

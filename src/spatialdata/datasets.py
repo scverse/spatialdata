@@ -20,7 +20,7 @@ from xarray import DataArray, DataTree
 from spatialdata._core.operations.aggregate import aggregate
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ArrayLike
+from spatialdata._types import ArrayLike, Table_T
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -460,7 +460,7 @@ def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
     """
     sdata = blobs(length=50)
     element = sdata[name]
-    assert not isinstance(element, AnnData)
+    assert not isinstance(element, Table_T)
     if name in ["blobs_labels", "blobs_multiscale_labels"]:
         instance_id = get_element_instances(element).tolist()
     else:

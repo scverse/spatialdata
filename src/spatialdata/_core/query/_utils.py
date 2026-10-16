@@ -4,12 +4,11 @@ from typing import Any
 
 import numba as nb
 import numpy as np
-from anndata import AnnData
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._core._elements import Tables
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ArrayLike, ListOrNDArrayFloating
+from spatialdata._types import ArrayLike, ListOrNDArrayFloating, Table_T
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.transformations._utils import compute_coordinates
 from spatialdata.transformations.transformations import BaseTransformation, Sequence, Translation
@@ -201,7 +200,7 @@ def _process_query_result(
 
 def _get_filtered_or_unfiltered_tables(
     filter_table: bool, elements: dict[str, Any], sdata: SpatialData
-) -> dict[str, AnnData] | Tables:
+) -> dict[str, Table_T] | Tables:
     """
     Get the tables in a SpatialData object.
 

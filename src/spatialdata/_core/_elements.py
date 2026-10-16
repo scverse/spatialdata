@@ -6,13 +6,12 @@ from collections import UserDict
 from collections.abc import Iterable, KeysView, ValuesView
 from typing import TypeVar
 
-from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from xarray import DataArray, DataTree
 
 from spatialdata._core.validation import check_key_is_case_insensitively_unique, check_valid_name
-from spatialdata._types import Raster_T
+from spatialdata._types import Raster_T, Table_T
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -102,8 +101,8 @@ class Points(Elements[DaskDataFrame]):
         super().__setitem__(key, value)
 
 
-class Tables(Elements[AnnData]):
-    def __setitem__(self, key: str, value: AnnData) -> None:
+class Tables(Elements[Table_T]):
+    def __setitem__(self, key: str, value: Table_T) -> None:
         self._check_key(key, self.keys(), self._shared_keys)
         schema = get_model(value)
         if schema != TableModel:

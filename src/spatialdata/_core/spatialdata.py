@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import pandas as pd
 import zarr
-from anndata import AnnData
 from annsel.core.typing import Predicates
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import Scalar
@@ -30,7 +29,7 @@ from spatialdata._core.validation import (
     validate_table_attr_keys,
 )
 from spatialdata._logging import logger
-from spatialdata._types import ArrayLike, JSONValue, Raster_T
+from spatialdata._types import ArrayLike, JSONValue, Raster_T, Table_T
 from spatialdata._utils import _deprecation_alias
 from spatialdata.models import (
     Image2DModel,
@@ -66,7 +65,7 @@ class SpatialData:
 
     The SpatialData object is a modular container for arbitrary combinations of SpatialElements and annotation tables.
     The elements can be accesses separately and are stored as standard types (:class:`anndata.AnnData`,
-    :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
+    :class:`mudata.MuData`, :class:`geopandas.GeoDataFrame`, :class:`xarray.DataArray`).
 
     The elements need to pass a validation step. To construct valid elements you can use the parsers that we
     provide:
@@ -95,8 +94,9 @@ class SpatialData:
         Dict of 2D shapes elements (circles, polygons, multipolygons).
         Shapes are regions, they can't contain annotation, but they can be annotated by a table.
         The following parsers are available: :class:`~spatialdata.ShapesModel`.
-    table
-        AnnData table containing annotations for regions (labels and shapes). The following parsers is
+    tables
+        Dict of AnnData or MuData tables containing annotations for regions (labels and shapes). Use MuData to store
+        multimodal measurements (e.g. RNA and protein) of the same instances. The following parsers is
         available: :class:`~spatialdata.TableModel`.
 
     Notes
@@ -106,8 +106,8 @@ class SpatialData:
         - images and labels are stored as :class:`xarray.DataArray` or :class:`datatree.DataTree` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
-        - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
-            slot.
+        - the tables are stored as :class:`anndata.AnnData` or :class:`mudata.MuData` objects, with the spatial
+            coordinates stored in the obsm slot.
 
     The table can annotate regions (shapes or labels) and can be used to store additional information.
     Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
@@ -120,7 +120,7 @@ class SpatialData:
         labels: dict[str, Raster_T] | None = None,
         points: dict[str, DaskDataFrame] | None = None,
         shapes: dict[str, GeoDataFrame] | None = None,
-        tables: dict[str, AnnData] | Tables | None = None,
+        tables: dict[str, Table_T] | Tables | None = None,
         attrs: Mapping[str, JSONValue] | None = None,
     ) -> None:
         self._path: Path | None = None
@@ -172,7 +172,7 @@ class SpatialData:
                         self.validate_table_in_spatialdata(table)
                         self.tables[k] = table
 
-    def validate_table_in_spatialdata(self, table: AnnData) -> None:
+    def validate_table_in_spatialdata(self, table: Table_T) -> None:
         """
         Validate the presence of the annotation target of a SpatialData table in the SpatialData object.
 
@@ -204,7 +204,7 @@ class SpatialData:
                         UserWarning,
                         stacklevel=2,
                     )
-                elif isinstance(element, AnnData):
+                elif isinstance(element, Table_T):
                     raise TypeError(f"The table is annotating {r!r}, which is itself a table.")
                 else:
                     dtype: DtypeObj
@@ -225,14 +225,14 @@ class SpatialData:
                         )
 
     @staticmethod
-    def get_annotated_regions(table: AnnData) -> list[str]:
+    def get_annotated_regions(table: Table_T) -> list[str]:
         """
         Get the regions annotated by a table.
 
         Parameters
         ----------
         table
-            The AnnData table for which to retrieve annotated regions.
+            The AnnData or MuData table for which to retrieve annotated regions.
 
         Returns
         -------
@@ -245,13 +245,13 @@ class SpatialData:
         return _get_region_metadata_from_region_key_column(table)
 
     @staticmethod
-    def get_region_key_column(table: AnnData) -> pd.Series:
+    def get_region_key_column(table: Table_T) -> pd.Series:
         """Get the column of table.obs containing per row the region annotated by that row.
 
         Parameters
         ----------
         table
-            The AnnData table.
+            The AnnData or MuData table.
 
         Returns
         -------
@@ -271,14 +271,14 @@ class SpatialData:
         return column
 
     @staticmethod
-    def get_instance_key_column(table: AnnData) -> pd.Series:
+    def get_instance_key_column(table: Table_T) -> pd.Series:
         """
         Return the instance key column in table.obs containing for each row the instance id of that row.
 
         Parameters
         ----------
         table
-            The AnnData table.
+            The AnnData or MuData table.
 
         Returns
         -------
@@ -324,13 +324,13 @@ class SpatialData:
 
     @staticmethod
     def _set_table_annotation_target(
-        table: AnnData,
+        table: Table_T,
         region: str | pd.Series | list[str],
         region_key: str,
         instance_key: str,
     ) -> None:
         """
-        Set the SpatialElement annotation target of an AnnData table.
+        Set the SpatialElement annotation target of an AnnData or MuData table.
 
         This method sets the target annotation element of a table  based on the specified parameters. It creates the
         `attrs` dictionary for `table.uns` and only after validation that the regions are present in the region_key
@@ -339,7 +339,7 @@ class SpatialData:
         Parameters
         ----------
         table
-            The AnnData object containing the data table.
+            The AnnData or MuData object containing the data table.
         region
             The name of the target element for the table annotation.
         region_key
@@ -371,7 +371,7 @@ class SpatialData:
 
     @staticmethod
     def _change_table_annotation_target(
-        table: AnnData,
+        table: Table_T,
         region: str | pd.Series | list[str],
         region_key: None | str = None,
         instance_key: None | str = None,
@@ -409,7 +409,7 @@ class SpatialData:
         attrs[TableModel.REGION_KEY] = region
 
     @staticmethod
-    def update_annotated_regions_metadata(table: AnnData, region_key: str | None = None) -> AnnData:
+    def update_annotated_regions_metadata(table: Table_T, region_key: str | None = None) -> Table_T:
         """
         Update the annotation target of the table using the region_key column in table.obs.
 
@@ -420,7 +420,7 @@ class SpatialData:
         Parameters
         ----------
         table
-            The AnnData table for which to set the annotation target.
+            The AnnData or MuData table for which to set the annotation target.
         region_key
             The column in table.obs containing the rows specifying the SpatialElements being annotated.
             If None the current value for region_key in the annotation metadata of the table is used. If
@@ -447,7 +447,7 @@ class SpatialData:
         instance_key: None | str = None,
     ) -> None:
         """
-        Set the SpatialElement annotation target of a given AnnData table.
+        Set the SpatialElement annotation target of a given AnnData or MuData table.
 
         Parameters
         ----------
@@ -577,7 +577,7 @@ class SpatialData:
         else:
             raise TypeError("Path must be `None`, a `str` or a `Path` object.")
 
-    def locate_element(self, element: SpatialElement | AnnData) -> list[str]:
+    def locate_element(self, element: SpatialElement | Table_T) -> list[str]:
         """
         Locate an element within the SpatialData object and returns its Zarr paths relative to the root.
 
@@ -591,7 +591,7 @@ class SpatialData:
         A list of Zarr paths of the element relative to the root (multiple copies of the same element are allowed).
         The list is empty if the element is not present.
         """
-        found: list[SpatialElement | AnnData] = []
+        found: list[SpatialElement | Table_T] = []
         found_element_type: list[str] = []
         found_element_name: list[str] = []
         for element_type in ["images", "labels", "points", "shapes", "tables"]:
@@ -671,7 +671,7 @@ class SpatialData:
         include_orphan_tables: bool = False,
         element_names: str | list[str] | None = None,
         elements_dict: dict[str, dict[str, Any]] | None = None,
-    ) -> Tables | dict[str, AnnData]:
+    ) -> Tables | dict[str, Table_T]:
         """
         Filter tables by coordinate system or elements or return tables.
 
@@ -698,7 +698,7 @@ class SpatialData:
 
         """
         if filter_tables:
-            tables: dict[str, AnnData] | Tables = {}
+            tables: dict[str, Table_T] | Tables = {}
             for table_name, table in self._tables.items():
                 if include_orphan_tables and not table.uns.get(TableModel.ATTRS_KEY):
                     tables[table_name] = table
@@ -832,7 +832,7 @@ class SpatialData:
         element = self.get(element_name)
         if element is None:
             raise KeyError(f"Element {element_name!r} not found in the SpatialData object.")
-        if isinstance(element, AnnData):
+        if isinstance(element, Table_T):
             raise TypeError(f"Element {element_name!r} is a table, which has no coordinate system.")
         t = get_transformation_between_coordinate_systems(self, element, target_coordinate_system)
         if maintain_positioning:
@@ -1145,7 +1145,7 @@ class SpatialData:
                 with collect_error(location=element_path):
                     check_valid_name(element_name)
                 if element_type == "tables":
-                    assert isinstance(element, AnnData)
+                    assert isinstance(element, Table_T)
                     with collect_error(location=element_path):
                         validate_table_attr_keys(element, location=element_path)
 
@@ -1261,7 +1261,7 @@ class SpatialData:
 
     def _write_element(
         self,
-        element: SpatialElement | AnnData,
+        element: SpatialElement | Table_T,
         zarr_container_path: Path,
         element_type: str,
         element_name: str,
@@ -1312,7 +1312,7 @@ class SpatialData:
         if element_type != "tables":
             from spatialdata.models import validate_element
 
-            assert not isinstance(element, AnnData)
+            assert not isinstance(element, Table_T)
             validate_element(element)
 
         if element_type == "images":
@@ -1361,7 +1361,7 @@ class SpatialData:
                 geometry_encoding=shapes_geometry_encoding,
             )
         elif element_type == "tables":
-            if not isinstance(element, AnnData):
+            if not isinstance(element, Table_T):
                 raise TypeError(f"Element {element_name!r} of type {element_type!r} is not a table.")
             tables_format = parsed_formats["tables"]
             assert isinstance(tables_format, TablesFormatV01 | TablesFormatV02)
@@ -1452,7 +1452,7 @@ class SpatialData:
         if element_type is None:
             raise ValueError(f"Element with name {element_name} not found in SpatialData object.")
         if element_type == "tables":
-            assert isinstance(element, AnnData)
+            assert isinstance(element, Table_T)
             validate_table_attr_keys(element)
 
         self._check_element_not_on_disk_with_different_type(element_type=element_type, element_name=element_name)
@@ -1595,7 +1595,7 @@ class SpatialData:
         store.close()
         return return_value
 
-    def _validate_can_write_metadata_on_element(self, element_name: str) -> tuple[str, SpatialElement | AnnData] | None:
+    def _validate_can_write_metadata_on_element(self, element_name: str) -> tuple[str, SpatialElement | Table_T] | None:
         """Validate if metadata can be written on an element, returns None if it cannot be written."""
         from spatialdata._io._utils import _is_element_self_contained
         from spatialdata._io.io_zarr import _group_for_element_exists
@@ -1713,7 +1713,7 @@ class SpatialData:
         if validation_result is None:
             return
         element_type, element = validation_result
-        if isinstance(element, AnnData):
+        if isinstance(element, Table_T):
             raise TypeError(f"Element {element_name!r} is a table, which has no transformations.")
 
         from spatialdata.transformations.operations import get_transformation
@@ -1740,7 +1740,7 @@ class SpatialData:
             overwrite_coordinate_transformations_raster(
                 group=element_group, axes=axes, transformations=transformations, raster_format=raster_format
             )
-        elif isinstance(element, DaskDataFrame | GeoDataFrame | AnnData):
+        elif isinstance(element, DaskDataFrame | GeoDataFrame | Table_T):
             from spatialdata._io._utils import (
                 overwrite_coordinate_transformations_non_raster,
             )
@@ -1942,14 +1942,14 @@ class SpatialData:
 
         Returns
         -------
-        dict[str, AnnData]
+        dict[str, AnnData | MuData]
             Either the empty dictionary or a dictionary with as values the strings representing the table names and
-            as values the AnnData tables themselves.
+            as values the AnnData or MuData tables themselves.
         """
         return self._tables
 
     @tables.setter
-    def tables(self, tables: dict[str, AnnData]) -> None:
+    def tables(self, tables: dict[str, Table_T]) -> None:
         """Set tables."""
         self._shared_keys = self._shared_keys - set(self._tables.keys())
         self._tables = Tables(shared_keys=self._shared_keys)
@@ -2193,7 +2193,7 @@ class SpatialData:
             gen = self._gen_elements()
             elements_in_cs: dict[str, list[str]] = {}
             for k, name, obj in gen:
-                if not isinstance(obj, AnnData):
+                if not isinstance(obj, Table_T):
                     transformations = get_transformation(obj, get_all=True)
                     assert isinstance(transformations, dict)
                     target_css = transformations.keys()
@@ -2274,7 +2274,7 @@ class SpatialData:
 
     def _gen_elements(
         self, include_tables: bool = False
-    ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
+    ) -> Generator[tuple[str, str, SpatialElement | Table_T], None, None]:
         """
         Generate elements contained in the SpatialData instance.
 
@@ -2310,7 +2310,7 @@ class SpatialData:
 
     def gen_elements(
         self,
-    ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
+    ) -> Generator[tuple[str, str, SpatialElement | Table_T], None, None]:
         """
         Generate elements within the SpatialData object.
 
@@ -2333,7 +2333,7 @@ class SpatialData:
         """
         check_all_keys_case_insensitively_unique([name for _, name, _ in self.gen_elements()], location=())
 
-    def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | AnnData]:
+    def _find_element(self, element_name: str) -> tuple[str, str, SpatialElement | Table_T]:
         """
         Retrieve SpatialElement or Table from the SpatialData instance matching element_name.
 
@@ -2371,7 +2371,7 @@ class SpatialData:
     @classmethod
     def init_from_elements(
         cls,
-        elements: dict[str, SpatialElement | AnnData],
+        elements: dict[str, SpatialElement | Table_T],
         attrs: Mapping[str, JSONValue] | None = None,
     ) -> SpatialData:
         """
@@ -2380,7 +2380,7 @@ class SpatialData:
         Parameters
         ----------
         elements
-            A dict of named elements, e.g. SpatialElements like images and labels and AnnData tables.
+            A dict of named elements, e.g. SpatialElements like images and labels and AnnData or MuData tables.
         attrs
             Additional attributes to store in the SpatialData object.
 
@@ -2392,7 +2392,7 @@ class SpatialData:
         labels: dict[str, Raster_T] = {}
         points: dict[str, DaskDataFrame] = {}
         shapes: dict[str, GeoDataFrame] = {}
-        tables: dict[str, AnnData] = {}
+        tables: dict[str, Table_T] = {}
         for name, element in elements.items():
             # get_model() returns a schema only for the element type it matched, so the element has that type.
             model = get_model(element)
@@ -2406,7 +2406,7 @@ class SpatialData:
                 assert isinstance(element, DaskDataFrame)
                 points[name] = element
             elif model == TableModel:
-                assert isinstance(element, AnnData)
+                assert isinstance(element, Table_T)
                 tables[name] = element
             else:
                 assert model == ShapesModel
@@ -2477,7 +2477,7 @@ class SpatialData:
         )
         return SpatialData(images=images, labels=labels, points=points, shapes=shapes, tables=tables, attrs=self.attrs)
 
-    def __getitem__(self, item: str) -> SpatialElement | AnnData:
+    def __getitem__(self, item: str) -> SpatialElement | Table_T:
         """
         Return the element with the given name.
 
@@ -2499,7 +2499,7 @@ class SpatialData:
         }
         return key in element_dict
 
-    def get(self, key: str, default_value: SpatialElement | AnnData | None = None) -> SpatialElement | AnnData | None:
+    def get(self, key: str, default_value: SpatialElement | Table_T | None = None) -> SpatialElement | Table_T | None:
         """
         Get element from SpatialData object based on corresponding name.
 
@@ -2520,7 +2520,7 @@ class SpatialData:
         else:
             return default_value
 
-    def __setitem__(self, key: str, value: SpatialElement | AnnData) -> None:
+    def __setitem__(self, key: str, value: SpatialElement | Table_T) -> None:
         """
         Add the element to the SpatialData object.
 
@@ -2546,7 +2546,7 @@ class SpatialData:
             assert isinstance(value, GeoDataFrame)
             self.shapes[key] = value
         elif schema == TableModel:
-            assert isinstance(value, AnnData)
+            assert isinstance(value, Table_T)
             self.tables[key] = value
         else:
             raise TypeError(f"Unknown element type with schema: {schema!r}.")

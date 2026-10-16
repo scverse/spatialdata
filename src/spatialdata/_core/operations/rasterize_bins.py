@@ -8,6 +8,7 @@ import pandas as pd
 from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from mudata import MuData
 from numpy.random import default_rng
 from shapely import MultiPolygon, Point, Polygon
 from xarray import DataArray
@@ -85,6 +86,12 @@ def rasterize_bins(
     """
     element = sdata[bins]
     table = sdata.tables[table_name]
+    if isinstance(table, MuData):
+        raise TypeError(
+            "Rasterizing bins annotated by a MuData table is not supported. Please store the modality to rasterize as "
+            "an AnnData table, e.g. `sdata.tables['<name>'] = mdata['<modality>']` (after copying the region and "
+            "instance key columns and the `spatialdata_attrs` metadata), and rasterize that table."
+        )
     if not isinstance(element, GeoDataFrame | DaskDataFrame | DataArray):
         raise ValueError("The bins should be a GeoDataFrame, a DaskDataFrame or a DataArray.")
     if isinstance(element, DataArray) and "c" in element.dims:
