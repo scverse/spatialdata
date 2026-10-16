@@ -104,6 +104,54 @@ def test_validate_invalid_names_in_modality():
     TableModel.validate(mdata)
 
 
+def test_sanitize_table_renames_modalities():
+    mdata = _get_mudata()
+    mdata = MuData({"Gene Expression": mdata.mod["rna"], "prot": mdata.mod["prot"]}, obs=mdata.obs, uns=mdata.uns)
+    with pytest.raises(ValidationError, match="sanitize_table"):
+        TableModel.validate(mdata)
+    sanitize_table(mdata)
+    assert list(mdata.mod) == ["Gene_Expression", "prot"]
+    for mapping in (mdata.obsm, mdata.varm, mdata.obsmap, mdata.varmap):
+        assert list(mapping) == ["Gene_Expression", "prot"]
+    TableModel.validate(mdata)
+    TableModel.validate(deepcopy(mdata))
+
+
+def test_sanitize_table_keeps_modality_masks(tmp_path: Path):
+    mdata = _get_mudata()
+    # collides case-insensitively with the mask of the modality "rna", and comes before it
+    mdata = MuData(dict(mdata.mod), obs=mdata.obs, uns=mdata.uns, obsm={"RNA": np.ones((N_CELLS, 1))})
+    assert list(mdata.obsm)[0] == "RNA"
+    with pytest.raises(ValidationError):
+        TableModel.validate(mdata)
+    sanitize_table(mdata)
+    assert "rna" in mdata.obsm
+    assert "RNA_1" in mdata.obsm
+    sdata = SpatialData(shapes={"cells": _get_circles()}, tables={"table": mdata})
+    sdata.write(tmp_path / "data.zarr")
+    SpatialData.read(tmp_path / "data.zarr")
+    deepcopy(sdata)
+
+
+def test_sanitize_table_with_varp():
+    mdata = _get_mudata()
+    mdata.varp["corr"] = np.eye(mdata.n_vars)
+    mdata.obsm["bad key"] = np.ones((N_CELLS, 1))
+    sanitize_table(mdata)
+    assert list(mdata.varp) == ["corr"]
+    assert "bad_key" in mdata.obsm
+    mdata.varp["corr2"] = np.eye(mdata.n_vars)
+
+
+def test_sanitize_table_not_inplace():
+    mdata = _get_mudata()
+    mdata.mod["prot"].obs["bad name"] = 0
+    sanitized = sanitize_table(mdata, inplace=False)
+    assert isinstance(sanitized, MuData)
+    assert "bad_name" in sanitized.mod["prot"].obs
+    assert "bad name" in mdata.mod["prot"].obs
+
+
 def test_sdata_with_mudata_table(sdata_mudata: SpatialData):
     assert isinstance(sdata_mudata["table"], MuData)
     assert SpatialData.get_annotated_regions(sdata_mudata["table"]) == ["cells"]
