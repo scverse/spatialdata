@@ -190,7 +190,7 @@ def sanitize_table(data: Table_T, inplace: bool = True) -> Table_T | None:
         d = getattr(sanitized, attr)
         # None is a valid key in layers (anndata >= 0.13: represents X); skip sanitizing it
         new_keys = {
-            old: get_unique_name(old, attr)
+            old: get_unique_name(old, attr, extra_allowed_chars=extra if attr == "uns" else "")
             for old in d
             if old is not None and not (attr in ("obsm", "varm") and old in modality_names)
         }

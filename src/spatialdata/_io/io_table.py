@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from importlib.metadata import version
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -31,8 +33,9 @@ from spatialdata.models import TableModel, get_table_keys
 
 # value of the `encoding-type` attribute that mudata writes to the root group of a MuData object
 MUDATA_ENCODING_TYPE = "MuData"
-# The columns of the global obs/var of a MuData table may contain ":" ("<modality>:<column>"), which is not allowed in
-# Windows file names, and each column is stored as a zarr array named after it; ":" is therefore stored percent-encoded.
+# The columns of the global obs/var and the keys of the global uns of a MuData table may contain ":"
+# ("<modality>:<column>"), which is not allowed in Windows file names, and each of them is stored as a zarr array or
+# group named after it; ":" is therefore stored percent-encoded.
 # "%" is not allowed in the names of the columns of a table, so the encoded names are decoded without ambiguity.
 _ESCAPED_MUDATA_MODALITY_SEPARATOR = "%3A"
 
@@ -43,6 +46,13 @@ def _escape_column_names(df: pd.DataFrame) -> pd.DataFrame:
 
 def _unescape_column_names(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns=lambda c: c.replace(_ESCAPED_MUDATA_MODALITY_SEPARATOR, MUDATA_MODALITY_SEPARATOR))
+
+
+def _escape_keys(mapping: Mapping[str, Any], escape: bool = True) -> dict[str, Any]:
+    old, new = MUDATA_MODALITY_SEPARATOR, _ESCAPED_MUDATA_MODALITY_SEPARATOR
+    if not escape:
+        old, new = new, old
+    return {key.replace(old, new): value for key, value in mapping.items()}
 
 
 def _read_table(store: str | Path) -> Table_T:
@@ -63,6 +73,7 @@ def _read_table(store: str | Path) -> Table_T:
         # undo the dtype changes that MuData applies to the global annotations when it is constructed
         _restore_mudata_global_annotations(mdata, obs=obs, var=var)
         mdata.obs, mdata.var = _unescape_column_names(mdata.obs), _unescape_column_names(mdata.var)
+        mdata.uns = _escape_keys(mdata.uns, escape=False)
         table = mdata
     else:
         table = read_anndata_zarr(str(store))
@@ -108,7 +119,8 @@ def _write_mudata(group: zarr.Group, name: str, mdata: MuData) -> None:
     table_group = group.create_group(name, overwrite=True)
     for attr in ("obs", "var"):
         write_adata(table_group, attr, _escape_column_names(getattr(mdata, attr)))
-    for attr in ("obsm", "varm", "obsp", "varp", "uns", "obsmap", "varmap"):
+    write_adata(table_group, "uns", _escape_keys(mdata.uns))
+    for attr in ("obsm", "varm", "obsp", "varp", "obsmap", "varmap"):
         write_adata(table_group, attr, dict(getattr(mdata, attr)))
     mod_group = table_group.require_group("mod")
     for mod_name, modality in mdata.mod.items():

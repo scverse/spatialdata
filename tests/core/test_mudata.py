@@ -113,6 +113,8 @@ def test_modality_separator_in_global_columns(tmp_path: Path):
     # MuData names the global columns taken from a modality "<modality>:<column>"
     mdata.pull_obs(columns=["leiden"], mods=["rna"])
     mdata.obs["rna:mod_weight"] = np.linspace(0, 1, N_CELLS)
+    # the colors that scanpy stores when plotting "rna:leiden"
+    mdata.uns["rna:leiden_colors"] = np.array(["#1f77b4", "#ff7f0e"])
     assert {"rna:leiden", "rna:mod_weight"} <= set(mdata.obs.columns)
     TableModel.validate(mdata)
 
@@ -123,6 +125,8 @@ def test_modality_separator_in_global_columns(tmp_path: Path):
     stored = set(zarr.open_group(path / "tables" / "table" / "obs", mode="r").keys())
     assert {"rna%3Aleiden", "rna%3Amod_weight"} <= stored
     assert not any(":" in key for key in stored)
+    stored_uns = set(zarr.open_group(path / "tables" / "table" / "uns", mode="r").keys())
+    assert "rna%3Aleiden_colors" in stored_uns
     table = SpatialData.read(path)["table"]
     assert_elements_are_identical(mdata, table)
     np.testing.assert_allclose(

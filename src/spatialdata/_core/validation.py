@@ -238,7 +238,8 @@ def validate_table_attr_keys(data: Table_T, location: tuple[str, ...] = ()) -> N
     This checks for AnnData obs, var, obsm, obsp, varm, varp, uns, layers whether their keys fulfill the
     naming restrictions and raises an error otherwise. For a MuData table, the global attributes and the names of the
     modalities are checked, and each modality is checked as an AnnData table; the column names of the global obs and
-    var may also contain ":", which MuData uses for the columns taken from a modality (e.g. "rna:leiden").
+    var, and the keys of the global uns, may also contain ":", which MuData uses for the columns taken from a modality
+    (e.g. "rna:leiden", and "rna:leiden_colors" for its colors).
 
     Parameters
     ----------
@@ -270,11 +271,13 @@ def validate_table_attr_keys(data: Table_T, location: tuple[str, ...] = ()) -> N
                     continue
                 key_path = attr_path + (key,)
                 with collect_error(location=key_path):
+                    # MuData names the global annotations taken from a modality "<modality>:<key>", and the
+                    # matching colors of scanpy "<modality>:<key>_colors"
+                    extra = MUDATA_MODALITY_SEPARATOR if is_mudata and attr in ("obs", "var", "uns") else ""
                     if attr in ("obs", "var"):
-                        extra = MUDATA_MODALITY_SEPARATOR if is_mudata else ""
                         check_valid_dataframe_column_name(key, extra_allowed_chars=extra)
                     else:
-                        check_valid_name(key)
+                        check_valid_name(key, extra_allowed_chars=extra)
         if isinstance(data, MuData):
             mod_path = location + ("mod",)
             with collect_error(location=mod_path):
