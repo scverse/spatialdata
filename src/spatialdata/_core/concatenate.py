@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from copy import copy  # Should probably go up at the top
 from itertools import chain
-from typing import Any, cast
+from typing import Any
 from warnings import warn
 
 import numpy as np
@@ -95,43 +95,99 @@ def _concatenate_tables(
     return TableModel().parse(merged_table)
 
 
+# arguments of `anndata.concat()` that depend on the position of each table in the list of tables
+_POSITIONAL_CONCAT_KWARGS = ("label", "keys", "index_unique")
+
+
 def _concatenate_mudata(tables: list[MuData], **kwargs: Any) -> MuData:
     """
     Concatenate MuData tables along the observations, modality by modality.
 
     `mudata.concat()` is not used because it fails when the variable names are not unique across the modalities (e.g.
     the gene and the protein CD45), which is common for multimodal data.
+
+    The global attributes are concatenated first, as AnnData objects without variables, with the same arguments used
+    to concatenate AnnData tables; this determines the order and the names of the observations (made unique, since
+    the modalities are mapped to the global observations by name) and the columns depending on the position of the
+    tables (`label`). The observations of each modality are then named after the corresponding global observations
+    (via `obsmap`) and the modalities are concatenated without the positional arguments.
     """
     import anndata as ad
 
-    obs_names = pd.Index(list(chain.from_iterable(table.obs_names for table in tables)))
-    if not obs_names.is_unique:
-        raise ValueError(
-            "The `obs_names` of the MuData tables to concatenate are not unique. Please make them unique, e.g. by "
-            "passing a dictionary of SpatialData objects to `concatenate()`, which adds a suffix to them."
-        )
-    modality_names = list(dict.fromkeys(chain.from_iterable(table.mod for table in tables)))
-    modalities = {
-        name: ad.concat(cast(list[AnnData], [table.mod[name] for table in tables if name in table.mod]), **kwargs)
-        for name in modality_names
-    }
-    merged = MuData(modalities)
-    # the global attributes are concatenated as AnnData objects without variables, with the same merge strategies used
-    # for the modalities; the boolean masks of the modalities in `obsm` are recomputed by MuData
+    axes = {table.axis for table in tables}
+    if len(axes) > 1:
+        raise ValueError(f"Cannot concatenate MuData tables with different `axis`: {sorted(axes)}.")
+
     global_attrs = ad.concat(
         [
-            ad.AnnData(obs=table.obs, obsm={k: v for k, v in table.obsm.items() if k not in table.mod}, uns=table.uns)
+            ad.AnnData(
+                obs=table.obs,
+                obsm={k: v for k, v in table.obsm.items() if k not in table.mod},
+                obsp=dict(table.obsp),
+                uns=table.uns,
+            )
             for table in tables
         ],
         **kwargs,
-    )[merged.obs_names]
+    )
     obs = global_attrs.obs
     if not isinstance(obs, pd.DataFrame):
         raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+    obs_names = make_index_unique(pd.Index(global_attrs.obs_names))
+    obs = obs.set_axis(obs_names.rename(tables[0].obs.index.name))
+
+    modality_kwargs = {k: v for k, v in kwargs.items() if k not in _POSITIONAL_CONCAT_KWARGS}
+    modality_pieces: dict[str, list[AnnData]] = defaultdict(list)
+    start = 0
+    for table in tables:
+        table_obs_names = obs_names[start : start + table.n_obs].to_numpy()
+        start += table.n_obs
+        for name, modality in table.mod.items():
+            assert isinstance(modality, AnnData)
+            obsmap = np.asarray(table.obsmap[name]).ravel()
+            measured = obsmap > 0
+            modality_obs_names = np.empty(modality.n_obs, dtype=object)
+            modality_obs_names[obsmap[measured].astype(np.intp) - 1] = table_obs_names[measured]
+            piece = modality.copy()
+            piece.obs_names = modality_obs_names.tolist()
+            piece.obs.index.name = modality.obs.index.name
+            modality_pieces[name].append(piece)
+    modalities = {name: ad.concat(pieces, **modality_kwargs) for name, pieces in modality_pieces.items()}
+
+    merged = MuData(modalities, obs=obs, axis=axes.pop())
+    if not merged.obs.index.equals(obs.index):
+        raise ValueError("The observations of the concatenated MuData table could not be matched to its modalities.")
     merged.obs = obs
     for key, value in global_attrs.obsm.items():
         merged.obsm[key] = value
+    for key, value in global_attrs.obsp.items():
+        merged.obsp[key] = value
     merged.uns = dict(global_attrs.uns)
+
+    # the global var annotations follow the `merge` strategy, as for AnnData tables; they can be merged only when the
+    # tables have the same variables, which are aligned by position since their names are often not unique
+    var_names = tables[0].var_names
+    if all(table.var_names.equals(var_names) for table in tables) and merged.var_names.equals(var_names):
+        positions = pd.RangeIndex(len(var_names)).astype(str)
+        global_var_attrs = ad.concat(
+            [
+                ad.AnnData(
+                    var=table.var.set_axis(positions),
+                    varm={k: v for k, v in table.varm.items() if k not in table.mod},
+                    varp=dict(table.varp),
+                )
+                for table in tables
+            ],
+            merge=kwargs.get("merge"),
+        )
+        var = global_var_attrs.var
+        if not isinstance(var, pd.DataFrame):
+            raise TypeError(f"`table.var` must be a pandas DataFrame, got {type(var).__name__}.")
+        merged.var = var.set_axis(merged.var_names)
+        for key, value in global_var_attrs.varm.items():
+            merged.varm[key] = value
+        for key, value in global_var_attrs.varp.items():
+            merged.varp[key] = value
     return merged
 
 
@@ -169,7 +225,8 @@ def concatenate(
         MuData) on each table of the
         concatenated object. If you passed a dictionary with the suffixes as keys and the `SpatialData` objects as
         values and if `concatenate_tables` is `True`, the `obs_names` will be made unique by adding the corresponding
-        suffix instead.
+        suffix instead. The `obs_names` of concatenated MuData tables are always made unique, since the modalities are
+        mapped to the global observations by name.
     modify_tables_inplace
         Whether to modify the tables in place. If `True`, the tables will be modified in place. If `False`, the tables
         will be copied before modification. Copying is enabled by default but can be disabled for performance reasons.

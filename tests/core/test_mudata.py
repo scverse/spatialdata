@@ -354,11 +354,98 @@ def test_concatenate_keeps_obs_index_name_of_anndata_tables():
     assert merged["table"].obs.index.name == "cell_id"
 
 
-def test_concatenate_tables_duplicated_obs_names():
+def _assert_modalities_match_global_obs(table: MuData) -> None:
+    """Each modality row must map to the global observation with the same name and the same instance id."""
+    for name, modality in table.mod.items():
+        obsmap = np.asarray(table.obsmap[name]).ravel()
+        measured = obsmap > 0
+        assert (modality.obs_names[obsmap[measured] - 1] == table.obs_names[measured]).all()
+
+
+@pytest.mark.parametrize("index_unique", [None, "-"])
+def test_concatenate_tables_duplicated_obs_names(index_unique: str | None):
     sdata0 = SpatialData(shapes={"cells0": _get_circles()}, tables={"table": _get_mudata(region="cells0")})
     sdata1 = SpatialData(shapes={"cells1": _get_circles()}, tables={"table": _get_mudata(region="cells1")})
-    with pytest.raises(ValueError, match="`obs_names` of the MuData tables to concatenate are not unique"):
-        concatenate([sdata0, sdata1], concatenate_tables=True)
+    kwargs = {} if index_unique is None else {"index_unique": index_unique}
+    table = concatenate([sdata0, sdata1], concatenate_tables=True, **kwargs)["table"]
+    assert table.n_obs == 2 * N_CELLS
+    assert table.obs_names.is_unique
+    assert table.obs["region"].tolist() == ["cells0"] * N_CELLS + ["cells1"] * N_CELLS
+    assert table.mod["prot"].n_obs == 2 * N_PROT_CELLS
+    _assert_modalities_match_global_obs(table)
+
+
+def test_concatenate_tables_result_is_not_a_view():
+    sdata0 = SpatialData(shapes={"cells0": _get_circles()}, tables={"table": _get_mudata(region="cells0")})
+    sdata1 = SpatialData(
+        shapes={"cells1": _get_circles()}, tables={"table": _get_mudata(region="cells1", prefix="s1_")}
+    )
+    for obs_names_make_unique in (True, False):
+        table = concatenate([sdata0, sdata1], concatenate_tables=True, obs_names_make_unique=obs_names_make_unique)[
+            "table"
+        ]
+        table.obsm["spatial"][0, 0] = 42
+        assert table.obsm["spatial"][0, 0] == 42
+        table.obs["new_column"] = 1
+        assert "new_column" in table.obs
+
+
+def test_concatenate_tables_with_different_modalities():
+    # the first table has no protein measurement: the positional arguments must follow the global observations
+    mdata0 = _get_mudata(region="cells0")
+    mdata0 = TableModel.parse(MuData({"rna": mdata0.mod["rna"]}, obs=mdata0.obs.copy(), uns=mdata0.uns))
+    sdata0 = SpatialData(shapes={"cells0": _get_circles()}, tables={"table": mdata0})
+    sdata1 = SpatialData(
+        shapes={"cells1": _get_circles()}, tables={"table": _get_mudata(region="cells1", prefix="s1_")}
+    )
+    table = concatenate([sdata0, sdata1], concatenate_tables=True, label="batch", keys=["A", "B"])["table"]
+    assert table.obs["batch"].tolist() == ["A"] * N_CELLS + ["B"] * N_CELLS
+    assert table.mod["prot"].n_obs == N_PROT_CELLS
+    assert (table.obs.loc[table.mod["prot"].obs_names, "batch"] == "B").all()
+    _assert_modalities_match_global_obs(table)
+    table = concatenate([sdata0, sdata1], concatenate_tables=True, index_unique="-")["table"]
+    _assert_modalities_match_global_obs(table)
+
+
+def test_concatenate_tables_keeps_global_attributes():
+    sdata0 = SpatialData(shapes={"cells0": _get_circles()}, tables={"table": _get_mudata(region="cells0")})
+    sdata1 = SpatialData(
+        shapes={"cells1": _get_circles()}, tables={"table": _get_mudata(region="cells1", prefix="s1_")}
+    )
+    sdata0["table"].varm["loadings"] = np.ones((sdata0["table"].n_vars, 2))
+    sdata1["table"].varm["loadings"] = np.ones((sdata1["table"].n_vars, 2))
+    table = concatenate([sdata0, sdata1], concatenate_tables=True, pairwise=True, merge="same")["table"]
+    assert table.obsp["distances"].shape == (2 * N_CELLS, 2 * N_CELLS)
+    assert "loadings" in table.varm
+    dtypes = table.obs.dtypes.drop("region").to_dict()
+    assert dtypes == sdata0["table"].obs.dtypes.drop("region").to_dict()
+
+
+def test_concatenate_tables_keeps_axis_and_row_order():
+    # with a modality covering only some cells first, the rows must still follow the order of the tables
+    def _get_table(region: str, prefix: str, axis: int) -> MuData:
+        names = [f"{prefix}{i}" for i in range(4)]
+        if axis == 0:
+            prot = AnnData(np.ones((2, 1)), obs=pd.DataFrame(index=names[:2]))
+            rna = AnnData(np.ones((4, 2)), obs=pd.DataFrame(index=names))
+            mdata = MuData({"prot": prot, "rna": rna})
+        else:
+            b1 = AnnData(np.ones((2, 2)), obs=pd.DataFrame(index=names[:2]))
+            b2 = AnnData(np.ones((2, 2)), obs=pd.DataFrame(index=names[2:]))
+            mdata = MuData({"b1": b1, "b2": b2}, axis=1)
+        mdata.obs["region"] = pd.Categorical([region] * 4)
+        mdata.obs["instance_id"] = np.arange(4)
+        return TableModel.parse(mdata, region=region, region_key="region", instance_key="instance_id")
+
+    for axis in (0, 1):
+        sdatas = [
+            SpatialData(shapes={f"cells{k}": _get_circles(4)}, tables={"table": _get_table(f"cells{k}", p, axis)})
+            for k, p in enumerate(["A", "B"])
+        ]
+        table = concatenate(sdatas, concatenate_tables=True)["table"]
+        assert table.axis == axis
+        assert table.obs_names.tolist() == [f"{p}{i}" for p in "AB" for i in range(4)]
+        _assert_modalities_match_global_obs(table)
 
 
 def test_concatenate_mixed_table_types():
