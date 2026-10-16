@@ -244,7 +244,6 @@ lint.ignore = [
 lint.per-file-ignores."*/__init__.py" = [ "D104", "D107", "E402", "F401" ]
 lint.per-file-ignores."benchmarks/*" = [ "ALL" ]
 lint.per-file-ignores."docs/*" = [ "A", "B", "D", "E", "I" ]
-lint.per-file-ignores."examples/*" = [ "I002", "T201" ]
 lint.per-file-ignores."src/spatialdata/dataloader/datasets.py" = [ "D101" ]
 lint.per-file-ignores."src/spatialdata/models/models.py" = [ "B026", "D101" ]
 lint.per-file-ignores."src/spatialdata/transformations/*" = [ "D", "RET", "UP006", "UP007" ]
