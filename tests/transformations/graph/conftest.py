@@ -195,6 +195,20 @@ def zyx_cs(axis_z_space_with_unit, axis_y_space_with_unit, axis_x_space_with_uni
 
 
 @pytest.fixture
+def czyx_cs(axis_c_channel, axis_z_space_with_unit, axis_y_space_with_unit, axis_x_space_with_unit) -> CoordSystem:
+    return CoordSystem(
+        name="czyx",
+        axes=(
+            axis_c_channel,
+            axis_z_space_with_unit,
+            axis_y_space_with_unit,
+            axis_x_space_with_unit,
+        ),
+        virtual=False,
+    )
+
+
+@pytest.fixture
 def xyc_cs(axis_x_space_with_unit, axis_y_space_with_unit, axis_c_channel) -> CoordSystem:
     return CoordSystem(
         name="xyc",
