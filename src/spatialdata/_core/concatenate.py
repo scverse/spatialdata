@@ -17,6 +17,7 @@ from mudata import MuData
 from spatialdata._core._utils import _find_common_table_keys
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import Table_T
+from spatialdata._utils import _copy_table, _set_obs_names
 from spatialdata.models import TableModel, get_table_keys
 from spatialdata.transformations import (
     get_transformation,
@@ -273,9 +274,10 @@ def concatenate(
     if obs_names_make_unique:
         for table in sdata.tables.values():
             if isinstance(table, MuData):
-                # `MuData.obs_names_make_unique()` only supports `axis=1`; the `obs_names` setter also renames the
-                # observations of the modalities
-                table.obs_names = make_index_unique(pd.Index(table.obs_names)).tolist()
+                # `MuData.obs_names_make_unique()` only supports `axis=1`; renaming rebuilds the MuData, so it is only
+                # done when needed
+                if not table.obs_names.is_unique:
+                    _set_obs_names(table, make_index_unique(pd.Index(table.obs_names)))
             else:
                 table.obs_names_make_unique()
     return sdata
@@ -310,7 +312,7 @@ def _fix_ensure_unique_element_names(
         tables = {}
         for name, table in sdata.tables.items():
             if not modify_tables_inplace:
-                table = table.copy()
+                table = _copy_table(table)
 
             # fix the region_key column
             region, region_key, _ = get_table_keys(table)
@@ -328,8 +330,7 @@ def _fix_ensure_unique_element_names(
 
             # fix the obs names
             if rename_obs_names:
-                # the setter (rather than `table.obs.index`) also renames the observations of the MuData modalities
-                table.obs_names = [f"{x}-{suffix}" for x in table.obs_names]
+                _set_obs_names(table, [f"{x}-{suffix}" for x in table.obs_names])
 
             # fix the table name
             new_name = f"{name}-{suffix}" if rename_tables else name

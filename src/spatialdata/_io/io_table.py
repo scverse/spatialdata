@@ -5,12 +5,13 @@ from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import zarr
 from anndata import read_zarr as read_anndata_zarr
+from anndata._io.specs import read_elem
 from anndata._io.specs import write_elem as write_adata
 from mudata import MuData
 from mudata import read_zarr as read_mudata_zarr
-from mudata import write_zarr as write_mudata_zarr
 from packaging.version import Version
 
 from spatialdata._io._utils import _resolve_zarr_store
@@ -24,6 +25,7 @@ from spatialdata._io.format import (
     _parse_version,
 )
 from spatialdata._types import Table_T
+from spatialdata._utils import _copy_table, _restore_mudata_global_annotations
 from spatialdata.models import TableModel, get_table_keys
 
 # value of the `encoding-type` attribute that mudata writes to the root group of a MuData object
@@ -41,7 +43,13 @@ def _read_table(store: str | Path) -> Table_T:
     table: Table_T
     if f.attrs.get("encoding-type") == MUDATA_ENCODING_TYPE:
         # pass the store of the group instead of a str, for the same reason as above
-        table = read_mudata_zarr(f.store)
+        mdata = read_mudata_zarr(f.store)
+        obs, var = read_elem(f["obs"]), read_elem(f["var"])
+        if not isinstance(mdata, MuData) or not isinstance(obs, pd.DataFrame) or not isinstance(var, pd.DataFrame):
+            raise TypeError(f"Expected the zarr group {store} to hold a MuData table.")
+        # undo the dtype changes that MuData applies to the global annotations when it is constructed
+        _restore_mudata_global_annotations(mdata, obs=obs, var=var)
+        table = mdata
     else:
         table = read_anndata_zarr(str(store))
 
@@ -65,6 +73,33 @@ def _read_table(store: str | Path) -> Table_T:
             f"Unsupported table format: {type(table_format)}. Supported formats are: {TablesFormats.values()}"
         )
     return table
+
+
+def _write_mudata(group: zarr.Group, name: str, mdata: MuData) -> None:
+    """
+    Write a MuData table to the subgroup `name` of `group`, in the MuData zarr format.
+
+    `mudata.write_zarr()` is not used because it converts the strings of the table to categoricals in place (also in
+    the modalities, and on disk regardless of `convert_strings_to_categoricals`), rebuilds the global annotations of
+    the table once written, and fails on views. Here, the elements are written as `anndata` writes the elements of an
+    AnnData table.
+    """
+    import mudata
+
+    if mdata.is_view:
+        mdata = _copy_table(mdata)
+    table_group = group.create_group(name, overwrite=True)
+    for attr in ("obs", "var"):
+        write_adata(table_group, attr, getattr(mdata, attr))
+    for attr in ("obsm", "varm", "obsp", "varp", "uns", "obsmap", "varmap"):
+        write_adata(table_group, attr, dict(getattr(mdata, attr)))
+    mod_group = table_group.require_group("mod")
+    for mod_name, modality in mdata.mod.items():
+        write_adata(mod_group, mod_name, modality)
+    mod_group.attrs["mod-order"] = list(mdata.mod)
+    table_group.attrs.update(
+        {"axis": mdata.axis, "encoding-type": MUDATA_ENCODING_TYPE, "encoding-version": mudata.__mudataversion__}
+    )
 
 
 def write_table(
@@ -114,8 +149,7 @@ def write_table(
     if isinstance(table, MuData):
         if convert_strings_to_categoricals:
             table.strings_to_categoricals()
-        # mudata always converts the strings of the modalities to categoricals when writing
-        write_mudata_zarr(_resolve_zarr_store(table_group), table, zarr_format=element_format.zarr_format)
+        _write_mudata(group, name, table)
 
     elif element_format.zarr_format == 3 and Version(version("anndata")) >= Version("0.13"):
         # `write_zarr` in anndata v0.13 and above can only write to zarr v3

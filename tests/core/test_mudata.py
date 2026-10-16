@@ -25,6 +25,7 @@ from spatialdata import (
     sanitize_table,
 )
 from spatialdata._core.validation import ValidationError
+from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
 from spatialdata.models import ShapesModel, TableModel
 from spatialdata.testing import assert_elements_are_identical, assert_spatial_data_objects_are_identical
 
@@ -44,13 +45,31 @@ def _get_mudata(region: str = "cells", n: int = N_CELLS, n_prot: int = N_PROT_CE
     obs_names = [f"{prefix}cell_{i}" for i in range(n)]
     rna = AnnData(RNG.random((n, 3)), obs=pd.DataFrame(index=obs_names))
     rna.var_names = ["Gene1", "Gene2", "CD45"]
+    rna.var["highly_variable"] = [True, False, True]
+    rna.layers["counts"] = RNG.integers(0, 10, (n, 3)).astype(float)
     rna.obs["leiden"] = pd.Categorical(["a", "b"] * (n // 2))
+    rna.obs["sample"] = ["s0", "s1"] * (n // 2)
     prot = AnnData(RNG.random((n_prot, 2)), obs=pd.DataFrame(index=obs_names[:n_prot]))
     prot.var_names = ["CD45", "CD68"]
+    prot.obs["pbool"] = [True, False] * (n_prot // 2)
     mdata = MuData({"rna": rna, "prot": prot})
     mdata.obs["region"] = pd.Categorical([region] * n)
     mdata.obs["instance_id"] = np.arange(n)
+    # global annotations of the dtypes that MuData converts when it is rebuilt
+    mdata.obs["score"] = np.arange(n, dtype=float)
+    mdata.obs["score_nan"] = [np.nan] + list(np.arange(1, n, dtype=float))
+    mdata.obs["label"] = ["x", "y", "y"] * (n // 3)
+    mdata.obs["flag"] = [True, False] * (n // 2)
+    mdata.obs.index.name = "cell"
+    mdata.obsm["spatial"] = np.stack([np.arange(n), np.arange(n)], axis=1).astype(float)
+    mdata.obsp["distances"] = np.abs(np.subtract.outer(np.arange(n), np.arange(n))).astype(float)
     return TableModel.parse(mdata, region=region, region_key="region", instance_key="instance_id")
+
+
+def _obs_dtypes(table: MuData) -> dict[str, dict[str, object]]:
+    dtypes = {"global": table.obs.dtypes.to_dict()} | {name: m.obs.dtypes.to_dict() for name, m in table.mod.items()}
+    index_names = {"global": table.obs.index.name} | {name: m.obs.index.name for name, m in table.mod.items()}
+    return {"dtypes": dtypes, "index_names": index_names}
 
 
 @pytest.fixture
@@ -99,7 +118,7 @@ def test_io_roundtrip(sdata_mudata: SpatialData, tmp_path: Path, zarr_format: in
     path = tmp_path / "data.zarr"
     formats = None if zarr_format == 3 else [SpatialDataContainerFormatV01(), TablesFormatV01()]
     if zarr_format == 2:
-        with pytest.warns(UserWarning):
+        with pytest.warns(WritingToZarrV2DeprecationWarning):
             sdata_mudata.write(path, sdata_formats=formats)
     else:
         sdata_mudata.write(path, sdata_formats=formats)
@@ -112,6 +131,46 @@ def test_io_roundtrip(sdata_mudata: SpatialData, tmp_path: Path, zarr_format: in
     assert isinstance(sdata_read["table"], MuData)
     assert sdata_read["table"].mod["prot"].n_obs == N_PROT_CELLS
     assert_spatial_data_objects_are_identical(sdata_mudata, sdata_read)
+
+
+def test_write_does_not_modify_table(sdata_mudata: SpatialData, tmp_path: Path):
+    before = _obs_dtypes(sdata_mudata["table"])
+    sdata_mudata.write(tmp_path / "data.zarr")
+    assert _obs_dtypes(sdata_mudata["table"]) == before
+    # the str column of the modality was not converted to categorical in place
+    sdata_mudata["table"].mod["rna"].obs.loc["cell_0", "sample"] = "new_sample"
+    assert _obs_dtypes(SpatialData.read(tmp_path / "data.zarr")["table"]) == before
+
+
+def test_io_roundtrip_repeated_str_instance_ids(tmp_path: Path):
+    # two elements indexed by the same str ids: the instance ids repeat across regions, and must not be stored as
+    # categorical, otherwise they do not match the dtype of the index of the elements when reading
+    shapes = {}
+    for region in ("a", "b"):
+        gdf = _get_circles(3)
+        gdf.index = pd.Index(["c0", "c1", "c2"], dtype=object)
+        shapes[region] = gdf
+    rna = AnnData(RNG.random((6, 2)), obs=pd.DataFrame(index=[f"{r}_c{i}" for r in "ab" for i in range(3)]))
+    mdata = MuData({"rna": rna})
+    mdata.obs["region"] = pd.Categorical(["a"] * 3 + ["b"] * 3)
+    mdata.obs["cell_id"] = pd.Series(["c0", "c1", "c2"] * 2, index=mdata.obs_names, dtype=object)
+    mdata = TableModel.parse(mdata, region=["a", "b"], region_key="region", instance_key="cell_id")
+    sdata = SpatialData(shapes=shapes, tables={"table": mdata})
+    sdata.write(tmp_path / "data.zarr")
+    sdata_read = SpatialData.read(tmp_path / "data.zarr")
+    assert not isinstance(sdata_read["table"].obs["cell_id"].dtype, pd.CategoricalDtype)
+    assert_elements_are_identical(sdata["table"], sdata_read["table"])
+
+
+def test_write_view(sdata_mudata: SpatialData, tmp_path: Path):
+    view = sdata_mudata["table"][[0, 1, 2, 4]]
+    assert view.is_view
+    sdata = SpatialData(shapes=sdata_mudata.shapes, tables={"table": view})
+    sdata.write(tmp_path / "data.zarr")
+    table_read = SpatialData.read(tmp_path / "data.zarr")["table"]
+    assert table_read.obs["instance_id"].tolist() == [0, 1, 2, 4]
+    assert table_read.mod["prot"].n_obs == 3
+    assert view.var_names.nlevels == 1
 
 
 def test_write_element(sdata_mudata: SpatialData, tmp_path: Path):
@@ -127,6 +186,8 @@ def test_deepcopy(sdata_mudata: SpatialData):
     copied = deepcopy(sdata_mudata)
     assert copied["table"] is not sdata_mudata["table"]
     assert_spatial_data_objects_are_identical(sdata_mudata, copied)
+    # MuData.copy() alone would turn the float columns into int64/Int64 and the str column into "string"
+    assert _obs_dtypes(copied["table"]) == _obs_dtypes(sdata_mudata["table"])
 
 
 def test_match_table_to_element(sdata_mudata: SpatialData):
@@ -138,6 +199,7 @@ def test_match_table_to_element(sdata_mudata: SpatialData):
     assert matched.mod["rna"].n_obs == 3
     # cell 5 has no protein measurement
     assert matched.mod["prot"].obs_names.tolist() == ["cell_3", "cell_1"]
+    assert matched.obs.dtypes.to_dict() == sdata_mudata["table"].obs.dtypes.to_dict()
 
 
 @pytest.mark.parametrize(
@@ -227,6 +289,26 @@ def test_concatenate_tables():
         f"cell_{i}-b" for i in range(N_PROT_CELLS)
     ]
     assert set(table.mod["prot"].obs_names).issubset(table.obs_names)
+
+
+def test_concatenate_does_not_modify_inputs():
+    sdata0 = SpatialData(shapes={"cells0": _get_circles()}, tables={"table0": _get_mudata(region="cells0")})
+    sdata1 = SpatialData(
+        shapes={"cells1": _get_circles()}, tables={"table1": _get_mudata(region="cells1", prefix="s1_")}
+    )
+    before = _obs_dtypes(sdata0["table0"])
+    merged = concatenate([sdata0, sdata1])
+    assert _obs_dtypes(sdata0["table0"]) == before
+    assert _obs_dtypes(merged["table0"]) == before
+
+
+def test_concatenate_keeps_obs_index_name_of_anndata_tables():
+    adata = AnnData(obs=pd.DataFrame({"region": pd.Categorical(["cells"] * 3), "instance_id": np.arange(3)}))
+    adata.obs.index.name = "cell_id"
+    adata = TableModel.parse(adata, region="cells", region_key="region", instance_key="instance_id")
+    sdata = SpatialData(shapes={"cells": _get_circles(3)}, tables={"table": adata})
+    merged = concatenate({"x": sdata, "y": sdata}, concatenate_tables=True)
+    assert merged["table"].obs.index.name == "cell_id"
 
 
 def test_concatenate_tables_duplicated_obs_names():

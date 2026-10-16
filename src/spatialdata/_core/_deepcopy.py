@@ -13,6 +13,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import Table_T
+from spatialdata._utils import _copy_table
 from spatialdata.models._utils import SpatialElement
 from spatialdata.models.models import (
     Image2DModel,
@@ -126,4 +127,4 @@ def _(df: DaskDataFrame) -> DaskDataFrame:
 @deepcopy.register(AnnData)
 @deepcopy.register(MuData)
 def _(table: Table_T) -> Table_T:
-    return table.copy()
+    return _copy_table(table)

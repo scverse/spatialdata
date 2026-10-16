@@ -4,15 +4,17 @@ import functools
 import re
 import warnings
 from collections.abc import Callable, Generator
+from collections.abc import Sequence as SequenceType
 from contextlib import contextmanager
 from itertools import islice
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import numpy as np
 import pandas as pd
 from dask import array as da
 from dask import config
 from dask.array import Array as DaskArray
+from mudata import MuData
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike, ListOrNDArrayFloating, Table_T
@@ -210,6 +212,49 @@ def iterate_pyramid_levels(
         node = data[scale]
         assert isinstance(node, DataTree)
         yield node[name] if attr is None else getattr(node[name], attr)
+
+
+def _restore_mudata_global_annotations(mdata: MuData, obs: pd.DataFrame, var: pd.DataFrame) -> None:
+    """
+    Put back the global `obs` and `var` of a MuData object after it has been rebuilt.
+
+    MuData runs `convert_dtypes()` on its global `obs` and `var` whenever it is constructed, copied or renamed (e.g. a
+    float column holding integer values becomes int64, a str column becomes "string"), and drops the index names. The
+    dataframes are restored when they still describe the same observations/variables, in the same order.
+    """
+    for attr, df in (("obs", obs), ("var", var)):
+        if df.index.equals(getattr(mdata, attr).index):
+            setattr(mdata, attr, df.copy())
+
+
+def _copy_table[T: Table_T](table: T) -> T:
+    """Copy a table; unlike `MuData.copy()`, keep the dtypes of the global annotations of a MuData table."""
+    copied = cast(T, table.copy())
+    if isinstance(table, MuData):
+        assert isinstance(copied, MuData)
+        _restore_mudata_global_annotations(copied, obs=table.obs, var=table.var)
+    return copied
+
+
+def _set_obs_names(table: Table_T, names: SequenceType[str] | pd.Index) -> None:
+    """
+    Rename the observations of a table, in place, keeping the name of the index.
+
+    For a MuData table, the observations of the modalities are renamed accordingly (via `obsmap`), and the dtypes of
+    the global annotations and the index names of the modalities are kept.
+    """
+    index_name = table.obs.index.name
+    if isinstance(table, MuData):
+        obs, var = table.obs.copy(), table.var.copy()
+        modality_index_names = {name: modality.obs.index.name for name, modality in table.mod.items()}
+        table.obs_names = list(names)
+        obs.index = table.obs_names
+        _restore_mudata_global_annotations(table, obs=obs, var=var)
+        for name, modality in table.mod.items():
+            modality.obs.index.name = modality_index_names[name]
+    else:
+        table.obs_names = list(names)
+    table.obs.index.name = index_name
 
 
 def _inplace_fix_subset_categorical_obs(subset_adata: Table_T | None, original_adata: Table_T) -> None:

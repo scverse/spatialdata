@@ -23,7 +23,7 @@ from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike, Table_T
-from spatialdata._utils import _inplace_fix_subset_categorical_obs
+from spatialdata._utils import _copy_table, _inplace_fix_subset_categorical_obs
 from spatialdata.models import (
     Image2DModel,
     Image3DModel,
@@ -430,7 +430,7 @@ def _inner_join_spatialelement_table(
         if match_rows in ("no", "right"):
             joined_indices = joined_indices.sort_values()
 
-    joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
+    joined_table = _copy_table(table[joined_indices.tolist(), :]) if joined_indices is not None else None
 
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     if joined_table is not None:
@@ -538,7 +538,7 @@ def _left_join_spatialelement_table(
         # restore the original table row order, as would be expected for a semi-join.
         if match_rows == "no":
             joined_indices = joined_indices.sort_values()
-    joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
+    joined_table = _copy_table(table[joined_indices.tolist(), :]) if joined_indices is not None else None
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     if joined_table is not None:
         joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = _region_as_str_if_list_of_len_one(
@@ -995,7 +995,7 @@ def filter_by_table_query(
         # annsel only supports AnnData (and the global `var_names` of a MuData table are often not unique), so the
         # filter is applied to an AnnData object holding only the global `obs`
         obs_only = AnnselAccessor(AnnData(obs=table.obs)).filter(obs=obs_expr, obs_names=obs_names_expr)
-        filtered_table = table[obs_only.obs_names].copy()
+        filtered_table = _copy_table(table[obs_only.obs_names])
     else:
         # `.an` is registered on AnnData at import time by annsel, so it is reached through the accessor class here.
         filtered_table = AnnselAccessor(table).filter(

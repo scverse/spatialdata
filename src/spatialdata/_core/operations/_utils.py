@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from xarray import DataArray, DataTree
 
 from spatialdata._types import Table_T
+from spatialdata._utils import _copy_table
 from spatialdata.models import SpatialElement, get_axes_names, get_spatial_axes
 
 if TYPE_CHECKING:
@@ -140,7 +141,7 @@ def transform_to_data_extent(
                 continue
             set_transformation(element_value, transformation={coordinate_system: Identity()}, set_all=True)
     for k, v in sdata.tables.items():
-        sdata_to_return_elements[k] = v.copy()
+        sdata_to_return_elements[k] = _copy_table(v)
     return SpatialData.init_from_elements(sdata_to_return_elements, attrs=sdata.attrs)
 
 

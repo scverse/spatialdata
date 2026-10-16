@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import dask.dataframe as dd
 import numpy as np
@@ -31,7 +31,7 @@ from xarray import DataArray, DataTree
 from spatialdata._core.validation import validate_table_attr_keys
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike, Table_T
-from spatialdata._utils import _check_match_length_channels_c_dim
+from spatialdata._utils import _check_match_length_channels_c_dim, _copy_table
 from spatialdata.config import settings
 from spatialdata.models import C, X, Y, Z, get_axes_names
 from spatialdata.models._utils import (
@@ -1249,7 +1249,7 @@ class TableModel:
         validate_table_attr_keys(adata)
         # Convert view to actual copy to avoid ImplicitModificationWarning when modifying .uns
         if adata.is_view:
-            adata = cast(T, adata.copy())
+            adata = _copy_table(adata)
         # either all live in adata.uns or all be passed in as argument
         n_args = sum([region is not None, region_key is not None, instance_key is not None])
         if n_args == 0:
