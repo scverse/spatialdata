@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
-    from spatialdata.transformations import BaseTransformation
+    pass
 
 
 class CoordinateSystemNotFoundError(ValueError):
@@ -263,15 +263,15 @@ class IncompatibleTransformationOutputCoordinateSystemError(Exception):
     """
 
     def __init__(
-        self, input_coordinate_system_name: str, transformation: BaseTransformation, output_coordinate_system_name: str
+        self, input_coordinate_system_name: str, transformation_class_name: str, output_coordinate_system_name: str
     ) -> None:
 
         self.input_coordinate_system_name = input_coordinate_system_name
         self.output_coordinate_system_name = output_coordinate_system_name
-        self.transformation = transformation
+        self.transformation_class_name = transformation_class_name
         super().__init__(
             f"Transformation incompatible with input/output coordinate systems: "
             f"\nInput coordinate system name: {input_coordinate_system_name}"
             f"\nOutput coordinate system name: {output_coordinate_system_name}"
-            f"\nTransformation: {transformation}"
+            f"\nTransformation type: {transformation_class_name}"
         )

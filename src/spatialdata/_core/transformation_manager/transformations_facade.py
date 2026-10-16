@@ -94,7 +94,7 @@ class TransformationsFacade:
                     raise IncompatibleTransformationOutputCoordinateSystemError(
                         input_coordinate_system_name=element_cs.name,
                         output_coordinate_system_name=output_coordinate_system_name,
-                        transformation=t,
+                        transformation_class_name=t.__class__.__name__,
                     )
             self._graph.add_transformation_edge(ngff_transformation_edge)
             transformation_edges.append(ngff_transformation_edge)
