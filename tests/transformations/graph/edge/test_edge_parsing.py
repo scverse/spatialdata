@@ -24,12 +24,6 @@ from spatialdata.transformations._graph import (
     parse_sequence,
     parse_translation,
 )
-from tests.transformations.graph.edge.conftest import (
-    xy_cs,
-    xyz_cs,
-    yx_cs,
-    z_axis,
-)
 
 # The ome-zarr-models transform models used below all leave `input`/`output` at their
 # default of None: those fields identify coordinate systems by name/path in the NGFF
@@ -41,14 +35,14 @@ POINTS_2D = np.array([[1.0, 2.0], [3.0, 4.0]])
 
 
 class TestParseIdentity:
-    def test_parses_name(self):
+    def test_parses_name(self, xy_cs):
         model = ozm06trans.Identity(name="my-identity")
         edge = parse_identity(model, input=xy_cs, out=xy_cs)
         assert edge.name == "my-identity"
         assert edge.input is xy_cs
         assert edge.output is xy_cs
 
-    def test_csgen_output_mirrors_input(self):
+    def test_csgen_output_mirrors_input(self, xy_cs):
         model = ozm06trans.Identity(name="my-identity")
         edge = parse_identity(model, input=xy_cs, out=CsGen(base_name="gen"))
         assert edge.output.axes_names == xy_cs.axes_names
@@ -56,7 +50,7 @@ class TestParseIdentity:
 
 
 class TestParseTranslation:
-    def test_parses_translation_vector(self):
+    def test_parses_translation_vector(self, xy_cs):
         model = ozm06trans.Translation(name="my-translation", translation=(1.0, 2.0))
         edge = parse_translation(model, input=xy_cs, out=xy_cs)
         np.testing.assert_allclose(edge.translation, [1.0, 2.0])
@@ -64,7 +58,7 @@ class TestParseTranslation:
         assert edge.input is xy_cs
         assert edge.output is xy_cs
 
-    def test_csgen_output_mirrors_input(self):
+    def test_csgen_output_mirrors_input(self, xy_cs):
         model = ozm06trans.Translation(translation=(1.0, 2.0))
         edge = parse_translation(model, input=xy_cs, out=CsGen(base_name="gen"))
         assert edge.output.axes_names == xy_cs.axes_names
@@ -72,35 +66,39 @@ class TestParseTranslation:
 
 
 class TestParseProjectAxis:
-    def test_parses_dropped_inputs(self):
+    def test_parses_dropped_inputs(self, xyz_cs, xy_cs, axis_z_space_with_unit):
         model = ozm06trans.ProjectAxis(name="drop-z", droppedInputs=(2,))
         edge = parse_project_axis(model, input=xyz_cs, output=xy_cs)
-        assert edge.dropped_inputs == {z_axis}
+        assert edge.dropped_inputs == {axis_z_space_with_unit}
         assert edge.created_outputs == set()
         assert edge.name == "drop-z"
 
-    def test_parses_created_outputs(self):
+    def test_parses_created_outputs(self, xyz_cs, xy_cs, axis_z_space_with_unit):
         model = ozm06trans.ProjectAxis(name="create-z", createdOutputs=(2,))
         edge = parse_project_axis(model, input=xy_cs, output=xyz_cs)
-        assert edge.created_outputs == {z_axis}
+        assert edge.created_outputs == {
+            axis_z_space_with_unit,
+        }
         assert edge.dropped_inputs == set()
 
-    def test_csgen_output_computes_dimensionality(self):
+    def test_csgen_output_computes_dimensionality(self, xyz_cs, axis_z_space_with_unit):
         model = ozm06trans.ProjectAxis(droppedInputs=(2,))
         edge = parse_project_axis(model, input=xyz_cs, output=CsGen(base_name="gen"))
         assert edge.output.num_axes == 2
-        assert edge.dropped_inputs == {z_axis}
+        assert edge.dropped_inputs == {
+            axis_z_space_with_unit,
+        }
 
 
 class TestParseScale:
-    def test_parses_scale_vector_and_name(self):
+    def test_parses_scale_vector_and_name(self, xy_cs):
         model = ozm06trans.Scale(name="my-scale", scale=(2.0, 3.0))
         edge = parse_scale(model, input=xy_cs, out=xy_cs)
         assert isinstance(edge, ScaleEdge)
         np.testing.assert_allclose(edge.scale, [2.0, 3.0])
         assert edge.name == "my-scale"
 
-    def test_csgen_output_mirrors_input(self):
+    def test_csgen_output_mirrors_input(self, xy_cs):
         model = ozm06trans.Scale(scale=(2.0, 3.0))
         edge = parse_scale(model, input=xy_cs, out=CsGen(base_name="gen"))
         assert edge.output.axes_names == xy_cs.axes_names
@@ -108,7 +106,7 @@ class TestParseScale:
 
 
 class TestParseMapAxis:
-    def test_parses_with_explicit_output(self):
+    def test_parses_with_explicit_output(self, xy_cs, yx_cs):
         model = ozm06trans.MapAxis(name="my-map-axis", mapAxis=(1, 0))
         edge = parse_map_axis(model, input=xy_cs, out=yx_cs)
         assert isinstance(edge, MapAxisEdge)
@@ -116,7 +114,7 @@ class TestParseMapAxis:
         assert edge.output is yx_cs
         np.testing.assert_allclose(edge.transform_points(POINTS_2D), np.array([[2.0, 1.0], [4.0, 3.0]]))
 
-    def test_csgen_output_is_permuted_input_axes(self):
+    def test_csgen_output_is_permuted_input_axes(self, xy_cs, yx_cs):
         model = ozm06trans.MapAxis(mapAxis=(1, 0))
         edge = parse_map_axis(model, input=xy_cs, out=CsGen(base_name="gen"))
         assert edge.output.axes_names == yx_cs.axes_names
@@ -124,7 +122,7 @@ class TestParseMapAxis:
 
 
 class TestParseAffine:
-    def test_parses_linear_translation_and_name(self):
+    def test_parses_linear_translation_and_name(self, xy_cs):
         model = ozm06trans.Affine(name="my-affine", affine=((2.0, 0.0, 1.0), (0.0, 3.0, 5.0)))
         edge = parse_affine(model, input=xy_cs, output=xy_cs)
         assert isinstance(edge, AffineEdge)
@@ -132,7 +130,7 @@ class TestParseAffine:
         np.testing.assert_allclose(edge.translation, [1.0, 5.0])
         assert edge.name == "my-affine"
 
-    def test_csgen_output_derived_from_matrix_row_count(self):
+    def test_csgen_output_derived_from_matrix_row_count(self, xy_cs):
         model = ozm06trans.Affine(affine=((2.0, 0.0, 1.0), (0.0, 3.0, 5.0)))
         edge = parse_affine(model, input=xy_cs, output=CsGen(base_name="gen"))
         assert edge.output.num_axes == 2
@@ -140,14 +138,14 @@ class TestParseAffine:
 
 
 class TestParseRotation:
-    def test_parses_rotation_matrix_and_name(self):
+    def test_parses_rotation_matrix_and_name(self, xy_cs):
         model = ozm06trans.Rotation(name="my-rotation", rotation=((0.0, -1.0), (1.0, 0.0)))
         edge = parse_rotation(model, input=xy_cs, out=xy_cs)
         assert isinstance(edge, RotationEdge)
         np.testing.assert_allclose(edge.rotation, [[0.0, -1.0], [1.0, 0.0]])
         assert edge.name == "my-rotation"
 
-    def test_csgen_output_derived_from_matrix_row_count(self):
+    def test_csgen_output_derived_from_matrix_row_count(self, xy_cs):
         model = ozm06trans.Rotation(rotation=((0.0, -1.0), (1.0, 0.0)))
         edge = parse_rotation(model, input=xy_cs, out=CsGen(base_name="gen"))
         assert edge.output.num_axes == 2
@@ -155,7 +153,7 @@ class TestParseRotation:
 
 
 class TestParseSequence:
-    def test_parses_name_and_composes_inner_transformations_in_order(self):
+    def test_parses_name_and_composes_inner_transformations_in_order(self, xy_cs):
         inner_translation = ozm06trans.Translation(translation=(1.0, 2.0))
         inner_scale = ozm06trans.Scale(scale=(2.0, 3.0))
         model = ozm06trans.Sequence(name="my-sequence", transformations=(inner_translation, inner_scale))
@@ -168,14 +166,14 @@ class TestParseSequence:
         expected = (POINTS_2D + np.array([1.0, 2.0])) * np.array([2.0, 3.0])
         np.testing.assert_allclose(edge.transform_points(POINTS_2D), expected)
 
-    def test_single_inner_transformation_uses_given_output_directly(self):
+    def test_single_inner_transformation_uses_given_output_directly(self, xy_cs):
         inner_translation = ozm06trans.Translation(translation=(1.0, 2.0))
         model = ozm06trans.Sequence(transformations=(inner_translation,))
         edge = parse_sequence(model, input=xy_cs, output=xy_cs)
         assert len(edge.transformations) == 1
         assert edge.transformations[0].output is xy_cs
 
-    def test_multiple_inner_transformations_use_virtual_intermediate_coord_systems(self):
+    def test_multiple_inner_transformations_use_virtual_intermediate_coord_systems(self, xy_cs):
         inner_translation = ozm06trans.Translation(translation=(1.0, 2.0))
         inner_scale = ozm06trans.Scale(scale=(2.0, 3.0))
         model = ozm06trans.Sequence(transformations=(inner_translation, inner_scale))
@@ -186,7 +184,7 @@ class TestParseSequence:
         assert intermediate.axes_names == xy_cs.axes_names
         assert edge.transformations[1].output is xy_cs
 
-    def test_csgen_output_mirrors_input(self):
+    def test_csgen_output_mirrors_input(self, xy_cs):
         inner_translation = ozm06trans.Translation(translation=(1.0, 2.0))
         inner_scale = ozm06trans.Scale(scale=(2.0, 3.0))
         model = ozm06trans.Sequence(transformations=(inner_translation, inner_scale))
@@ -196,7 +194,7 @@ class TestParseSequence:
 
 
 class TestParseByDimension:
-    def test_parses_name_and_splits_axes_between_inner_transformations(self):
+    def test_parses_name_and_splits_axes_between_inner_transformations(self, xy_cs):
         scale_x = ozm06trans.Scale(scale=(2.0,))
         translate_y = ozm06trans.Translation(translation=(5.0,))
         model = ozm06trans.ByDimension(
@@ -212,7 +210,7 @@ class TestParseByDimension:
         assert [type(t) for t in edge.transformations] == [ScaleEdge, TranslationEdge]
         np.testing.assert_allclose(edge.transform_points(POINTS_2D), np.array([[2.0, 7.0], [6.0, 9.0]]))
 
-    def test_csgen_output_derived_from_max_output_axis_index(self):
+    def test_csgen_output_derived_from_max_output_axis_index(self, xy_cs):
         scale_x = ozm06trans.Scale(scale=(2.0,))
         translate_y = ozm06trans.Translation(translation=(5.0,))
         model = ozm06trans.ByDimension(
