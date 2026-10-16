@@ -1,2 +1,4 @@
+# the notebooks of this folder are tracked, unlike elsewhere in the repository
+!*.ipynb
 data/
 *.zarr/
