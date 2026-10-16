@@ -56,7 +56,7 @@ def rasterize_bins(
         The key(s) (obs columns/var names) in the table that will be used to rasterize the bins.
         If `None`, all the var names will be used, and the returned object will be lazily constructed.
         Ignored if `return_region_as_labels` is `True`.
-    return_regions_as_labels
+    return_region_as_labels
         If `False` this function returns a `xarray.DataArray` of shape `(c, y, x)` with dimension
         of `c` equal to the number of key(s) specified in `value_key`, or the number of var names
         in `table_name` if `value_key` is `None`.  If `True`, will return labels of shape `(y, x)`,
@@ -280,7 +280,7 @@ def rasterize_bins_link_table_to_labels(sdata: SpatialData, table_name: str, ras
     Change the annotation target of the table to the rasterized labels.
 
     This function should be called after having rasterized the bins (calling `rasterize_bins()` with
-    `return_regions_as_labels=True`) and after having added the rasterized labels to the spatial data object.
+    `return_region_as_labels=True`) and after having added the rasterized labels to the spatial data object.
 
     Parameters
     ----------

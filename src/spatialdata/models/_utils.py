@@ -92,7 +92,7 @@ def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
 
     Parameters
     ----------
-    axis
+    axes
         The names of the axes
 
     Raises

@@ -217,9 +217,9 @@ class SpatialData:
                     else:
                         dtype = element.index.dtype
                     instance_dtype = self.get_instance_key_column(table).dtype
-                    if dtype != instance_dtype and (
-                        pd.api.types.is_string_dtype(dtype) or pd.api.types.is_string_dtype(instance_dtype)
-                    ):
+                    # Only a string vs non-string mismatch is an error: string ids may be stored as `object` or
+                    # as a pandas string dtype (the default with pandas>=3) depending on the reader.
+                    if pd.api.types.is_string_dtype(dtype) != pd.api.types.is_string_dtype(instance_dtype):
                         raise TypeError(
                             f"Table instance_key column ({instance_key}) has a dtype "
                             f"({instance_dtype}) that does not match the dtype of the indices of "
@@ -2429,8 +2429,8 @@ class SpatialData:
         ----------
         element_names
             The names of the element_names to subset. If the element_name is the name of a table, this table would be
-            completely included in the subset even if filter_table is True.
-        filter_table
+            completely included in the subset even if `filter_tables` is True.
+        filter_tables
             If True (default), the table is filtered to only contain rows that are annotating regions
             contained within the element_names.
         include_orphan_tables
