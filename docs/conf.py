@@ -101,7 +101,7 @@ source_suffix = {
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "anndata": ("https://anndata.readthedocs.io/en/stable/", None),
-    "mudata": ("https://mudata.readthedocs.io/en/stable/", None),
+    "mudata": ("https://mudata.scverse.org/stable/", None),
     "annsel": ("https://annsel.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
     "datatree": ("https://datatree.readthedocs.io/en/latest/", None),

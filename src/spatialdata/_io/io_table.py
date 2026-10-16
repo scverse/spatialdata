@@ -36,10 +36,9 @@ def _read_table(store: str | Path) -> Table_T:
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
     if not isinstance(f, zarr.Group):
         raise TypeError(f"Expected a zarr group holding a table element, got {type(f).__name__}.")
-    version = _parse_version(f, expect_attrs_key=False)
-    assert version is not None
-    table_format = TablesFormats[version]
 
+    # read the table before parsing the version: an incomplete table group then raises a reading error (e.g. a
+    # KeyError), which `on_bad_files="warn"` turns into a warning
     table: Table_T
     if f.attrs.get("encoding-type") == MUDATA_ENCODING_TYPE:
         # pass the store of the group instead of a str, for the same reason as above
@@ -53,6 +52,9 @@ def _read_table(store: str | Path) -> Table_T:
     else:
         table = read_anndata_zarr(str(store))
 
+    version = _parse_version(f, expect_attrs_key=False)
+    assert version is not None
+    table_format = TablesFormats[version]
     f.store.close()
 
     if isinstance(table_format, TablesFormatV01 | TablesFormatV02):

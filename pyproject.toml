@@ -35,7 +35,7 @@ dependencies = [
   "distributed>=2026.3",
   "fsspec[http,s3]",
   "geopandas>=0.14",
-  "mudata>=0.3.1",
+  "mudata>=0.4.1",
   "multiscale-spatial-image==2.0.3",
   "networkx",
   "numba>=0.55",
@@ -318,8 +318,8 @@ show_error_codes = true
 module = [
   "annsel.*",
   "dask_image.*",
-  "mudata.*",
   "datashader.*",
+  "mudata.*",
   "multiscale_spatial_image.*",
   "numcodecs.*",
   "ome_zarr.*",

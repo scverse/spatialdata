@@ -261,12 +261,14 @@ def _inplace_fix_subset_categorical_obs(subset_adata: Table_T | None, original_a
     """
     Fix categorical obs columns of subset_adata to match the categories of original_adata.
 
+    For MuData tables, the obs of the modalities are fixed as well.
+
     Parameters
     ----------
     subset_adata
-        The subset AnnData object, or None when the subset is empty
+        The subset table, or None when the subset is empty
     original_adata
-        The original AnnData object
+        The original table
 
     Notes
     -----
@@ -286,6 +288,10 @@ def _inplace_fix_subset_categorical_obs(subset_adata: Table_T | None, original_a
             c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
             obs[column] = c
     subset_adata.obs = obs
+    if isinstance(subset_adata, MuData) and isinstance(original_adata, MuData):
+        for name, modality in subset_adata.mod.items():
+            if name in original_adata.mod:
+                _inplace_fix_subset_categorical_obs(subset_adata=modality, original_adata=original_adata.mod[name])
 
 
 # TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080

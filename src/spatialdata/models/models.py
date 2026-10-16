@@ -1266,9 +1266,6 @@ class TableModel:
                 f" argument(s). However, `adata.uns[{cls.ATTRS_KEY!r}]` has already been set."
             )
 
-        if cls.ATTRS_KEY not in adata.uns:
-            adata.uns[cls.ATTRS_KEY] = {}
-
         if region is None:
             raise ValueError(f"`{cls.REGION_KEY}` must be provided.")
         if region_key is None:
@@ -1279,7 +1276,8 @@ class TableModel:
         if isinstance(adata, MuData) and (missing := [k for k in (region_key, instance_key) if k not in adata.obs]):
             raise ValueError(
                 f"Column(s) {missing} not found in the global `mdata.obs`. For a MuData table, the region and instance "
-                "key columns must be global columns; use `mdata.pull_obs()` to copy them from the modalities."
+                f"key columns must be global columns; to copy them from a modality, use e.g. "
+                f"`mdata.pull_obs(columns={missing}, mods=['<modality>'], prefix_unique=False)`."
             )
 
         if isinstance(region, np.ndarray):
@@ -1288,6 +1286,8 @@ class TableModel:
         if not adata.obs[region_key].isin(region_).all():
             raise ValueError(f"`adata.obs[{region_key}]` values do not match with `{cls.REGION_KEY}` values.")
 
+        if cls.ATTRS_KEY not in adata.uns:
+            adata.uns[cls.ATTRS_KEY] = {}
         adata.uns[cls.ATTRS_KEY][cls.REGION_KEY] = region
         adata.uns[cls.ATTRS_KEY][cls.REGION_KEY_KEY] = region_key
         adata.uns[cls.ATTRS_KEY][cls.INSTANCE_KEY] = instance_key

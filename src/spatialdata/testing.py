@@ -23,7 +23,7 @@ def _assert_mudata_equal(mdata0: MuData, mdata1: MuData) -> None:
     """Compare two MuData objects: the global attributes and each modality."""
     assert mdata0.axis == mdata1.axis
     assert list(mdata0.mod.keys()) == list(mdata1.mod.keys())
-    for attr in ("obs", "var", "obsm", "varm", "obsp", "varp", "uns"):
+    for attr in ("obs", "var", "obsm", "varm", "obsp", "varp", "uns", "obsmap", "varmap"):
         assert_anndata_equal(getattr(mdata0, attr), getattr(mdata1, attr), elem_name=attr)
     for name in mdata0.mod:
         assert_anndata_equal(mdata0.mod[name], mdata1.mod[name])

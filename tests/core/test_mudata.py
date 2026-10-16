@@ -89,8 +89,12 @@ def test_parse_requires_global_obs_columns():
     mdata = _get_mudata()
     del mdata.uns[TableModel.ATTRS_KEY]
     mdata.mod["rna"].obs["cell_index"] = np.arange(N_CELLS)
-    with pytest.raises(ValueError, match="mdata.pull_obs"):
+    with pytest.raises(ValueError, match="prefix_unique=False"):
         TableModel.parse(mdata, region="cells", region_key="region", instance_key="cell_index")
+    # the failed parse left no metadata behind, and the suggested fix works
+    assert TableModel.ATTRS_KEY not in mdata.uns
+    mdata.pull_obs(columns=["cell_index"], mods=["rna"], prefix_unique=False)
+    TableModel.parse(mdata, region="cells", region_key="region", instance_key="cell_index")
 
 
 def test_validate_invalid_names_in_modality():
@@ -221,6 +225,19 @@ def test_write_view(sdata_mudata: SpatialData, tmp_path: Path):
     assert view.var_names.nlevels == 1
 
 
+def test_read_incomplete_table_group_with_warn(sdata_mudata: SpatialData, tmp_path: Path):
+    from spatialdata import read_zarr
+
+    path = tmp_path / "data.zarr"
+    # a write that failed while writing the table leaves an empty table group, and no consolidated metadata
+    SpatialData(shapes=sdata_mudata.shapes).write(path, consolidate_metadata=False)
+    zarr.open_group(path / "tables", mode="a").create_group("table")
+    with pytest.warns(UserWarning, match="tables/table"):
+        sdata = read_zarr(path, on_bad_files="warn")
+    assert "cells" in sdata.shapes
+    assert len(sdata.tables) == 0
+
+
 def test_write_element(sdata_mudata: SpatialData, tmp_path: Path):
     path = tmp_path / "data.zarr"
     sdata = SpatialData(shapes=sdata_mudata.shapes)
@@ -275,6 +292,15 @@ def test_filter_by_table_query(sdata_mudata: SpatialData):
     assert filtered["cells"].index.tolist() == [3, 4, 5]
     with pytest.raises(NotImplementedError, match="only `obs_expr` and `obs_names_expr` are supported"):
         filter_by_table_query(sdata_mudata, "table", var_names_expr=an.var_names == "CD68")
+
+
+def test_subset_keeps_modality_categories(sdata_mudata: SpatialData):
+    # cells 0, 2 and 4 are all in leiden cluster "a"
+    sdata_mudata["cells"] = sdata_mudata["cells"].iloc[[0, 2, 4]]
+    matched = match_table_to_element(sdata_mudata, element_name="cells", table_name="table")
+    assert matched.mod["rna"].obs["leiden"].cat.categories.tolist() == ["a", "b"]
+    values = get_values("rna:leiden", sdata=sdata_mudata, element_name="cells", table_name="table")
+    assert values["rna:leiden"].cat.categories.tolist() == ["a", "b"]
 
 
 def test_bounding_box_query_filters_table(sdata_mudata: SpatialData):
