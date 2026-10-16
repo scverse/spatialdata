@@ -200,8 +200,8 @@ def get_union_of_axes(axes: tuple[Axis, ...]) -> tuple[Axis, ...]:
     # Sort axes in descending (alphabetical) order
     df = df.sort_values(
         by=[
-            "name",
             "type",
+            "name",
             "unit_not_none",
             "unit",
             "long_name_not_none",
