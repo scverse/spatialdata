@@ -14,6 +14,7 @@ from mudata import MuData
 from mudata import read_zarr as read_mudata_zarr
 from packaging.version import Version
 
+from spatialdata._core.validation import MUDATA_MODALITY_SEPARATOR
 from spatialdata._io._utils import _resolve_zarr_store
 from spatialdata._io.exceptions import FormatVersionUnknownError, WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import (
@@ -30,6 +31,18 @@ from spatialdata.models import TableModel, get_table_keys
 
 # value of the `encoding-type` attribute that mudata writes to the root group of a MuData object
 MUDATA_ENCODING_TYPE = "MuData"
+# The columns of the global obs/var of a MuData table may contain ":" ("<modality>:<column>"), which is not allowed in
+# Windows file names, and each column is stored as a zarr array named after it; ":" is therefore stored percent-encoded.
+# "%" is not allowed in the names of the columns of a table, so the encoded names are decoded without ambiguity.
+_ESCAPED_MUDATA_MODALITY_SEPARATOR = "%3A"
+
+
+def _escape_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(columns=lambda c: c.replace(MUDATA_MODALITY_SEPARATOR, _ESCAPED_MUDATA_MODALITY_SEPARATOR))
+
+
+def _unescape_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(columns=lambda c: c.replace(_ESCAPED_MUDATA_MODALITY_SEPARATOR, MUDATA_MODALITY_SEPARATOR))
 
 
 def _read_table(store: str | Path) -> Table_T:
@@ -46,8 +59,10 @@ def _read_table(store: str | Path) -> Table_T:
         obs, var = read_elem(f["obs"]), read_elem(f["var"])
         if not isinstance(mdata, MuData) or not isinstance(obs, pd.DataFrame) or not isinstance(var, pd.DataFrame):
             raise TypeError(f"Expected the zarr group {store} to hold a MuData table.")
+        obs, var = _unescape_column_names(obs), _unescape_column_names(var)
         # undo the dtype changes that MuData applies to the global annotations when it is constructed
         _restore_mudata_global_annotations(mdata, obs=obs, var=var)
+        mdata.obs, mdata.var = _unescape_column_names(mdata.obs), _unescape_column_names(mdata.var)
         table = mdata
     else:
         table = read_anndata_zarr(str(store))
@@ -92,7 +107,7 @@ def _write_mudata(group: zarr.Group, name: str, mdata: MuData) -> None:
         mdata = _copy_table(mdata)
     table_group = group.create_group(name, overwrite=True)
     for attr in ("obs", "var"):
-        write_adata(table_group, attr, getattr(mdata, attr))
+        write_adata(table_group, attr, _escape_column_names(getattr(mdata, attr)))
     for attr in ("obsm", "varm", "obsp", "varp", "uns", "obsmap", "varmap"):
         write_adata(table_group, attr, dict(getattr(mdata, attr)))
     mod_group = table_group.require_group("mod")

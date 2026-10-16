@@ -143,7 +143,8 @@ Names of SpatialData elements must fulfill certain restrictions to ensure robust
 In tables, the above restrictions apply to the column names of `obs` and `var`, and to the key names of the `obsm`,
 `obsp`, `varm`, `varp`, `uns`, `layers` slots (for example `adata.obs['has space']` and `adata.layers['.']` are not
 allowed).
-Additionally, dataframes in tables MUST NOT have a column named `_index`, which is reserved.
+Additionally, dataframes in tables MUST NOT have a column named `_index`, which is reserved. As an exception, the column
+names of the global `obs` and `var` of a MuData table MAY also contain `":"` (see the Table section).
 
 #### Images
 
@@ -260,7 +261,7 @@ One region table can refer to multiple sets of Regions. But each row can map to 
 
 If any of `region`, `region_key` and `instance_key` are defined, they all MUST be defined. A table not defining them is still allowed, but it will not be mapped to any spatial element.
 
-Multimodal measurements of the same regions (e.g. RNA and protein measured on the same cells) MAY be stored in a single table represented as a [`MuData`](https://mudata.readthedocs.io) object, in which each modality is an `AnnData` object. In this case the `region`, `region_key` and `instance_key` metadata is stored in the global `uns` of the `MuData` object, and the `region_key` and `instance_key` columns are columns of its global `obs`, so that all the modalities annotate the same instances. A modality MAY measure only a subset of the instances. On disk, the table is stored with the MuData Zarr encoding (`encoding-type: MuData`).
+Multimodal measurements of the same regions (e.g. RNA and protein measured on the same cells) MAY be stored in a single table represented as a [`MuData`](https://mudata.readthedocs.io) object, in which each modality is an `AnnData` object. In this case the `region`, `region_key` and `instance_key` metadata is stored in the global `uns` of the `MuData` object, and the `region_key` and `instance_key` columns are columns of its global `obs`, so that all the modalities annotate the same instances. A modality MAY measure only a subset of the instances. On disk, the table is stored with the MuData Zarr encoding (`encoding-type: MuData`). Following the MuData convention for the columns taken from a modality (`"<modality>:<column>"`), the column names of the global `obs` and `var` MAY contain `":"`, which is stored percent-encoded (`"%3A"`) since it is not allowed in Windows file names.
 
 In `spatialdata-io` we use a consistent naming scheme for the `region_key` and `instance_key` column, which is suggested (but not required):
 

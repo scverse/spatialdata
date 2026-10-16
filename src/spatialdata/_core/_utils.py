@@ -6,6 +6,7 @@ from typing import Any, cast
 from mudata import MuData
 
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._core.validation import MUDATA_MODALITY_SEPARATOR
 from spatialdata._types import Table_T
 from spatialdata._utils import _copy_table
 
@@ -34,7 +35,7 @@ def _find_common_table_keys(sdatas: Iterable[SpatialData]) -> set[str]:
     return common_keys
 
 
-def sanitize_name(name: str, is_dataframe_column: bool = False) -> str:
+def sanitize_name(name: str, is_dataframe_column: bool = False, extra_allowed_chars: str = "") -> str:
     """
     Sanitize a name to comply with SpatialData naming rules.
 
@@ -54,6 +55,9 @@ def sanitize_name(name: str, is_dataframe_column: bool = False) -> str:
         The name to sanitize
     is_dataframe_column
         Whether this name is for a dataframe column (additional restrictions apply)
+    extra_allowed_chars
+        Characters kept in addition to alphanumeric characters, underscores, dots and hyphens (e.g. ":" in the columns
+        of the global obs/var of a MuData table).
 
     Returns
     -------
@@ -80,7 +84,7 @@ def sanitize_name(name: str, is_dataframe_column: bool = False) -> str:
     if name in {".", ".."}:
         return "unnamed"
 
-    sanitized = "".join(char if char.isalnum() or char in "_-." else "_" for char in name)
+    sanitized = "".join(char if char.isalnum() or char in "_-." + extra_allowed_chars else "_" for char in name)
 
     # remove double underscores if found as a prefix
     while sanitized.startswith("__"):
@@ -147,8 +151,8 @@ def sanitize_table(data: Table_T, inplace: bool = True) -> Table_T | None:
     # Track used names to maintain case-insensitive uniqueness
     used_names_lower: dict[str, set[str]] = defaultdict(set)
 
-    def get_unique_name(name: str, attr: str, is_dataframe_column: bool = False) -> str:
-        base_name = sanitize_name(name, is_dataframe_column)
+    def get_unique_name(name: str, attr: str, is_dataframe_column: bool = False, extra_allowed_chars: str = "") -> str:
+        base_name = sanitize_name(name, is_dataframe_column, extra_allowed_chars=extra_allowed_chars)
         normalized_base = base_name.lower()
 
         # If this exact name is already used, add a number
@@ -171,10 +175,13 @@ def sanitize_table(data: Table_T, inplace: bool = True) -> Table_T | None:
         for attr in ("obsm", "varm"):
             used_names_lower[attr].update(name.lower() for name in sanitized.mod)
 
-    # Handle obs and var (dataframe columns)
+    # Handle obs and var (dataframe columns); MuData names the global columns taken from a modality "<modality>:<column>"
+    extra = MUDATA_MODALITY_SEPARATOR if is_mudata else ""
     for attr in ("obs", "var"):
         df = getattr(sanitized, attr)
-        new_columns = {old: get_unique_name(old, attr, is_dataframe_column=True) for old in df.columns}
+        new_columns = {
+            old: get_unique_name(old, attr, is_dataframe_column=True, extra_allowed_chars=extra) for old in df.columns
+        }
         df.rename(columns=new_columns, inplace=True)
 
     # Handle other attributes; MuData has no global layers, they live in the modalities

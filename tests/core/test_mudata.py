@@ -108,6 +108,38 @@ def test_validate_invalid_names_in_modality():
     TableModel.validate(mdata)
 
 
+def test_modality_separator_in_global_columns(tmp_path: Path):
+    mdata = _get_mudata()
+    # MuData names the global columns taken from a modality "<modality>:<column>"
+    mdata.pull_obs(columns=["leiden"], mods=["rna"])
+    mdata.obs["rna:mod_weight"] = np.linspace(0, 1, N_CELLS)
+    assert {"rna:leiden", "rna:mod_weight"} <= set(mdata.obs.columns)
+    TableModel.validate(mdata)
+
+    sdata = SpatialData(shapes={"cells": _get_circles()}, tables={"table": mdata})
+    path = tmp_path / "data.zarr"
+    sdata.write(path)
+    # escaped on disk, since ":" is not allowed in Windows file names
+    stored = set(zarr.open_group(path / "tables" / "table" / "obs", mode="r").keys())
+    assert {"rna%3Aleiden", "rna%3Amod_weight"} <= stored
+    assert not any(":" in key for key in stored)
+    table = SpatialData.read(path)["table"]
+    assert_elements_are_identical(mdata, table)
+    np.testing.assert_allclose(
+        get_values("rna:mod_weight", element=table)["rna:mod_weight"], np.linspace(0, 1, N_CELLS)
+    )
+
+    # only the global columns of a MuData table may contain ":"
+    mdata.mod["rna"].obs["a:b"] = 0
+    with pytest.raises(ValidationError) as e:
+        TableModel.validate(mdata)
+    assert [error.location for error in e.value.errors] == [("mod", "rna", "obs", "a:b")]
+    sanitize_table(mdata)
+    assert "a_b" in mdata.mod["rna"].obs
+    assert "rna:leiden" in mdata.obs
+    TableModel.validate(mdata)
+
+
 def test_sanitize_table_renames_modalities():
     mdata = _get_mudata()
     mdata = MuData({"Gene Expression": mdata.mod["rna"], "prot": mdata.mod["prot"]}, obs=mdata.obs, uns=mdata.uns)

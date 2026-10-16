@@ -81,7 +81,12 @@ def check_target_region_column_symmetry(table: Table_T, region_key: str, target:
         )
 
 
-def check_valid_name(name: str) -> None:
+# MuData names the columns of its global obs/var taken from a modality "<modality>:<column>" (e.g. `pull_obs()`, the
+# modality weights of muon's WNN); this character is allowed there, and escaped on disk (see `spatialdata._io.io_table`)
+MUDATA_MODALITY_SEPARATOR = ":"
+
+
+def check_valid_name(name: str, extra_allowed_chars: str = "") -> None:
     """
     Check that a name is valid for SpatialData elements.
 
@@ -92,6 +97,8 @@ def check_valid_name(name: str) -> None:
     ----------
     name
         The name for a SpatialData element
+    extra_allowed_chars
+        Characters allowed in addition to alphanumeric characters, underscores, dots and hyphens.
 
     Raises
     ------
@@ -110,8 +117,9 @@ def check_valid_name(name: str) -> None:
         raise ValueError("Name cannot be '..'.")
     if name.startswith("__"):
         raise ValueError("Name cannot start with '__'.")
-    if not all(c.isalnum() or c in "_-." for c in name):
-        raise ValueError("Name must contain only alphanumeric characters, underscores, dots and hyphens.")
+    if not all(c.isalnum() or c in "_-." + extra_allowed_chars for c in name):
+        extra = "".join(f", {c!r}" for c in extra_allowed_chars)
+        raise ValueError(f"Name must contain only alphanumeric characters, underscores, dots and hyphens{extra}.")
 
 
 def check_all_keys_case_insensitively_unique(keys: Collection[str], location: tuple[str, ...] = ()) -> None:
@@ -197,7 +205,7 @@ def check_key_is_case_insensitively_unique(key: str, other_keys: set[str | None]
         )
 
 
-def check_valid_dataframe_column_name(name: str) -> None:
+def check_valid_dataframe_column_name(name: str, extra_allowed_chars: str = "") -> None:
     """
     Check that a name is valid for SpatialData table dataframe.
 
@@ -208,6 +216,8 @@ def check_valid_dataframe_column_name(name: str) -> None:
     ----------
     name
         The name for a table column
+    extra_allowed_chars
+        Characters allowed in addition to alphanumeric characters, underscores, dots and hyphens.
 
     Raises
     ------
@@ -216,7 +226,7 @@ def check_valid_dataframe_column_name(name: str) -> None:
     ValueError
         If the proposed name violates a naming restriction.
     """
-    check_valid_name(name)
+    check_valid_name(name, extra_allowed_chars=extra_allowed_chars)
     if name == "_index":
         raise ValueError("Name cannot be '_index'")
 
@@ -227,7 +237,8 @@ def validate_table_attr_keys(data: Table_T, location: tuple[str, ...] = ()) -> N
 
     This checks for AnnData obs, var, obsm, obsp, varm, varp, uns, layers whether their keys fulfill the
     naming restrictions and raises an error otherwise. For a MuData table, the global attributes and the names of the
-    modalities are checked, and each modality is checked as an AnnData table.
+    modalities are checked, and each modality is checked as an AnnData table; the column names of the global obs and
+    var may also contain ":", which MuData uses for the columns taken from a modality (e.g. "rna:leiden").
 
     Parameters
     ----------
@@ -260,7 +271,8 @@ def validate_table_attr_keys(data: Table_T, location: tuple[str, ...] = ()) -> N
                 key_path = attr_path + (key,)
                 with collect_error(location=key_path):
                     if attr in ("obs", "var"):
-                        check_valid_dataframe_column_name(key)
+                        extra = MUDATA_MODALITY_SEPARATOR if is_mudata else ""
+                        check_valid_dataframe_column_name(key, extra_allowed_chars=extra)
                     else:
                         check_valid_name(key)
         if isinstance(data, MuData):
