@@ -1126,3 +1126,38 @@ def test_query_multiple_boxes_len_one(sdata_blobs):
         target_coordinate_system="global",
     )
     assert_spatial_data_objects_are_identical(queried0, queried1)
+
+
+def test_query_filter_table_keeps_category_colors():
+    # three cells of types A, C and B; B lies outside the query box
+    shapes = GeoDataFrame(
+        geometry=[Point(x, 0) for x in (0, 10, 100)],
+        index=["a", "c", "b"],
+    ).assign(radius=1.0)
+    obs = pd.DataFrame(
+        {
+            "region": pd.Categorical(["cells"] * 3),
+            "cell_id": ["a", "c", "b"],
+            "cell_type": pd.Categorical(["A", "C", "B"], categories=["A", "B", "C"]),
+        },
+        index=["a", "c", "b"],
+    )
+    table = AnnData(obs=obs)
+    table.uns["cell_type_colors"] = ["red", "green", "blue"]
+    sdata = SpatialData(
+        shapes={"cells": ShapesModel.parse(shapes)},
+        tables={"table": TableModel.parse(table, region="cells", region_key="region", instance_key="cell_id")},
+    )
+
+    queried = bounding_box_query(
+        sdata,
+        axes=("x", "y"),
+        min_coordinate=[-5, -5],
+        max_coordinate=[15, 5],
+        target_coordinate_system="global",
+        filter_table=True,
+    )
+    queried_table = queried["table"]
+    assert queried_table.n_obs == 2
+    assert queried_table.obs["cell_type"].cat.categories.tolist() == ["A", "B", "C"]
+    assert list(map(str, queried_table.uns["cell_type_colors"])) == ["red", "green", "blue"]
