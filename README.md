@@ -39,7 +39,7 @@ SpatialData is an approved de.NBI service, your feedback helps us improve it. We
          src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
          align="center">
   </a>
-  <br>
+  &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://www.denbi.de/">
     <img height="60px"
          src="https://www.denbi.de/templates/nbimaster/img/denbi-logo-color.svg"
