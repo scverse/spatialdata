@@ -8,6 +8,7 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 from geopandas import GeoDataFrame
 from numpy.random import default_rng
+from xarray.testing import assert_identical
 
 from spatialdata import aggregate, to_polygons
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
@@ -357,6 +358,91 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
 
     out = aggregate(values=image, by=labels, zone_ids=[1, 2, 3]).tables["table"]
     assert len(out) == 3
+
+
+@pytest.fixture(params=[None, [2]], ids=["single_scale", "multiscale"])
+def image_labels_for_channel_selection(request):
+    # Background is deliberately bright; regions have different pixel counts.
+    image = Image2DModel.parse(
+        np.array(
+            [
+                [[999, 2, 4, 999], [1, 3, 5, 7]],
+                [[999, 10, 14, 999], [2, 4, 6, 8]],
+                [[999, 6, 8, 999], [3, 5, 7, 9]],
+            ],
+            dtype=float,
+        ),
+        c_coords=["DAPI", "CD3", "CD20"],
+        scale_factors=request.param,
+    )
+    labels = Labels2DModel.parse(np.array([[0, 1, 1, 0], [2, 2, 2, 2]], dtype=np.int32))
+    return SpatialData(images={"image": image}, labels={"labels": labels})
+
+
+@pytest.mark.parametrize("value_key", [None, "CD3", ["CD3"], ["CD20", "CD3"]])
+@pytest.mark.parametrize("agg_func", ["mean", "sum", ["mean", "sum", "count"]])
+def test_aggregate_image_by_labels_value_key(image_labels_for_channel_selection, value_key, agg_func):
+    sdata = image_labels_for_channel_selection
+    image, labels = sdata.images["image"], sdata.labels["labels"]
+    original_image, original_labels = image.copy(deep=True), labels.copy(deep=True)
+    out = aggregate(values=image, by=labels, value_key=value_key, agg_func=agg_func).tables["table"]
+
+    channels = (
+        ["DAPI", "CD3", "CD20"] if value_key is None else [value_key] if isinstance(value_key, str) else value_key
+    )
+    stats = [agg_func] if isinstance(agg_func, str) else agg_func
+    # Independent, hand-calculated expectations; rows are label IDs 1 and 2.
+    expected = {
+        "DAPI": {"mean": [3, 4], "sum": [6, 16], "count": [2, 4]},
+        "CD3": {"mean": [12, 5], "sum": [24, 20], "count": [2, 4]},
+        "CD20": {"mean": [7, 6], "sum": [14, 24], "count": [2, 4]},
+    }
+    names = [f"channel_{channel}_{stat}" for channel in channels for stat in stats]
+    assert out.var_names.tolist() == names
+    np.testing.assert_allclose(
+        out.X.toarray(), np.column_stack([expected[c][stat] for c in channels for stat in stats])
+    )
+    assert out.obs_names.tolist() == ["1", "2"]
+    assert out.obs["instance_id"].tolist() == [1, 2]
+    assert out.obs["region"].tolist() == ["by", "by"]
+    assert out.uns[TableModel.ATTRS_KEY] == {"region": "by", "region_key": "region", "instance_key": "instance_id"}
+
+    all_channels = aggregate(values=image, by=labels, agg_func=agg_func).tables["table"]
+    assert_equal(out, all_channels[:, names].copy())
+    assert_identical(image, original_image)
+    assert_identical(labels, original_labels)
+
+
+@pytest.mark.parametrize(
+    ("value_key", "match"),
+    [
+        ([], "must not be empty"),
+        (["CD3", "CD3"], "must not contain duplicate"),
+        ("missing", "missing.*not found"),
+        (["CD3", "missing"], "missing.*not found"),
+    ],
+)
+def test_aggregate_image_by_labels_invalid_value_key(image_labels_for_channel_selection, value_key, match):
+    sdata = image_labels_for_channel_selection
+    with pytest.raises(ValueError, match=match):
+        aggregate(values=sdata.images["image"], by=sdata.labels["labels"], value_key=value_key)
+
+
+def test_aggregate_image_by_labels_value_key_spatialdata(image_labels_for_channel_selection):
+    sdata = image_labels_for_channel_selection
+    out = sdata.aggregate(values="image", by="labels", value_key="CD3", zone_ids=[2]).tables["table"]
+    assert out.var_names.tolist() == ["channel_CD3_sum"]
+    np.testing.assert_allclose(out.X.toarray(), [[20]])
+    assert out.obs["instance_id"].tolist() == [2]
+    assert out.obs["region"].tolist() == ["labels"]
+    assert out.uns[TableModel.ATTRS_KEY]["region"] == "labels"
+
+
+def test_aggregate_image_by_labels_value_key_nonunique_channels():
+    image = Image2DModel.parse(np.ones((2, 2, 2)), c_coords=["CD3", "CD3"])
+    labels = Labels2DModel.parse(np.array([[0, 1], [2, 2]], dtype=np.int32))
+    with pytest.raises(ValueError, match="Image channel names must be unique"):
+        aggregate(values=image, by=labels, value_key="CD3")
 
 
 @pytest.mark.parametrize("values", ["blobs_image", "blobs_points", "blobs_circles", "blobs_polygons"])
