@@ -184,7 +184,7 @@ def _get_joined_table_indices(
     -------
         The indices that of the table that match the SpatialElement indices.
     """
-    mask = np.isin(table_instance_key_column.values, element_indices)
+    mask = table_instance_key_column.isin(element_indices).to_numpy()
     if joined_indices is None:
         if match_rows == "left":
             _, joined_indices = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
@@ -225,7 +225,7 @@ def _get_masked_element(
     -------
     The masked spatial element based on the provided indices and match rows.
     """
-    mask = np.isin(table_instance_key_column.values, element_indices)
+    mask = table_instance_key_column.isin(element_indices).to_numpy()
     masked_table_instance_key_column = table_instance_key_column[mask]
     mask_values = mask_values if len(mask_values := masked_table_instance_key_column.values) != 0 else None
     if match_rows in ["left", "right"]:
