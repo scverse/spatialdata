@@ -92,7 +92,11 @@ def map_raster(
     if isinstance(data, DataArray):
         arr = data.data
     elif isinstance(data, DataTree):
-        arr = data["scale0"].values().__iter__().__next__().data
+        scale0 = data["scale0"]
+        assert isinstance(scale0, DataTree)
+        first_variable = next(iter(scale0.values()))
+        assert isinstance(first_variable, DataArray)
+        arr = first_variable.data
     else:
         raise ValueError("Only 'DataArray' and 'DataTree' are supported.")
 
@@ -153,7 +157,9 @@ def map_raster(
         "transformations": transformations,
     }
     model = get_raster_model_from_data_dims(dims)
-    return model.parse(arr, **model_kwargs)
+    parsed = model.parse(arr, **model_kwargs)
+    assert isinstance(parsed, DataArray)
+    return parsed
 
 
 def _relabel(arr: da.Array) -> da.Array:
@@ -206,7 +212,7 @@ def _relabel(arr: da.Array) -> da.Array:
 
         return block
 
-    return da.map_blocks(
+    relabeled: da.Array = da.map_blocks(
         _relabel_block,
         arr,
         dtype=arr.dtype,
@@ -214,6 +220,7 @@ def _relabel(arr: da.Array) -> da.Array:
         shift=shift,
         meta=meta,
     )
+    return relabeled
 
 
 def relabel_sequential(arr: da.Array) -> da.Array:
@@ -250,4 +257,5 @@ def relabel_sequential(arr: da.Array) -> da.Array:
     # Note that both sides are ordered as da.unique returns an ordered array.
     new_labeling[unique_labels] = da.arange(len(unique_labels), dtype=arr.dtype)
 
-    return da.map_blocks(operator.getitem, new_labeling, arr, dtype=arr.dtype, chunks=arr.chunks)
+    consecutive: da.Array = da.map_blocks(operator.getitem, new_labeling, arr, dtype=arr.dtype, chunks=arr.chunks)
+    return consecutive

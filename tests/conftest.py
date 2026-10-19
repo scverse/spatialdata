@@ -43,6 +43,7 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata.utils.points import _make_points
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -401,14 +402,6 @@ def blobs_factory(_sdata_blobs_session: SpatialData) -> Callable[[], SpatialData
         return _fast_deepcopy_sdata(_sdata_blobs_session)
 
     return _make
-
-
-def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
-    """Helper function to make a Points element."""
-    k0 = int(len(coordinates) / 3)
-    k1 = len(coordinates) - k0
-    genes = np.hstack((np.repeat("a", k0), np.repeat("b", k1)))
-    return PointsModel.parse(coordinates, annotation=pd.DataFrame({"genes": genes}), feature_key="genes")
 
 
 def _make_squares(centroid_coordinates: np.ndarray, half_widths: list[float]) -> polygons:

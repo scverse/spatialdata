@@ -3,7 +3,7 @@ from __future__ import annotations
 from anndata import AnnData
 from anndata.tests.helpers import assert_equal as assert_anndata_equal
 from dask.dataframe import DataFrame as DaskDataFrame
-from dask.dataframe.tests.test_dataframe import assert_eq as assert_dask_dataframe_equal
+from dask.dataframe.utils import assert_eq as assert_dask_dataframe_equal
 from geopandas import GeoDataFrame
 from geopandas.testing import assert_geodataframe_equal
 from xarray import DataArray, DataTree
@@ -107,6 +107,7 @@ def assert_elements_are_identical(
 
     # compare transformations (only for SpatialElements)
     if not isinstance(element0, AnnData):
+        assert not isinstance(element1, AnnData)
         transformations0 = get_transformation(element0, get_all=True)
         transformations1 = get_transformation(element1, get_all=True)
         assert isinstance(transformations0, dict)
@@ -124,9 +125,11 @@ def assert_elements_are_identical(
     elif isinstance(element0, DataArray | DataTree):
         assert_equal(element0, element1)
     elif isinstance(element0, GeoDataFrame):
+        assert isinstance(element1, GeoDataFrame)
         assert_geodataframe_equal(element0, element1, check_less_precise=True)
     else:
         assert isinstance(element0, DaskDataFrame)
+        assert isinstance(element1, DaskDataFrame)
         assert_dask_dataframe_equal(element0, element1, check_divisions=False)
         if PointsModel.ATTRS_KEY in element0.attrs or PointsModel.ATTRS_KEY in element1.attrs:
             assert element0.attrs[PointsModel.ATTRS_KEY] == element1.attrs[PointsModel.ATTRS_KEY]

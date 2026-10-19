@@ -40,7 +40,8 @@
 
     // Install using default install
     "install_command": [
-        "in-dir={env_dir} python -m pip install {build_dir}[test]"
+        "in-dir={env_dir} python -m pip install {build_dir}",
+        "in-dir={env_dir} python -m pip install torch"
     ],
     "uninstall_command": [
         "in-dir={env_dir} python -m pip uninstall -y {project}"

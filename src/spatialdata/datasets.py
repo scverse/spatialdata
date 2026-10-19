@@ -153,7 +153,7 @@ class RaccoonDataset:
         from skimage.segmentation import slic
 
         im_data = scipy.datasets.face()
-        im = Image2DModel.parse(im_data, dims=["y", "x", "c"])
+        im = Image2DModel.parse(np.asarray(im_data), dims=["y", "x", "c"])
         labels_data = slic(im_data, n_segments=100, compactness=10, sigma=1)
         labels = Labels2DModel.parse(labels_data, dims=["y", "x"])
         coords = np.array([[610, 450], [730, 325], [575, 300], [480, 90]])
@@ -303,8 +303,8 @@ class BlobsDataset:
             dims = ["z", "y", "x"]
             model = Labels3DModel
         if scale_factors is None:
-            return model.parse(out, transformations=transformations, dims=dims)
-        return model.parse(out, transformations=transformations, dims=dims, scale_factors=scale_factors)
+            return model.parse(np.asarray(out), transformations=transformations, dims=dims)
+        return model.parse(np.asarray(out), transformations=transformations, dims=dims, scale_factors=scale_factors)
 
     def _generate_blobs(self, length: int = 512, seed: int | None = None, ndim: int = 2) -> ArrayLike:
         from scipy.ndimage import gaussian_filter
@@ -384,9 +384,13 @@ class BlobsDataset:
                 ]
             )
 
+        minx: float
+        miny: float
+        maxx: float
+        maxy: float
         minx = miny = bbox[0]
         maxx = maxy = bbox[1]
-        polygons: list[Polygon] = []
+        polygons: list[Polygon | MultiPolygon] = []
         for i in range(n):
             # generate random points
             rng1 = default_rng(i)
@@ -403,16 +407,20 @@ class BlobsDataset:
                     # by translating it by the size of the first polygon.
                     poly2 = get_poly(i)
                     last = polygons.pop()
+                    # `last` was just appended above, so it is the single polygon this loop generated.
+                    assert isinstance(last, Polygon)
 
                     # Calculate the size of the polygon
+                    # note: this rebinds `maxx`/`maxy`, which `get_poly` reads on the next iteration
                     (minx, miny, maxx, maxy) = poly2.bounds
                     dx = maxx - minx
                     dy = maxy - miny
 
                     # Translate the polygon
-                    poly2 = translate(poly2, xoff=dx, yoff=dy)
+                    translated = translate(poly2, xoff=dx, yoff=dy)
+                    assert isinstance(translated, Polygon)
 
-                    polygons.append(MultiPolygon([last, poly2]))
+                    polygons.append(MultiPolygon([last, translated]))
         return polygons
 
     # function that generates random shapely points given a bounding box
@@ -451,10 +459,13 @@ def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
     SpatialData object with the desired element annotated by the table.
     """
     sdata = blobs(length=50)
+    element = sdata[name]
+    assert not isinstance(element, AnnData)
     if name in ["blobs_labels", "blobs_multiscale_labels"]:
-        instance_id = get_element_instances(sdata[name]).tolist()
+        instance_id = get_element_instances(element).tolist()
     else:
-        index = sdata[name].index
+        assert isinstance(element, GeoDataFrame | DaskDataFrame)
+        index = element.index
         instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.Index) else index.tolist()
     n = len(instance_id)
     obs_df = pd.DataFrame(
