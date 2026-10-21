@@ -529,7 +529,14 @@ class MultiscalesDumper:
         transform_edges: Sequence[Edge], # FIXME: set[Edge]?
         labels: Mapping[PurePosixPath, MultiscalesDumper],
     ):
-        coord_systems = {intrinsic} | {e.origin for e in transform_edges} | {e.target for e in transform_edges}
+        coord_systems = {intrinsic}
+
+        _labels_coord_systems = set(itertools.chain(label.coord_systems for label in labels.values()))
+        for e in transform_edges:
+            for cs in (e.origin, e.target):
+                if cs not in _labels_coord_systems:
+                    coord_systems.add(cs)
+
         cs_to_path: dict[CsVert, PurePosixPath] = {cs: PurePosixPath("") for cs in coord_systems}
         intrinsic = sdata.get_intrinsic(key)
         cs_to_path[intrinsic] = PurePosixPath("")
@@ -620,7 +627,7 @@ class MultiscalesDumper:
             image=omz_image, # FIXME: use from_pyramid once it's available
             labels=dumped_labels,
             default_coordinate_system_name=self.intrinsic.provenance.name,
-            coordinate_systems=[cs.to_ngff_cs() for cs in {*self.coord_systems, self.intrinsic}],
+            coordinate_systems=[cs.to_ngff_cs() for cs in self.coord_systems.difference({self.intrinsic})],
             coordinate_transformations=tuple(omz_transforms),
         )
 

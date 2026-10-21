@@ -203,5 +203,5 @@ def test_dumping_multiscales_to_ngff():
     )
 
     sdata = try_parse_ngff06_scene(group_path=PurePosixPath("."), scene=scene)
-    dumped_scene = sdata.default_scene_dumper()
+    dumped_scene = sdata.default_scene_dumper().dump()
 

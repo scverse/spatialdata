@@ -4,11 +4,10 @@ import uuid
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Callable, Final, Literal, NamedTuple, Type, TypedDict, assert_never, assert_type
+from typing import TYPE_CHECKING, Callable, Final, Literal, NamedTuple, Type, TypedDict, assert_never
 
 import networkx as nx
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
-import ome_zarr as oz
 
 from spatialdata.transformations.graph.edge import parse_ngff_transf
 
@@ -258,7 +257,9 @@ class CsVert:
         return hash(self.id)
 
     def __eq__(self, value: CsVert, /) -> bool: # pyright: ignore [reportIncompatibleMethodOverride]
-        return isinstance(value, CsVert) and self.id == value.id
+        if not isinstance(value, CsVert): # pyright: ignore [reportUnnecessaryIsInstance]
+            return False
+        return self.id == value.id
 
     def to_ngff_cs(self) -> ozm06ct.CoordinateSystem:
         return self.coord_system.to_model(name=self.name)
@@ -271,7 +272,7 @@ class CsVert:
     def namespace(self) -> PurePosixPath:
         if isinstance(self.provenance, NgffCsPath):
             return self.provenance.group_path
-        if isinstance(self.provenance, UserCreated):
+        if isinstance(self.provenance, UserCreated): # pyright: ignore [reportUnnecessaryIsInstance]
             return PurePosixPath("")
         assert_never(self.provenance)
 
