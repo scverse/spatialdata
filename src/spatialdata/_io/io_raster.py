@@ -1,14 +1,18 @@
+# pyright: standard
+
 from __future__ import annotations
 
+from dataclasses import dataclass
 import warnings
 from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import Any, Literal, TypeGuard, get_args
+from pathlib import Path, PurePosixPath
+from typing import Any, Final, Iterator, Literal, TypeGuard, assert_type, get_args
 
+import itertools
 import dask.array as da
 import numpy as np
 import ome_zarr as oz
-import ome_zarr_models.v06.coordinate_transforms as ozm06trans
+import ome_zarr_models.v06.coordinate_transforms as ozm06ct
 import xarray as xr
 import zarr
 from ome_zarr.format import Format
@@ -44,8 +48,8 @@ from spatialdata.transformations._utils import (
     _set_transformations,
     compute_coordinates,
 )
-from spatialdata.transformations.graph.edge import BaseTransformationEdge, parse_ngff_transf
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations.graph.edge import BaseTransformationEdge, IdentityEdge, ScaleEdge, TranslationEdge, parse_ngff_transf
+from spatialdata.transformations.graph.vert import Axis, CoordSystem, CsVert, Edge, Edges, NgffCsPath, Provenance, Spaces
 
 
 def _is_flat_int_sequence(value: object) -> TypeGuard[Sequence[int]]:
@@ -168,61 +172,276 @@ def _prepare_storage_options(
     return prepared_options
 
 
-def try_read_ngff06_multiscale(store: Path) -> tuple[DataTree, Sequence[BaseTransformationEdge]]:
-    multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store))
+@dataclass(frozen=True, eq=True)
+class ElementKey:
+    namespace: Final[PurePosixPath]
+    name: Final[str]
+
+    def __post_init__(self):
+        assert not self.namespace.is_absolute()
+
+    @classmethod
+    def from_path(cls, path: PurePosixPath) -> ElementKey:
+        return ElementKey(namespace=path.parent, name=path.name)
+
+    def to_path(self) -> PurePosixPath:
+        return self.namespace / self.name
+
+    def is_sibling_of(self, other: ElementKey) -> bool:
+        return self.namespace == other.namespace
+
+    def is_relative_to(self, other: ElementKey) -> bool:
+        return self.namespace.is_relative_to(other.namespace)
+
+
+@dataclass(frozen=True, eq=True)
+class MultiscalesKeys:
+    raster: ElementKey
+    labels: Mapping[PurePosixPath, ElementKey]
+
+
+class FutureSpatialData:
+    __graph: Spaces  # FIXME: use TransformationManager
+    _images: dict[ElementKey, xr.DataTree]
+    _labels: dict[ElementKey, xr.DataTree]
+    _intrinsics: dict[ElementKey, CsVert]
+
+    def __init__(self) -> None:
+        self.__graph = Spaces()
+        self._images = {}
+        self._labels = {}
+        self._intrinsics = {}
+        super().__init__()
+
+    def add_image(self, key: ElementKey, image: xr.DataTree, into: CsVert):
+        if into not in self.__graph.verts():
+            raise KeyError(f"{CsVert} is not in the transformation graph")
+        if key in self._labels:
+            raise KeyError(f"Already a label")
+        self._images[key] = image
+        self._intrinsics[key] = into
+
+    def get_image(self, key: ElementKey) -> xr.DataTree | None:
+        return self._images[key]
+
+    def add_label(self, key: ElementKey, label: xr.DataTree, into: CsVert):
+        if into not in self.__graph.verts():
+            raise KeyError(f"{CsVert} is not in the transformation graph")
+        if key in self._images:
+            raise KeyError(f"Already an image")
+        self._labels[key] = label
+        self._intrinsics[key] = into
+
+    def get_label(self, key: ElementKey) -> xr.DataTree | None:
+        return self._labels[key]
+
+    def get_intrinsic(self, key: ElementKey) -> CsVert:
+        return  self._intrinsics[key]
+
+    def add_cs(self, cs: CoordSystem, provenance: Provenance):
+        self.__graph.add_cs(cs=cs, provenance=provenance)
+
+    def find_node(self, *, ngff_path: NgffCsPath) -> CsVert:
+        return self.__graph.find_node(ngff_path=ngff_path)
+
+    def add_transformation(self, *, input: CsVert, output: CsVert, transf: BaseTransformationEdge, name: str | None):
+        self.__graph.add_transformation(input=input, output=output, transf=transf, name=name)
+
+    def edges(self) -> Edges:
+        return self.__graph.edges()
+
+    def ngff_label_dumper(self, *, label_key: ElementKey) -> MultiscalesDumper:
+        return self._ngff_raster_dumper(MultiscalesKeys(raster=label_key, labels={}))
+
+    def ngff_multiscales_dumper(self, keys: MultiscalesKeys) -> MultiscalesDumper:
+        return self._ngff_raster_dumper(keys)
+
+    def _ngff_raster_dumper(self, keys: MultiscalesKeys) -> MultiscalesDumper:
+        assert keys.raster in self._images or (keys.raster in self._labels and len(keys.labels) == 0)
+
+        intrinsic = self.get_intrinsic(key=keys.raster)
+        multiscales_transforms: set[Edge] = self.edges().containing(cs=intrinsic).ngff_siblings().collect(set)
+
+        label_dumpers: dict[PurePosixPath, MultiscalesDumper] = {}
+        for label_rel_path, label_key in keys.labels.items():
+            label_intrinsic = self.get_intrinsic(label_key)
+            ngff_transforms_to_label = (
+                self.edges()
+                .directed(fro=intrinsic, to=label_intrinsic) #mutlsicale-local transfs can point down to labels
+                .transf_is((IdentityEdge, ScaleEdge, TranslationEdge))
+                .collect(set)
+            )
+            multiscales_transforms |= ngff_transforms_to_label
+            label_dumpers[label_rel_path] = self.ngff_label_dumper(label_key=label_key)
+
+        return MultiscalesDumper(
+            intrinsic=intrinsic,
+            key=keys.raster,
+            labels=label_dumpers,
+            sdata=self,
+            transform_edges=list(multiscales_transforms),
+        )
+
+    def candidate_ngff_labels(
+        self,
+        *,
+        image_key: ElementKey,
+        gather_by_ngff_provenance: bool,
+        gather_by_unique_connection: bool,
+    ) -> Mapping[PurePosixPath, ElementKey]:
+        image_intrinsic = self.get_intrinsic(image_key)
+        out: dict[PurePosixPath, ElementKey] = {}
+
+        for label_key  in self._labels.keys():
+            label_intrinsic = self.get_intrinsic(label_key)
+            edges = (
+                self.edges()
+                .directed(fro=image_intrinsic, to=label_intrinsic)
+                .transf_is((IdentityEdge, ScaleEdge, TranslationEdge))
+                .collect(set)
+            )
+
+            proceed = False
+            if not proceed:
+                proceed = gather_by_unique_connection and len(edges) == 1
+            if not proceed:
+                proceed = gather_by_ngff_provenance and any(e.points_down_ngff_hierarchy() for e in edges)
+            if not proceed:
+                continue
+
+            if label_key.is_relative_to(image_key):
+                label_rel_path = label_key.namespace.relative_to(image_key.namespace)
+            else:
+                label_rel_path = PurePosixPath(label_key.name)
+                suffix = 2
+                while label_rel_path in out:
+                    label_rel_path = PurePosixPath(f"{label_key.name}__{suffix}")
+                    suffix += 1
+            out[label_rel_path] = label_key
+
+        return out
+
+    def scene_dumper(
+        self,
+        multiscale_keys: Mapping[str, MultiscalesKeys],
+    ) -> SceneDumper:
+        scene_coord_systems: set[CsVert] = set(self.__graph.verts())
+
+        ms_dumpers = {
+            name: self.ngff_multiscales_dumper(mskey)
+            for name, mskey in multiscale_keys.items()
+        }
+        ms_coord_systems = set(itertools.chain.from_iterable(
+            ms.all_coord_systems() for ms in ms_dumpers.values()
+        ))
+        scene_coord_systems: set[CsVert] = set()
+        scene_edges: set[Edge] = set()
+        for edge in self.edges():
+            if edge.origin in ms_coord_systems and edge.target not in ms_coord_systems:
+                scene_cs = edge.origin
+            elif edge.origin not in ms_coord_systems and edge.target in ms_coord_systems:
+                scene_cs = edge.target
+            else:
+                continue
+            scene_coord_systems.add(scene_cs)
+            scene_edges.add(edge)
+
+        return SceneDumper(
+            multiscales=ms_dumpers,
+            coord_systems=tuple(scene_coord_systems),
+            transform_edges=tuple(scene_edges),
+        )
+
+def try_read_ngff06_multiscale(
+    store: Path | zarr.Group,
+) -> FutureSpatialData:
+    multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store) if isinstance(store, Path) else store)
     assert isinstance(multiscale, oz.OMEZarrMultiscale)  # disambiguate from OMEZarrLabel
-    return try_parse_ngff06_multiscale(multiscale)
+    # FIXME: return a SpatialData
+    return try_parse_ngff06_multiscale(multiscale=multiscale)
 
 
-def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataTree, Sequence[BaseTransformationEdge]]:
+def try_parse_ngff06_multiscale(
+    multiscale: oz.OMEZarrMultiscale | oz.OMEZarrLabels,
+) -> FutureSpatialData:
+    sdata = FutureSpatialData()
+    _populate_with_ngff06_multiscale(
+        group_path=PurePosixPath("."),
+        multiscale=multiscale,
+        sdata=sdata,
+    )
+
+    # FIXME: return a SpatialData
+    return sdata
+
+def _populate_with_ngff06_scene(
+    group_path: PurePosixPath,
+    scene: oz.OMEZarrScene,
+    sdata: FutureSpatialData,
+) -> None:
+    for cs in scene.coordinate_systems:
+        parsed_cs = CoordSystem.try_from_model(cs)
+        cs_path = NgffCsPath(group_path=group_path, name=cs.name)
+        sdata.add_cs(cs=parsed_cs, provenance=cs_path)
+
+def _populate_with_ngff06_multiscale(
+    group_path: PurePosixPath,
+    multiscale: oz.OMEZarrMultiscale | oz.OMEZarrLabels,
+    sdata: FutureSpatialData,
+) -> None:
     """Parse an OMEZarMultiscale into a DataTree and collects Multiscale-level transforms."""
-    name_to_cs: dict[str, CoordSystem] = {}
     for cs in multiscale.metadata.coordinateSystems or ():
         parsed_cs = CoordSystem.try_from_model(cs)
-        name_to_cs[cs.name] = parsed_cs
+        cs_path = NgffCsPath(group_path=group_path, name=cs.name)
+        sdata.add_cs(cs=parsed_cs, provenance=cs_path)
 
-    parsed_transfs: list[BaseTransformationEdge] = []
-    for transf in multiscale.metadata.coordinateTransformations or ():
-        in_cs_id = transf.input
-        out_cs_ref = transf.output
-        # these should not be None as per the spec
-        assert in_cs_id is not None
-        assert out_cs_ref is not None
+    if not isinstance(multiscale, oz.OMEZarrLabels):
+        assert_type(multiscale, oz.OMEZarrMultiscale)
+        for label_path, label in (multiscale.labels or {}).items():
+            # spec says labels are under the "labels/" directory
+            label_namespace = group_path / "labels" / label_path  # FIXME: is label_path safe?
+            _populate_with_ngff06_multiscale(
+                group_path=label_namespace,
+                multiscale=label,
+                sdata=sdata,
+            )
 
-        # FIXME: not handling references into labels yet, which use name and path
-        in_cs_name = in_cs_id.name
-        out_cs_name = out_cs_ref.name
-        assert in_cs_name is not None
-        assert out_cs_name is not None
+    for ds_transf in multiscale.metadata.coordinateTransformations or ():
+        assert ds_transf.input is not None  # as per the spec
+        assert ds_transf.output is not None  # as per the spec
+        assert ds_transf.input.name is not None  # as per the spec
+        assert ds_transf.output.name is not None  # as per the spec
+
+        input_path = NgffCsPath(group_path / (ds_transf.input.path or ""), ds_transf.input.name)
+        output_path = NgffCsPath(group_path / (ds_transf.output.path or ""), ds_transf.output.name)
 
         # assume CS references are valid via ome-zarr(-models)-py
-        input = name_to_cs[in_cs_name]
-        output = name_to_cs[out_cs_name]
-        parsed = parse_ngff_transf(input=input, output=output, model=transf)
-        parsed_transfs.append(parsed)
+        input = sdata.find_node(ngff_path=input_path)
+        output = sdata.find_node(ngff_path=output_path)
+        parsed = parse_ngff_transf(input=input.coord_system, output=output.coord_system, model=ds_transf)
+        sdata.add_transformation(name=ds_transf.name, input=input, output=output, transf=parsed)
 
-    omero = multiscale.omero
-    channel_names = None if omero is None else [d.color for d in omero.channels]
+    channel_names: Sequence[str] | None = None
+    if isinstance(multiscale, oz.OMEZarrMultiscale):
+        omero = multiscale.omero
+        channel_names = None if omero is None else [d.color for d in omero.channels]
+    elif isinstance(multiscale, oz.OMEZarrLabels):
+        # FIXME: ome zarr has special annotations for labels
+        pass
+    else:
+        assert_never(multiscale)
 
+    intrinsic_cs_path = NgffCsPath(group_path=group_path, name=multiscale.metadata.intrinsic_coordinate_system.name)
+    intrinsic = sdata.find_node(ngff_path=intrinsic_cs_path)
+    intrinsic_cs = intrinsic.coord_system
     data_tree = xr.DataTree()
     for scale_idx, (ds_md, ds) in enumerate(zip(multiscale.metadata.datasets, multiscale.images, strict=True)):
-        transf = ds_md.coordinateTransformations[0]
-
-        intrinsic_cs = name_to_cs[multiscale.metadata.intrinsic_coordinate_system.name]
-        assert transf.input is not None
-        assert transf.input.path is not None
-
         # This coord system doesn't exist explicitly in the NGFF file, nor will
         # it exist in our graph of transformations; It is only created here
         # for the sake of creating the transformations that will be expressed
         # in levels of a xr.DataTree
-        pixel_cs = CoordSystem(
-            name=transf.input.path,
-            axes=tuple(Axis(name=ax.name, type=ax.type) for ax in intrinsic_cs.axes),
-            virtual=True,
-        )
-
-        pixel_cs_to_intrinsic_ngff = ozm06trans.Sequence(transformations=ds_md.coordinateTransformations)
+        pixel_cs = CoordSystem.create_dummy(axes=intrinsic_cs.num_axes)
+        pixel_cs_to_intrinsic_ngff = ozm06ct.Sequence(transformations=ds_md.coordinateTransformations)
         seq = parse_ngff_transf(input=pixel_cs, output=intrinsic_cs, model=pixel_cs_to_intrinsic_ngff)
         ds_shape = np.asarray(ds.data.shape)
         transformed_start = seq.transform_points(np.zeros_like(ds_shape)[np.newaxis, :])[0]
@@ -256,8 +475,187 @@ def try_parse_ngff06_multiscale(multiscale: oz.OMEZarrMultiscale) -> tuple[DataT
                 )
             },
         )
-    return data_tree, parsed_transfs
 
+    sdata_key = ElementKey(namespace=group_path, name=multiscale.name)
+    if isinstance(multiscale, oz.OMEZarrLabels):
+        sdata.add_label(key=sdata_key, label=data_tree, into=intrinsic)
+    elif isinstance(multiscale, oz.OMEZarrMultiscale):
+        sdata.add_image(key=sdata_key, image=data_tree, into=intrinsic)
+    else:
+        assert_never(multiscale)
+
+class MultiscalesDumper:
+    name: Final[str]
+    raster_data: Final[xr.DataTree]
+    intrinsic: Final[CsVert]
+    coord_systems: Final[set[CsVert]]
+    transform_edges: Final[Sequence[Edge]]
+    labels: Final[Mapping[PurePosixPath, MultiscalesDumper]]
+    cs_to_path: Final[Mapping[CsVert, PurePosixPath]]
+
+    def __init__(
+        self,
+        sdata: FutureSpatialData,
+        key: ElementKey,
+        intrinsic: CsVert,
+        transform_edges: Sequence[Edge], # FIXME: set[Edge]?
+        labels: Mapping[PurePosixPath, MultiscalesDumper],
+    ):
+        coord_systems = {intrinsic} | {e.origin for e in transform_edges} | {e.target for e in transform_edges}
+        cs_to_path: dict[CsVert, PurePosixPath] = {cs: PurePosixPath("") for cs in coord_systems}
+        intrinsic = sdata.get_intrinsic(key)
+        cs_to_path[intrinsic] = PurePosixPath("")
+        for label_path, label_dumper in self.labels.items():
+            if label_path.is_absolute():
+                raise ValueError(f"Label path {label_path} cannot be absolute")
+            for label_cs, label_cs_path in label_dumper.cs_to_path.items():
+                label_cs_path = "labels" / label_path / label_cs_path
+                if label_cs in cs_to_path:
+                    raise ValueError(f"Coordinate system {label_cs} from {label_cs_path} is not unique") # FIXME
+                cs_to_path[label_cs] = label_cs_path
+
+        for edge in transform_edges:
+            if edge.origin!= intrinsic and edge.target != intrinsic:
+                raise ValueError("Origin or target must be the intrinsic") # FIXME
+            for vert in (edge.origin, edge.target):
+                if vert not in cs_to_path:
+                    raise ValueError(f"Reference to {vert} is dangling") # FIXME
+
+        self.name = key.name
+        raster_data = sdata.get_image(key) or sdata.get_label(key)
+        if raster_data is None:
+            raise KeyError(f"Could not find element with key {key}") # FIXME
+        self.raster_data = raster_data
+        self.intrinsic = intrinsic
+        self.coord_systems = coord_systems
+        self.transform_edges = transform_edges
+        self.labels = labels
+        self.cs_to_path = cs_to_path
+
+        super().__init__()
+
+    def contains(self, cs: CsVert) -> bool:
+        if cs in self.coord_systems:
+            return True
+        for label in self.labels.values():
+            if label.contains(cs):
+                return True
+        return False
+
+    def all_coord_systems(self) -> Iterator[CsVert]:
+        yield from self.coord_systems
+        for label in self.labels.values():
+            yield from label.all_coord_systems()
+
+    def _make_ngff_cs_ident(self, csvert: CsVert) -> ozm06ct.CoordinateSystemIdentifier:
+        path = self.cs_to_path[csvert]
+        return ozm06ct.CoordinateSystemIdentifier(
+            name=csvert.name,
+            path=None if path == PurePosixPath(".") else path.as_posix(),
+        )
+
+    def dump(self) -> oz.OMEZarrMultiscale:
+        image_data_tree: xr.DataTree = self.raster_data
+        scale0 = image_data_tree["scale0"]["image"] # FIXME: using current silent convention
+        assert not isinstance(scale0, xr.DataTree)
+        assert isinstance(scale0.data, (da.Array, np.ndarray))
+
+        omz_image = oz.OMEZarrImage(
+            data=scale0.data,
+            axes=[str(d) for d in scale0.dims], # FIXME: safer alternative?
+            axes_units={
+                ax.name: ax.unit
+                for ax in self.intrinsic.coord_system.axes
+                if ax.unit is not None
+            },
+            axes_types={ax.name: ax.type for ax in self.intrinsic.coord_system.axes},
+            name=self.name,
+        )
+
+        omz_transforms: list[ozm06ct.AnyTransform] = [
+            edge.data["transform"].to_ngff_transform(
+                name=edge.data["name"],
+                input=self._make_ngff_cs_ident(edge.origin),
+                output=self._make_ngff_cs_ident(edge.target),
+            )
+            for edge in self.transform_edges
+        ]
+
+        dumped_labels: list[oz.OMEZarrLabels] = []
+        for label in self.labels.values():
+            dumped_label = label.dump()
+            dumped_labels.append(
+                oz.OMEZarrLabels(image=dumped_label.images[0]) # FIXME: use from_pyramid, no cs or transfers??
+            )
+
+        return oz.OMEZarrMultiscale(
+            image=omz_image, # FIXME: use from_pyramid once it's available
+            labels=dumped_labels,
+            default_coordinate_system_name=self.intrinsic.provenance.name,
+            coordinate_systems=[cs.to_ngff_cs() for cs in {*self.coord_systems, self.intrinsic}],
+            coordinate_transformations=tuple(omz_transforms),
+        )
+
+class SceneDumper:
+    multiscales: Final[ Mapping[str, MultiscalesDumper] ]
+    coord_systems: Final[ Sequence[CsVert] ]
+    transform_edges: Final[ Sequence[Edge] ]
+    cs_to_path: Final[ Mapping[CsVert, PurePosixPath] ]
+
+    def __init__(
+        self,
+        *,
+        multiscales: Mapping[str, MultiscalesDumper],
+        coord_systems: Sequence[CsVert],
+        transform_edges: Sequence[Edge],
+    ) -> None:
+        cs_to_path: dict[CsVert, PurePosixPath] = {cs: PurePosixPath("") for cs in coord_systems}
+        for ms_name, ms_dumper in multiscales.items():
+            parsed_raster_name = PurePosixPath(ms_name)
+            if (
+                parsed_raster_name.is_absolute() or
+                len(parsed_raster_name.parts) != 1
+            ):
+                raise ValueError(f"Raster name cannot be a path: {ms_name}")
+            for raster_cs, raster_cs_path in ms_dumper.cs_to_path.items():
+                raster_cs_path = ms_name / raster_cs_path
+                if raster_cs in cs_to_path:
+                    raise ValueError(f"Coordinate system {raster_cs} from {raster_cs_path} is not unique")
+                cs_to_path[raster_cs] = raster_cs_path
+
+        for edge in transform_edges:
+            for vert in (edge.origin, edge.target):
+                if vert not in cs_to_path:
+                    raise ValueError(f"Reference to {vert} is dangling") # FIXME
+
+        self.multiscales = multiscales
+        self.coord_systems = coord_systems
+        self.transform_edges = transform_edges
+        self.cs_to_path = cs_to_path
+        super().__init__()
+
+    def _make_ngff_cs_ident(self, csvert: CsVert) -> ozm06ct.CoordinateSystemIdentifier:
+        path = self.cs_to_path[csvert]
+        return ozm06ct.CoordinateSystemIdentifier(
+            name=csvert.name,
+            path=None if path == PurePosixPath(".") else path.as_posix(),
+        )
+
+    def dump(self) -> oz.OMEZarrScene:
+        omz_transforms: list[ozm06ct.AnyTransform] = [
+            edge.data["transform"].to_ngff_transform(
+                name=edge.data["name"],
+                input=self._make_ngff_cs_ident(edge.origin),
+                output=self._make_ngff_cs_ident(edge.target),
+            )
+            for edge in self.transform_edges
+        ]
+
+        return oz.OMEZarrScene(
+            images={name: r.dump() for name, r in self.multiscales.items()},
+            coordinate_systems=[cs.to_ngff_cs() for cs in self.coord_systems],
+            coordinate_transformations=omz_transforms,
+        )
 
 def _read_multiscale(
     store: str | Path, raster_type: ELEMENT_TYPE_RASTER, reader_format: Format

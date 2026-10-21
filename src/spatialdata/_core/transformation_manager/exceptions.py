@@ -1,7 +1,9 @@
+# pyright: reportImplicitStringConcatenation=false
+
 from __future__ import annotations
 
 from spatialdata._types import ArrayLike
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations.graph import vert
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem
 
 
@@ -232,17 +234,17 @@ class TransformationManagerWarning(UserWarning):
 
 
 class IncompatibleCoordSystemsError(Exception):
-    def __init__(self, input: CoordSystem, output: CoordSystem, message: str | None = None) -> None:
+    def __init__(self, input: vert.CoordSystem, output: vert.CoordSystem, message: str | None = None) -> None:
         self.input = input
         self.output = output
         super().__init__(message or "Output axes can't be mapped to input axes")
 
 
 class MissingAxisError(Exception):
-    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
+    def __init__(self, axis: vert.Axis, cs: vert.CoordSystem) -> None:
         self.axis = axis
         self.cs = cs
-        super().__init__(f"Axis {axis.name} is not in coordinate system {cs.name}")
+        super().__init__(f"Axis {axis.name} is not in coordinate system {cs}")
 
 
 class UnexpectedShapeError(Exception):
@@ -282,12 +284,12 @@ class EmptyTransformSequenceError(Exception):
 
 
 class AxisRedefinitionError(Exception):
-    def __init__(self, axis: Axis) -> None:
+    def __init__(self, axis: vert.Axis) -> None:
         super().__init__(f"Axis {axis.name} is defined multiple times")
 
 
 class UnmappedAxisError(Exception):
-    def __init__(self, axis: Axis, cs: CoordSystem) -> None:
+    def __init__(self, axis: vert.Axis, cs: vert.CoordSystem) -> None:
         self.axis = axis
         self.cs = cs
-        super().__init__(f"Axis {axis.name} from coordinate system {cs.name} is not mapped to anything")
+        super().__init__(f"Axis {axis.name} from coordinate system {cs} is not mapped to anything")
