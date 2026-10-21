@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Callable, Final, Literal, NamedTuple, Type, TypedDict, assert_never
+from typing import TYPE_CHECKING, Callable, Final, Literal, NamedTuple, Type, TypedDict, assert_never, assert_type
 
 import networkx as nx
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
@@ -340,7 +340,7 @@ class Edge(NamedTuple):
 type VertFilter = Callable[[CsVert, Spaces], bool]
 
 class Verts:
-    def __init__(self, verts: Iterator, graph: Spaces, filters: Sequence[VertFilter]) -> None:
+    def __init__(self, verts: Iterator[CsVert], graph: Spaces, filters: Sequence[VertFilter]) -> None:
         self.verts = verts
         self.graph = graph
         self.filters: Sequence[VertFilter] = filters
@@ -373,7 +373,7 @@ class Verts:
             return False
         return self.filter(filter)
 
-    def single_neighbor(self) -> Verts:
+    def has_single_neighbor(self) -> Verts:
         def filter(v: CsVert, g: Spaces) -> bool:
             return len(g.all_neighbors(v)) == 1
 
@@ -421,10 +421,7 @@ class Edges:
 
     def containing(self, cs: CsVert) -> Edges:
         def filter(edge: Edge, graph: Spaces) -> bool:
-            for edge in self.edges:
-                if cs in (edge.origin, edge.target):
-                    return True
-            return False
+            return edge.origin == cs or edge.target == cs
         return self.filter(filter)
 
     def between(self, cs1: CsVert, cs2: CsVert) -> Edges:
@@ -459,7 +456,7 @@ class Spaces:
         super().__init__()
 
     @classmethod
-    def from_ngff(
+    def non_recursing_from_ngff(
         cls,
         group_path: PurePosixPath,
         ngff_element: oz.OMEZarrScene | oz.OMEZarrMultiscale | oz.OMEZarrLabels,
@@ -467,11 +464,10 @@ class Spaces:
         if isinstance(ngff_element, oz.OMEZarrScene):
             coord_systems = ngff_element.coordinate_systems
             transforms = ngff_element.coordinate_transformations
-        elif isinstance(ngff_element, (oz.OMEZarrMultiscale, oz.OMEZarrLabels)):
+        else:
+            assert_type(ngff_element, oz.OMEZarrMultiscale | oz.OMEZarrLabels)
             coord_systems = ngff_element.metadata.coordinateSystems
             transforms = ngff_element.metadata.coordinateTransformations or ()
-        else:
-            assert_never(ngff_element)
 
         out = Spaces()
         for cs in coord_systems:

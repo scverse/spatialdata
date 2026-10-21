@@ -1,8 +1,11 @@
+# pyright: standard
+
 from __future__ import annotations
 
 from pathlib import PurePosixPath
 
 import numpy as np
+import xarray as xr
 import ome_zarr as oz
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
@@ -52,7 +55,7 @@ def test_parse_multiscale():
         labels=[omz_label],
     )
 
-    sdata = try_parse_ngff06_multiscale(ms)
+    sdata = try_parse_ngff06_multiscale(group_path=PurePosixPath("."), multiscale=ms)
 
     base_path = PurePosixPath(".")
     intrinsic_cs = sdata.find_node(
@@ -80,6 +83,7 @@ def test_parse_multiscale():
         image_data_tree.children.values(), ms.images, ms.metadata.datasets, strict=True
     ):
         xr_scale = xr_scale_node["image"]
+        assert not isinstance(xr_scale, xr.DataTree)
         assert xr_scale.shape == ngff_scale.data.shape
 
         coords_x = xr_scale.coords["x"]

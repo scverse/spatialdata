@@ -206,12 +206,27 @@ class FutureSpatialData:
     _labels: dict[ElementKey, xr.DataTree]
     _intrinsics: dict[ElementKey, CsVert]
 
-    def __init__(self) -> None:
-        self.__graph = Spaces()
+    def __init__(self, graph: Spaces | None = None) -> None:
+        self.__graph = graph or Spaces()
         self._images = {}
         self._labels = {}
         self._intrinsics = {}
         super().__init__()
+
+    def incorporate(self, other: FutureSpatialData):
+        # FIXME: there might be more conflicts that need to be checked before merging
+        # so we avoid a half-merged SpatialData
+        for key in other._images.keys():
+            if key in self._images:
+                raise KeyError(f"Can't merge key {key}") # FIXME: custm error
+
+        for key in other._labels.keys():
+            if key in self._images:
+                raise KeyError(f"Can't merge key {key}") # FIXME: custm error
+
+        self.__graph.incorporate(other.__graph)
+        self._images.update(other._images)
+        self._labels.update(other._labels)
 
     def add_image(self, key: ElementKey, image: xr.DataTree, into: CsVert):
         if into not in self.__graph.verts():
@@ -352,74 +367,47 @@ class FutureSpatialData:
             transform_edges=tuple(scene_edges),
         )
 
+def try_parse_ngff06_scene(
+    group_path: PurePosixPath,
+    scene: oz.OMEZarrScene,
+) -> FutureSpatialData:
+    graph = Spaces.non_recursing_from_ngff(group_path=group_path, ngff_element=scene)
+    sdata = FutureSpatialData(graph=graph)
+
+    for img_path, img in scene.images.items():
+        ms_sdata = try_parse_ngff06_multiscale(
+            group_path=group_path / img_path.lstrip("/"),
+            multiscale=img,
+        )
+        sdata.incorporate(ms_sdata)
+
+    return sdata
+
 def try_read_ngff06_multiscale(
     store: Path | zarr.Group,
 ) -> FutureSpatialData:
     multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store) if isinstance(store, Path) else store)
     assert isinstance(multiscale, oz.OMEZarrMultiscale)  # disambiguate from OMEZarrLabel
-    # FIXME: return a SpatialData
-    return try_parse_ngff06_multiscale(multiscale=multiscale)
+    return try_parse_ngff06_multiscale(multiscale=multiscale, group_path=PurePosixPath("."))
 
 
 def try_parse_ngff06_multiscale(
+    group_path: PurePosixPath,
     multiscale: oz.OMEZarrMultiscale | oz.OMEZarrLabels,
 ) -> FutureSpatialData:
-    sdata = FutureSpatialData()
-    _populate_with_ngff06_multiscale(
-        group_path=PurePosixPath("."),
-        multiscale=multiscale,
-        sdata=sdata,
-    )
-
-    # FIXME: return a SpatialData
-    return sdata
-
-def _populate_with_ngff06_scene(
-    group_path: PurePosixPath,
-    scene: oz.OMEZarrScene,
-    sdata: FutureSpatialData,
-) -> None:
-    for cs in scene.coordinate_systems:
-        parsed_cs = CoordSystem.try_from_model(cs)
-        cs_path = NgffCsPath(group_path=group_path, name=cs.name)
-        sdata.add_cs(cs=parsed_cs, provenance=cs_path)
-
-def _populate_with_ngff06_multiscale(
-    group_path: PurePosixPath,
-    multiscale: oz.OMEZarrMultiscale | oz.OMEZarrLabels,
-    sdata: FutureSpatialData,
-) -> None:
-    """Parse an OMEZarMultiscale into a DataTree and collects Multiscale-level transforms."""
-    for cs in multiscale.metadata.coordinateSystems or ():
-        parsed_cs = CoordSystem.try_from_model(cs)
-        cs_path = NgffCsPath(group_path=group_path, name=cs.name)
-        sdata.add_cs(cs=parsed_cs, provenance=cs_path)
+    graph = Spaces.non_recursing_from_ngff(group_path=group_path, ngff_element=multiscale)
+    sdata = FutureSpatialData(graph=graph)
 
     if not isinstance(multiscale, oz.OMEZarrLabels):
         assert_type(multiscale, oz.OMEZarrMultiscale)
         for label_path, label in (multiscale.labels or {}).items():
             # spec says labels are under the "labels/" directory
             label_namespace = group_path / "labels" / label_path  # FIXME: is label_path safe?
-            _populate_with_ngff06_multiscale(
+            label_sdata = try_parse_ngff06_multiscale(
                 group_path=label_namespace,
                 multiscale=label,
-                sdata=sdata,
             )
-
-    for ds_transf in multiscale.metadata.coordinateTransformations or ():
-        assert ds_transf.input is not None  # as per the spec
-        assert ds_transf.output is not None  # as per the spec
-        assert ds_transf.input.name is not None  # as per the spec
-        assert ds_transf.output.name is not None  # as per the spec
-
-        input_path = NgffCsPath(group_path / (ds_transf.input.path or ""), ds_transf.input.name)
-        output_path = NgffCsPath(group_path / (ds_transf.output.path or ""), ds_transf.output.name)
-
-        # assume CS references are valid via ome-zarr(-models)-py
-        input = sdata.find_node(ngff_path=input_path)
-        output = sdata.find_node(ngff_path=output_path)
-        parsed = parse_ngff_transf(input=input.coord_system, output=output.coord_system, model=ds_transf)
-        sdata.add_transformation(name=ds_transf.name, input=input, output=output, transf=parsed)
+            sdata.incorporate(label_sdata)
 
     channel_names: Sequence[str] | None = None
     if isinstance(multiscale, oz.OMEZarrMultiscale):
@@ -483,6 +471,8 @@ def _populate_with_ngff06_multiscale(
         sdata.add_image(key=sdata_key, image=data_tree, into=intrinsic)
     else:
         assert_never(multiscale)
+
+    return sdata
 
 class MultiscalesDumper:
     name: Final[str]
