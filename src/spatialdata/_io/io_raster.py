@@ -227,6 +227,7 @@ class FutureSpatialData:
         self.__graph.incorporate(other.__graph)
         self._images.update(other._images)
         self._labels.update(other._labels)
+        self._intrinsics.update(other._intrinsics)
 
     def incorporate_graph(self, graph: Spaces):
         self.__graph.incorporate(graph)
@@ -349,13 +350,13 @@ class FutureSpatialData:
 
     def scene_dumper(
         self,
-        multiscale_keys: Mapping[str, MultiscalesKeys],
+        children: Mapping[PurePosixPath, MultiscalesKeys],
     ) -> SceneDumper:
         scene_coord_systems: set[CsVert] = set(self.__graph.verts())
 
         ms_dumpers = {
-            name: self.ngff_multiscales_dumper(mskey)
-            for name, mskey in multiscale_keys.items()
+            ms_path: self.ngff_multiscales_dumper(mskey)
+            for ms_path, mskey in children.items()
         }
         ms_coord_systems = set(itertools.chain.from_iterable(
             ms.all_coord_systems() for ms in ms_dumpers.values()
@@ -364,9 +365,9 @@ class FutureSpatialData:
         scene_edges: set[Edge] = set()
         for edge in self.edges():
             if edge.origin in ms_coord_systems and edge.target not in ms_coord_systems:
-                scene_cs = edge.origin
-            elif edge.origin not in ms_coord_systems and edge.target in ms_coord_systems:
                 scene_cs = edge.target
+            elif edge.origin not in ms_coord_systems and edge.target in ms_coord_systems:
+                scene_cs = edge.origin
             else:
                 continue
             scene_coord_systems.add(scene_cs)
@@ -377,6 +378,22 @@ class FutureSpatialData:
             coord_systems=tuple(scene_coord_systems),
             transform_edges=tuple(scene_edges),
         )
+
+    def default_scene_dumper(self) -> SceneDumper:
+        multiscale_keys: dict[PurePosixPath, MultiscalesKeys] = {}
+        for img_key, img in self._images.items():
+            candidate_labels = self.candidate_ngff_labels(
+                image_key=img_key, gather_by_ngff_provenance=True, gather_by_unique_connection=False,
+            )
+            # FIXME: raising for duplicate names doens't seem appropriate
+            img_path = img_key.to_path()
+            if img_path in multiscale_keys:
+                raise ValueError(f"Multiple images with conflicting paths: {img_path}") # FIXME: custom exception
+            multiscale_keys[img_path] = MultiscalesKeys(
+                raster=img_key,
+                labels=candidate_labels
+            )
+        return self.scene_dumper(multiscale_keys)
 
 def try_parse_ngff06_scene(
     group_path: PurePosixPath,
@@ -516,7 +533,7 @@ class MultiscalesDumper:
         cs_to_path: dict[CsVert, PurePosixPath] = {cs: PurePosixPath("") for cs in coord_systems}
         intrinsic = sdata.get_intrinsic(key)
         cs_to_path[intrinsic] = PurePosixPath("")
-        for label_path, label_dumper in self.labels.items():
+        for label_path, label_dumper in labels.items():
             if label_path.is_absolute():
                 raise ValueError(f"Label path {label_path} cannot be absolute")
             for label_cs, label_cs_path in label_dumper.cs_to_path.items():
@@ -608,7 +625,7 @@ class MultiscalesDumper:
         )
 
 class SceneDumper:
-    multiscales: Final[ Mapping[str, MultiscalesDumper] ]
+    multiscales: Final[ Mapping[PurePosixPath, MultiscalesDumper] ]
     coord_systems: Final[ Sequence[CsVert] ]
     transform_edges: Final[ Sequence[Edge] ]
     cs_to_path: Final[ Mapping[CsVert, PurePosixPath] ]
@@ -616,20 +633,16 @@ class SceneDumper:
     def __init__(
         self,
         *,
-        multiscales: Mapping[str, MultiscalesDumper],
+        multiscales: Mapping[PurePosixPath, MultiscalesDumper],
         coord_systems: Sequence[CsVert],
         transform_edges: Sequence[Edge],
     ) -> None:
         cs_to_path: dict[CsVert, PurePosixPath] = {cs: PurePosixPath("") for cs in coord_systems}
-        for ms_name, ms_dumper in multiscales.items():
-            parsed_raster_name = PurePosixPath(ms_name)
-            if (
-                parsed_raster_name.is_absolute() or
-                len(parsed_raster_name.parts) != 1
-            ):
-                raise ValueError(f"Raster name cannot be a path: {ms_name}")
+        for ms_path, ms_dumper in multiscales.items():
+            if ms_path.is_absolute():
+                raise ValueError(f"Raster name cannot be absolute: {ms_path}")
             for raster_cs, raster_cs_path in ms_dumper.cs_to_path.items():
-                raster_cs_path = ms_name / raster_cs_path
+                raster_cs_path = ms_path / raster_cs_path
                 if raster_cs in cs_to_path:
                     raise ValueError(f"Coordinate system {raster_cs} from {raster_cs_path} is not unique")
                 cs_to_path[raster_cs] = raster_cs_path
@@ -663,7 +676,7 @@ class SceneDumper:
         ]
 
         return oz.OMEZarrScene(
-            images={name: r.dump() for name, r in self.multiscales.items()},
+            images={path.as_posix(): r.dump() for path, r in self.multiscales.items()},
             coordinate_systems=[cs.to_ngff_cs() for cs in self.coord_systems],
             coordinate_transformations=omz_transforms,
         )
