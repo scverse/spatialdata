@@ -16,7 +16,7 @@ from spatialdata import transform
 from spatialdata._core.data_extent import are_extents_equal, get_extent
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._utils import disable_dask_tune_optimization, unpad_raster
-from spatialdata.models import Image2DModel, PointsModel, ShapesModel, get_axes_names
+from spatialdata.models import Image2DModel, Labels2DModel, Labels3DModel, PointsModel, ShapesModel, get_axes_names
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,
@@ -232,6 +232,58 @@ def test_transform_shapes(shapes: SpatialData):
         p0 = shapes.shapes[k]
         p1 = new_shapes.shapes[k]
         assert geom_almost_equals(p0["geometry"], p1["geometry"])
+
+
+def _label_ids_per_scale(labels: DataArray | DataTree) -> list[set[int]]:
+    levels = [labels] if isinstance(labels, DataArray) else [next(iter(scale.values())) for scale in labels.values()]
+    return [set(np.unique(np.asarray(level.data)).tolist()) for level in levels]
+
+
+def _rotation_xy(degrees: float) -> Affine:
+    theta = np.deg2rad(degrees)
+    matrix = np.array([[np.cos(theta), -np.sin(theta), 0], [np.sin(theta), np.cos(theta), 0], [0, 0, 1]])
+    return Affine(matrix, input_axes=("x", "y"), output_axes=("x", "y"))
+
+
+@pytest.mark.parametrize("multiscale", [False, True])
+@pytest.mark.parametrize("via_spatialdata", [False, True])
+@pytest.mark.parametrize(
+    "transformation",
+    [_rotation_xy(30), Scale([1.5, 1.5], axes=("x", "y"))],
+    ids=["rotation", "scale"],
+)
+def test_transform_labels_preserves_label_ids(multiscale: bool, via_spatialdata: bool, transformation):
+    """Labels are resampled with nearest neighbour, so no label ids are invented (gh-1202)."""
+    arr = np.zeros((64, 64), dtype=np.uint16)
+    arr[:32, :] = 1
+    arr[32:, :] = 50
+    labels = Labels2DModel.parse(arr, scale_factors=[2] if multiscale else None)
+    set_transformation(labels, transformation, "transformed")
+
+    if via_spatialdata:
+        transformed = transform(SpatialData(labels={"labels": labels}), to_coordinate_system="transformed")["labels"]
+    else:
+        transformed = transform(labels, to_coordinate_system="transformed")
+
+    for ids in _label_ids_per_scale(transformed):
+        assert ids <= {0, 1, 50}
+        assert {1, 50} <= ids
+
+
+@pytest.mark.parametrize("multiscale", [False, True])
+def test_transform_labels_3d_preserves_label_ids(multiscale: bool):
+    """Labels are resampled with nearest neighbour, so no label ids are invented (gh-1202)."""
+    arr = np.zeros((8, 32, 32), dtype=np.uint16)
+    arr[:, :16, :] = 1
+    arr[:, 16:, :] = 50
+    labels = Labels3DModel.parse(arr, scale_factors=[2] if multiscale else None)
+    set_transformation(labels, Scale([1.5, 1.5, 1.5], axes=("x", "y", "z")), "transformed")
+
+    transformed = transform(labels, to_coordinate_system="transformed")
+
+    for ids in _label_ids_per_scale(transformed):
+        assert ids <= {0, 1, 50}
+        assert {1, 50} <= ids
 
 
 def test_transform_datatree_scale_handling():
