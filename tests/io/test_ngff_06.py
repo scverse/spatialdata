@@ -9,7 +9,7 @@ import xarray as xr
 import ome_zarr as oz
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
-from spatialdata._io.io_raster import ElementKey, FutureSpatialData, try_parse_ngff06_multiscale
+from spatialdata._io.io_raster import ElementKey, FutureSpatialData, try_parse_ngff06_multiscale, try_parse_ngff06_scene
 from spatialdata.transformations.graph.edge import ScaleEdge
 from spatialdata.transformations.graph.vert import NgffCsPath
 from tests.conftest import SEED
@@ -201,3 +201,6 @@ def test_dumping_multiscales_to_ngff():
         coordinate_transformations=[scene_transf1],
         images={"multiscales1": multiscales1, "multiscales2": multiscales2},
     )
+
+    sdata = try_parse_ngff06_scene(group_path=PurePosixPath("."), scene=scene)
+

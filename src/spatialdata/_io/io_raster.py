@@ -228,6 +228,17 @@ class FutureSpatialData:
         self._images.update(other._images)
         self._labels.update(other._labels)
 
+    def incorporate_graph(self, graph: Spaces):
+        self.__graph.incorporate(graph)
+
+    def incorporate_ngff_graph(
+        self,
+        group_path: PurePosixPath,
+        coord_systems: Sequence[ozm06ct.CoordinateSystem],
+        transforms: Sequence[ozm06ct.AnyTransform],
+    ) -> None:
+        self.__graph.incorporate_ngff_graph(group_path, coord_systems, transforms)
+
     def add_image(self, key: ElementKey, image: xr.DataTree, into: CsVert):
         if into not in self.__graph.verts():
             raise KeyError(f"{CsVert} is not in the transformation graph")
@@ -371,8 +382,7 @@ def try_parse_ngff06_scene(
     group_path: PurePosixPath,
     scene: oz.OMEZarrScene,
 ) -> FutureSpatialData:
-    graph = Spaces.non_recursing_from_ngff(group_path=group_path, ngff_element=scene)
-    sdata = FutureSpatialData(graph=graph)
+    sdata = FutureSpatialData()
 
     for img_path, img in scene.images.items():
         ms_sdata = try_parse_ngff06_multiscale(
@@ -381,6 +391,12 @@ def try_parse_ngff06_scene(
         )
         sdata.incorporate(ms_sdata)
 
+    sdata.incorporate_ngff_graph(
+        group_path=group_path,
+        coord_systems=scene.coordinate_systems,
+        transforms=scene.coordinate_transformations,
+    )
+
     return sdata
 
 def try_read_ngff06_multiscale(
@@ -388,18 +404,16 @@ def try_read_ngff06_multiscale(
 ) -> FutureSpatialData:
     multiscale = oz.OMEZarrMultiscale.from_ome_zarr(str(store) if isinstance(store, Path) else store)
     assert isinstance(multiscale, oz.OMEZarrMultiscale)  # disambiguate from OMEZarrLabel
+    # FIXME: we should probably use something liek a zarr-interpretable URL isntead of a path
     return try_parse_ngff06_multiscale(multiscale=multiscale, group_path=PurePosixPath("."))
-
 
 def try_parse_ngff06_multiscale(
     group_path: PurePosixPath,
     multiscale: oz.OMEZarrMultiscale | oz.OMEZarrLabels,
 ) -> FutureSpatialData:
-    graph = Spaces.non_recursing_from_ngff(group_path=group_path, ngff_element=multiscale)
-    sdata = FutureSpatialData(graph=graph)
+    sdata = FutureSpatialData()
 
-    if not isinstance(multiscale, oz.OMEZarrLabels):
-        assert_type(multiscale, oz.OMEZarrMultiscale)
+    if isinstance(multiscale, oz.OMEZarrMultiscale):
         for label_path, label in (multiscale.labels or {}).items():
             # spec says labels are under the "labels/" directory
             label_namespace = group_path / "labels" / label_path  # FIXME: is label_path safe?
@@ -408,6 +422,13 @@ def try_parse_ngff06_multiscale(
                 multiscale=label,
             )
             sdata.incorporate(label_sdata)
+
+    # mutliscales transforms can reference CSs in `labels/` , so we process those last
+    sdata.incorporate_ngff_graph(
+        group_path=group_path,
+        coord_systems = multiscale.metadata.coordinateSystems,
+        transforms = multiscale.metadata.coordinateTransformations or (),
+    )
 
     channel_names: Sequence[str] | None = None
     if isinstance(multiscale, oz.OMEZarrMultiscale):

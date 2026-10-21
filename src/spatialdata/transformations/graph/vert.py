@@ -404,7 +404,7 @@ class Edges:
         for e in self.edges:
             if all(f(e, self.graph) for f  in self.filters):
                 return e
-        raise StopAsyncIteration()
+        raise StopIteration()
 
     def filter(self, filter: Callable[[Edge, Spaces], bool]) -> Edges:
         return Edges(edges=self.edges, graph=self.graph, filters=[*self.filters, filter])
@@ -455,24 +455,15 @@ class Spaces:
         self._graph: nx.MultiDiGraph[CsVert, dict[str, None], EdgeData] = nx.MultiDiGraph()
         super().__init__()
 
-    @classmethod
-    def non_recursing_from_ngff(
-        cls,
+    def incorporate_ngff_graph(
+        self,
         group_path: PurePosixPath,
-        ngff_element: oz.OMEZarrScene | oz.OMEZarrMultiscale | oz.OMEZarrLabels,
-    ) -> Spaces:
-        if isinstance(ngff_element, oz.OMEZarrScene):
-            coord_systems = ngff_element.coordinate_systems
-            transforms = ngff_element.coordinate_transformations
-        else:
-            assert_type(ngff_element, oz.OMEZarrMultiscale | oz.OMEZarrLabels)
-            coord_systems = ngff_element.metadata.coordinateSystems
-            transforms = ngff_element.metadata.coordinateTransformations or ()
-
-        out = Spaces()
+        coord_systems: Sequence[ozm06ct.CoordinateSystem],
+        transforms: Sequence[ozm06ct.AnyTransform],
+    ) -> None:
         for cs in coord_systems:
             parsed_cs = CoordSystem.try_from_model(cs)
-            out.add_cs(cs=parsed_cs, provenance=NgffCsPath(group_path=group_path, name=cs.name))
+            self.add_cs(cs=parsed_cs, provenance=NgffCsPath(group_path=group_path, name=cs.name))
 
         for transf in transforms:
             assert transf.input is not None  # as per the spec
@@ -482,12 +473,10 @@ class Spaces:
             input_path = NgffCsPath(group_path / (transf.input.path or ""), transf.input.name)
             output_path = NgffCsPath(group_path / (transf.output.path or ""), transf.output.name)
 
-            input = out.find_node(ngff_path=input_path)
-            output = out.find_node(ngff_path=output_path)
+            input = self.find_node(ngff_path=input_path)
+            output = self.find_node(ngff_path=output_path)
             parsed = parse_ngff_transf(input=input.coord_system, output=output.coord_system, model=transf)
-            out.add_transformation(name=transf.name, input=input, output=output, transf=parsed)
-
-        return out
+            self.add_transformation(name=transf.name, input=input, output=output, transf=parsed)
 
     def incorporate(self, other: Spaces):
         # FIXME: maybe there are some nodes or edges that cannot be incorporated.
