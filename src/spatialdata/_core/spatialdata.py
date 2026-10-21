@@ -1160,6 +1160,8 @@ class SpatialData:
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
         convert_table_strings_to_categoricals: bool = False,
+        *,
+        table_shard_size_bytes: int | None = None,
     ) -> None:
         """
         Write the `SpatialData` object to a Zarr store.
@@ -1215,12 +1217,33 @@ class SpatialData:
         convert_table_strings_to_categoricals
             If True, convert string columns of all tables to categoricals before writing.
             Note that this will have a side effect of modifying string columns into categoricals in place.
+        table_shard_size_bytes
+            The target size in bytes of uncompressed data for a single zarr shard of every array inside every
+            table group. If `None` (default), no shard budget is requested and the write is left entirely to the
+            backend defaults. Requires a zarr v3 table format, zarr >= 3.1.6 and an anndata that supports zarr v3
+            auto-sharding; a `TableWriteOptionsError` is raised otherwise, before anything is written to disk.
+            Setting it forces anndata's zarr v3 auto-sharding on for the duration of each table write, overriding
+            an explicit :attr:`anndata.settings.auto_shard_zarr_v3` of `False`; there is no value that turns
+            sharding off. The budget is a target, not a bound: if it is below the automatically chosen inner
+            chunk (about 1 MiB), it degenerates to one chunk per shard, which is larger than the budget.
+            Non-table elements ignore this parameter.
+
+        Raises
+        ------
+        TableWriteOptionsError
+            If `table_shard_size_bytes` is not a positive `int`, or if the active backend cannot honour a shard
+            budget.
         """
-        from spatialdata._io._utils import _resolve_zarr_store, _validate_compressor_args
+        from spatialdata._io._utils import (
+            _resolve_zarr_store,
+            _validate_compressor_args,
+            _validate_table_shard_size_bytes,
+        )
         from spatialdata._io.format import _parse_formats
 
         parsed = _parse_formats(sdata_formats)
         _validate_compressor_args(raster_compressor)
+        _validate_table_shard_size_bytes(table_shard_size_bytes, tables_zarr_format=parsed["tables"].zarr_format)
 
         if isinstance(file_path, str):
             file_path = Path(file_path)
@@ -1251,6 +1274,7 @@ class SpatialData:
                 shapes_geometry_encoding=shapes_geometry_encoding,
                 raster_compressor=raster_compressor,
                 convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
+                table_shard_size_bytes=table_shard_size_bytes,
             )
 
         if self.path != file_path and update_sdata_path:
@@ -1270,6 +1294,8 @@ class SpatialData:
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
         convert_table_strings_to_categoricals: bool = False,
+        *,
+        table_shard_size_bytes: int | None = None,
     ) -> None:
         from spatialdata._io.io_zarr import _get_groups_for_element
 
@@ -1371,6 +1397,7 @@ class SpatialData:
                 name=element_name,
                 element_format=tables_format,
                 convert_strings_to_categoricals=convert_table_strings_to_categoricals,
+                shard_size_bytes=table_shard_size_bytes,
             )
         else:
             raise ValueError(f"Unknown element type: {element_type}")
@@ -1383,6 +1410,8 @@ class SpatialData:
         shapes_geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
         raster_compressor: dict[Literal["lz4", "zstd"], int] | None = None,
         convert_table_strings_to_categoricals: bool = False,
+        *,
+        table_shard_size_bytes: int | None = None,
     ) -> None:
         """
         Write a single element, or a list of elements, to the Zarr store used for backing.
@@ -1409,15 +1438,29 @@ class SpatialData:
         convert_table_strings_to_categoricals
             If True, and if element to be written is a table, convert string columns to categoricals before writing.
             Note that this will have a side effect of modifying string columns into categoricals in place.
+        table_shard_size_bytes
+            The target size in bytes of uncompressed data for a single zarr shard of every array inside the
+            table group. See :meth:`spatialdata.SpatialData.write` for the full semantics. Ignored if the
+            element being written is not a table.
+
+        Raises
+        ------
+        TableWriteOptionsError
+            If `table_shard_size_bytes` is not a positive `int`, or if the active backend cannot honour a shard
+            budget.
 
         Notes
         -----
         If you pass a list of names, the elements will be written one by one. If an error occurs during the writing of
         an element, the writing of the remaining elements will not be attempted.
         """
+        from spatialdata._io._utils import _validate_table_shard_size_bytes
         from spatialdata._io.format import _parse_formats
 
         parsed_formats = _parse_formats(formats=sdata_formats)
+        _validate_table_shard_size_bytes(
+            table_shard_size_bytes, tables_zarr_format=parsed_formats["tables"].zarr_format
+        )
 
         if isinstance(element_name, list):
             for name in element_name:
@@ -1429,6 +1472,7 @@ class SpatialData:
                     shapes_geometry_encoding=shapes_geometry_encoding,
                     raster_compressor=raster_compressor,
                     convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
+                    table_shard_size_bytes=table_shard_size_bytes,
                 )
             return
 
@@ -1467,6 +1511,7 @@ class SpatialData:
             shapes_geometry_encoding=shapes_geometry_encoding,
             raster_compressor=raster_compressor,
             convert_table_strings_to_categoricals=convert_table_strings_to_categoricals,
+            table_shard_size_bytes=table_shard_size_bytes,
         )
         # After every write, metadata should be consolidated, otherwise this can lead to IO problems like when deleting.
         if self.has_consolidated_metadata():
