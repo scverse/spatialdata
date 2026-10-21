@@ -50,11 +50,11 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinxcontrib.bibtex",
     "sphinxcontrib.katex",
+    "scverse_misc.sphinx_ext",  # needs to be before sphinx_autodoc_typehints, which turns class bases into strings
     "sphinx_autodoc_typehints",
     "sphinx_design",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinxext.opengraph",
-    "scverse_misc.sphinx_ext",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
     *[p.stem for p in (HERE / "tutorials" / "notebooks" / "extensions").glob("*.py")],
 ]
