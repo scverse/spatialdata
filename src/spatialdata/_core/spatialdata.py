@@ -95,23 +95,24 @@ class SpatialData:
         Dict of 2D shapes elements (circles, polygons, multipolygons).
         Shapes are regions, they can't contain annotation, but they can be annotated by a table.
         The following parsers are available: :class:`~spatialdata.ShapesModel`.
-    table
-        AnnData table containing annotations for regions (labels and shapes). The following parsers is
-        available: :class:`~spatialdata.TableModel`.
+    tables
+        Dict of AnnData tables containing annotations for SpatialElements (labels, shapes and points). The
+        following parser is available: :class:`~spatialdata.TableModel`.
+    attrs
+        Dictionary of global attributes on this SpatialData object.
 
     Notes
     -----
     The SpatialElements are stored with standard types:
 
-        - images and labels are stored as :class:`xarray.DataArray` or :class:`datatree.DataTree` objects.
+        - images and labels are stored as :class:`xarray.DataArray` or :class:`xarray.DataTree` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
             slot.
 
-    The table can annotate regions (shapes or labels) and can be used to store additional information.
-    Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
-    annotation directly.
+    Tables can annotate SpatialElements (labels, shapes or points) and can be used to store additional
+    information. Points can also store annotations directly, as additional dataframe columns.
     """
 
     def __init__(
