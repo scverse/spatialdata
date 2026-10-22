@@ -201,13 +201,13 @@ class MultiscalesKeys:
 
 
 class FutureSpatialData:
-    __graph: Spaces  # FIXME: use TransformationManager
+    _graph: Spaces  # FIXME: use TransformationManager
     _images: dict[ElementKey, xr.DataTree]
     _labels: dict[ElementKey, xr.DataTree]
     _intrinsics: dict[ElementKey, CsVert]
 
     def __init__(self, graph: Spaces | None = None) -> None:
-        self.__graph = graph or Spaces()
+        self._graph = graph or Spaces()
         self._images = {}
         self._labels = {}
         self._intrinsics = {}
@@ -224,13 +224,13 @@ class FutureSpatialData:
             if key in self._images:
                 raise KeyError(f"Can't merge key {key}") # FIXME: custm error
 
-        self.__graph.incorporate(other.__graph)
+        self._graph.incorporate(other._graph)
         self._images.update(other._images)
         self._labels.update(other._labels)
         self._intrinsics.update(other._intrinsics)
 
     def incorporate_graph(self, graph: Spaces):
-        self.__graph.incorporate(graph)
+        self._graph.incorporate(graph)
 
     def incorporate_ngff_graph(
         self,
@@ -238,10 +238,10 @@ class FutureSpatialData:
         coord_systems: Sequence[ozm06ct.CoordinateSystem],
         transforms: Sequence[ozm06ct.AnyTransform],
     ) -> None:
-        self.__graph.incorporate_ngff_graph(group_path, coord_systems, transforms)
+        self._graph.incorporate_ngff_graph(group_path, coord_systems, transforms)
 
     def add_image(self, key: ElementKey, image: xr.DataTree, into: CsVert):
-        if into not in self.__graph.verts():
+        if into not in self._graph.verts():
             raise KeyError(f"{CsVert} is not in the transformation graph")
         if key in self._labels:
             raise KeyError(f"Already a label")
@@ -252,7 +252,7 @@ class FutureSpatialData:
         return self._images[key]
 
     def add_label(self, key: ElementKey, label: xr.DataTree, into: CsVert):
-        if into not in self.__graph.verts():
+        if into not in self._graph.verts():
             raise KeyError(f"{CsVert} is not in the transformation graph")
         if key in self._images:
             raise KeyError(f"Already an image")
@@ -266,16 +266,16 @@ class FutureSpatialData:
         return  self._intrinsics[key]
 
     def add_cs(self, cs: CoordSystem, provenance: Provenance):
-        self.__graph.add_cs(cs=cs, provenance=provenance)
+        self._graph.add_cs(cs=cs, provenance=provenance)
 
     def find_node(self, *, ngff_path: NgffCsPath) -> CsVert:
-        return self.__graph.find_node(ngff_path=ngff_path)
+        return self._graph.find_node(ngff_path=ngff_path)
 
     def add_transformation(self, *, input: CsVert, output: CsVert, transf: BaseTransformationEdge, name: str | None):
-        self.__graph.add_transformation(input=input, output=output, transf=transf, name=name)
+        self._graph.add_transformation(input=input, output=output, transf=transf, name=name)
 
     def edges(self) -> Edges:
-        return self.__graph.edges()
+        return self._graph.edges()
 
     def ngff_label_dumper(self, *, label_key: ElementKey) -> MultiscalesDumper:
         return self._ngff_raster_dumper(MultiscalesKeys(raster=label_key, labels={}))
@@ -352,7 +352,7 @@ class FutureSpatialData:
         self,
         children: Mapping[PurePosixPath, MultiscalesKeys],
     ) -> SceneDumper:
-        scene_coord_systems: set[CsVert] = set(self.__graph.verts())
+        scene_coord_systems: set[CsVert] = set(self._graph.verts())
 
         ms_dumpers = {
             ms_path: self.ngff_multiscales_dumper(mskey)
@@ -386,7 +386,7 @@ class FutureSpatialData:
                 image_key=img_key, gather_by_ngff_provenance=True, gather_by_unique_connection=False,
             )
             # FIXME: raising for duplicate names doens't seem appropriate
-            img_path = img_key.to_path()
+            img_path = img_key.namespace
             if img_path in multiscale_keys:
                 raise ValueError(f"Multiple images with conflicting paths: {img_path}") # FIXME: custom exception
             multiscale_keys[img_path] = MultiscalesKeys(

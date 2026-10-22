@@ -134,10 +134,10 @@ def test_dumping_multiscales_to_ngff():
     multiscales1 = oz.OMEZarrMultiscale(
         image=omz_img1,
         scale_factors=scale_factors,
-        default_coordinate_system_name="intrinsic_cs",
+        default_coordinate_system_name="intrinsic_cs1",
         coordinate_systems=[
             ozm06trans.CoordinateSystem(
-                name="another_cs",
+                name="cs_in_multiscales1",
                 axes=(
                     ozm06trans.Axis(name="i", type="space"),
                     ozm06trans.Axis(name="j", type="space"),
@@ -147,8 +147,8 @@ def test_dumping_multiscales_to_ngff():
         coordinate_transformations=(
             ozm06trans.Scale(
                 scale=(10.0, 20.0),
-                input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs"),
-                output=ozm06trans.CoordinateSystemIdentifier(name="another_cs"),
+                input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs1"),
+                output=ozm06trans.CoordinateSystemIdentifier(name="cs_in_multiscales1"),
             ),
         ),
         # default_coordinate_system_name="physical",
@@ -166,7 +166,7 @@ def test_dumping_multiscales_to_ngff():
         default_coordinate_system_name="intrinsic_cs2",
         coordinate_systems=[
             ozm06trans.CoordinateSystem(
-                name="another_cs2",
+                name="cs_in_multiscales2",
                 axes=(
                     ozm06trans.Axis(name="c", type="channel"),
                     ozm06trans.Axis(name="i", type="space"),
@@ -178,37 +178,38 @@ def test_dumping_multiscales_to_ngff():
             ozm06trans.Scale(
                 scale=(10.0, 20.0, 1.0),
                 input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs2"),
-                output=ozm06trans.CoordinateSystemIdentifier(name="another_cs2"),
+                output=ozm06trans.CoordinateSystemIdentifier(name="cs_in_multiscales2"),
             ),
         ),
         labels=[omz_label1],
     )
 
-    scene_cs1 = ozm06trans.CoordinateSystem(
-        name="scene_cs1",
+    root_cs = ozm06trans.CoordinateSystem(
+        name="root_cs",
         axes=(
             ozm06trans.Axis(name="axis_0", type="space"),
             ozm06trans.Axis(name="axis_1", type="space"),
             ozm06trans.Axis(name="axis_2", type="channel"),
         ),
     )
-    scene_transf1 = ozm06trans.Identity(
-        input=ozm06trans.CoordinateSystemIdentifier(name=scene_cs1.name),
-        output=ozm06trans.CoordinateSystemIdentifier(path="multiscales2", name="another_cs2"),
+    ome_identity = ozm06trans.Identity(
+        input=ozm06trans.CoordinateSystemIdentifier(name=root_cs.name),
+        output=ozm06trans.CoordinateSystemIdentifier(path="multiscales2", name="cs_in_multiscales2"),
     )
     scene = oz.OMEZarrScene(
-        coordinate_systems=[scene_cs1],
-        coordinate_transformations=[scene_transf1],
+        coordinate_systems=[root_cs],
+        coordinate_transformations=[ome_identity],
         images={"multiscales1": multiscales1, "multiscales2": multiscales2},
     )
 
-    assert set(scene.coordinate_transformations) == set(scene_cs1)
+    sdata = try_parse_ngff06_scene(group_path=PurePosixPath("."), scene=scene)
 
-    # sdata = try_parse_ngff06_scene(group_path=PurePosixPath("."), scene=scene)
-    # dumped_scene = sdata.default_scene_dumper().dump()
+    dumped_scene = sdata.default_scene_dumper().dump()
 
-    # assert(set(dumped_scene.coordinate_systems) == set(scene.coordinate_systems))
+    assert(set(dumped_scene.coordinate_systems) == set(scene.coordinate_systems))
 
+    for ct in dumped_scene.coordinate_transformations:
+        assert ct in scene.coordinate_transformations
     # assert set(dumped_scene.coordinate_transformations) == set(scene.coordinate_transformations)
 
 
