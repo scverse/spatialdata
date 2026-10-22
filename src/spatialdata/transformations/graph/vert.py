@@ -27,13 +27,21 @@ class Axis:
 
     name: Final[str]
     type: Final[Literal["space", "channel"]]
+    discrete: bool | None
+    "this ios just for round-tripping NGFF for now and maybe shouldbe moved out of here"
     unit: Final[str | None] = None
     "unit of the axis. For a set of valid options see https://ngff.openmicroscopy.org/"
     long_name: Final[str | None] = None
     "a longer, human-friendly name for this axis"
 
     def cloned_with(self, *, unit: str | None) -> Axis:
-        return Axis(name=self.name, type=self.type, unit=unit or self.unit, long_name=self.long_name)
+        return Axis(
+            name=self.name,
+            type=self.type,
+            unit=unit or self.unit,
+            long_name=self.long_name,
+            discrete=self.discrete,
+        )
 
     def __hash__(self) -> int:
         return hash((self.name, self.type, self.unit, self.long_name))
@@ -74,14 +82,15 @@ class Axis:
             raise AxisParsingException("Can't handle axis unit")
         return Axis(
             name=name,
-            type=model.type,  # type: ignore[arg-type]
+            type=model.type,
             unit=model.unit,
             long_name=model.longName,
+            discrete=model.discrete,
         )
 
     def to_model(self) -> ozm06ct.Axis:
         return ozm06ct.Axis(
-            discrete=False,
+            discrete=self.discrete,
             longName=self.long_name,
             name=self.name,
             type=self.type,
@@ -199,6 +208,7 @@ class CoordSystem:
                 Axis(
                     name=f"axis_{ax_idx}",
                     type="space",  # FIXME
+                    discrete=None,
                 )
                 for ax_idx in range(axes)
             )
