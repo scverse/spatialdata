@@ -271,6 +271,9 @@ class CsVert:
             return False
         return self.id == value.id
 
+    def __str__(self) -> str:
+        return f"CsVert(id={self.id}, coord_system={self.coord_system}, provenance={self.provenance})"
+
     def to_ngff_cs(self) -> ozm06ct.CoordinateSystem:
         return self.coord_system.to_model(name=self.name)
 
