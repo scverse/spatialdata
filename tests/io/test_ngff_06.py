@@ -10,7 +10,7 @@ import ome_zarr as oz
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
 from spatialdata._io.io_raster import ElementKey, FutureSpatialData, try_parse_ngff06_multiscale, try_parse_ngff06_scene
-from spatialdata.transformations.graph.edge import ScaleEdge
+from spatialdata.transformations.graph.edge import IdentityEdge, ScaleEdge
 from spatialdata.transformations.graph.vert import NgffCsPath
 from tests.conftest import SEED
 
@@ -114,6 +114,137 @@ def test_parse_multiscale():
         xr_scale = xr_scale_node["image"]
         expected_shape = np.asarray(full_shape) / 2 / scale_factor
         np.testing.assert_equal(xr_scale.shape, expected_shape)
+
+def test_parse_scene():
+    full_shape = (256, 256)
+    rng = np.random.default_rng(seed=SEED)
+
+    labels_name = "my_labels"
+    omz_label = oz.OMEZarrLabels(
+        image=oz.OMEZarrImage(
+            data=rng.integers(0, 256, size=full_shape, dtype=np.uint8), axes="yx", name=labels_name
+        ),
+    )
+
+    omz_img1 = oz.OMEZarrImage(data=rng.random(full_shape), axes="yx")
+    multiscales1 = oz.OMEZarrMultiscale(
+        image=omz_img1,
+        scale_factors=(2, 4),
+        default_coordinate_system_name="intrinsic_cs1",
+        labels=[omz_label],
+    )
+
+    omz_img2 = oz.OMEZarrImage(data=rng.random((1, *full_shape)), axes="cyx")
+    multiscales2 = oz.OMEZarrMultiscale(
+        image=omz_img2,
+        scale_factors=[{"x": s, "y": s} for s in (2, 4)],
+        default_coordinate_system_name="intrinsic_cs2",
+        coordinate_systems=[
+            ozm06trans.CoordinateSystem(
+                name="cs_in_multiscales2",
+                axes=(
+                    ozm06trans.Axis(name="c", type="channel"),
+                    ozm06trans.Axis(name="i", type="space"),
+                    ozm06trans.Axis(name="j", type="space"),
+                ),
+            )
+        ],
+        coordinate_transformations=(
+            ozm06trans.Scale(
+                scale=(1.0, 10.0, 20.0),
+                input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs2"),
+                output=ozm06trans.CoordinateSystemIdentifier(name="cs_in_multiscales2"),
+            ),
+        ),
+    )
+
+    root_cs_2d = ozm06trans.CoordinateSystem(
+        name="root_cs_2d",
+        axes=(
+            ozm06trans.Axis(name="u", type="space"),
+            ozm06trans.Axis(name="v", type="space"),
+        ),
+    )
+    root_cs_3d = ozm06trans.CoordinateSystem(
+        name="root_cs_3d",
+        axes=(
+            ozm06trans.Axis(name="axis_0", type="channel"),
+            ozm06trans.Axis(name="axis_1", type="space"),
+            ozm06trans.Axis(name="axis_2", type="space"),
+        ),
+    )
+    scene = oz.OMEZarrScene(
+        coordinate_systems=[root_cs_2d, root_cs_3d],
+        coordinate_transformations=[
+            ozm06trans.Scale(
+                scale=(3.0, 4.0),
+                input=ozm06trans.CoordinateSystemIdentifier(name=root_cs_2d.name),
+                output=ozm06trans.CoordinateSystemIdentifier(path="multiscales1", name="intrinsic_cs1"),
+            ),
+            ozm06trans.Identity(
+                input=ozm06trans.CoordinateSystemIdentifier(name=root_cs_3d.name),
+                output=ozm06trans.CoordinateSystemIdentifier(path="multiscales2", name="cs_in_multiscales2"),
+            ),
+        ],
+        images={"multiscales1": multiscales1, "multiscales2": multiscales2},
+    )
+
+    base_path = PurePosixPath(".")
+    sdata = try_parse_ngff06_scene(group_path=base_path, scene=scene)
+
+    ms1_path = base_path / "multiscales1"
+    ms2_path = base_path / "multiscales2"
+
+    # scene-level coordinate systems
+    root_2d = sdata.find_node(ngff_path=NgffCsPath(group_path=base_path, name="root_cs_2d"))
+    root_3d = sdata.find_node(ngff_path=NgffCsPath(group_path=base_path, name="root_cs_3d"))
+
+    # multiscales-level coordinate systems are namespaced under their scene path
+    intrinsic_cs1 = sdata.find_node(ngff_path=NgffCsPath(group_path=ms1_path, name="intrinsic_cs1"))
+    intrinsic_cs2 = sdata.find_node(ngff_path=NgffCsPath(group_path=ms2_path, name="intrinsic_cs2"))
+    cs_in_ms2 = sdata.find_node(ngff_path=NgffCsPath(group_path=ms2_path, name="cs_in_multiscales2"))
+    label_cs = sdata.find_node(
+        ngff_path=NgffCsPath(group_path=ms1_path / "labels" / labels_name, name="physical")
+    )
+
+    # scene-level transforms point into the multiscales
+    root_to_ms1 = sdata.edges().directed(fro=root_2d, to=intrinsic_cs1).collect(list)
+    assert len(root_to_ms1) == 1
+    scale = root_to_ms1[0].data["transform"]
+    assert isinstance(scale, ScaleEdge)
+    np.testing.assert_equal(scale.scale, [3.0, 4.0])
+
+    root_to_ms2 = sdata.edges().directed(fro=root_3d, to=cs_in_ms2).collect(list)
+    assert len(root_to_ms2) == 1
+    assert isinstance(root_to_ms2[0].data["transform"], IdentityEdge)
+
+    # multiscales-level transforms survive being nested in a scene
+    ms2_transfs = list(sdata.edges().directed(fro=intrinsic_cs2, to=cs_in_ms2))
+    assert len(ms2_transfs) == 1
+    ms2_scale = ms2_transfs[0].data["transform"]
+    assert isinstance(ms2_scale, ScaleEdge)
+    np.testing.assert_equal(ms2_scale.scale, [1.0, 10.0, 20.0])
+
+    # images and labels are keyed by their scene path and attached to their intrinsic CSs
+    img1_key = ElementKey(namespace=ms1_path, name=omz_img1.name)
+    img2_key = ElementKey(namespace=ms2_path, name=omz_img2.name)
+    label_key = ElementKey(namespace=ms1_path / "labels" / labels_name, name=labels_name)
+    assert sdata.get_intrinsic(img1_key) == intrinsic_cs1
+    assert sdata.get_intrinsic(img2_key) == intrinsic_cs2
+    assert sdata.get_intrinsic(label_key) == label_cs
+
+    for key, ms in [(img1_key, multiscales1), (img2_key, multiscales2)]:
+        data_tree = sdata.get_image(key)
+        assert data_tree is not None
+        for xr_scale_node, ngff_scale in zip(data_tree.children.values(), ms.images, strict=True):
+            xr_scale = xr_scale_node["image"]
+            assert not isinstance(xr_scale, xr.DataTree)
+            assert xr_scale.shape == ngff_scale.data.shape
+
+    label_tree = sdata.get_label(label_key)
+    assert label_tree is not None
+    assert label_tree["scale0"]["image"].shape == full_shape
+
 
 def test_dumping_multiscales_to_ngff():
     full_shape = (256, 256)
