@@ -252,7 +252,9 @@ def relabel_sequential(arr: da.Array) -> da.Array:
 
     max_label = unique_labels[-1]
 
-    new_labeling = da.full(max_label + 1, -1, dtype=arr.dtype)
+    # The fill value is never read (every label in `arr` is overwritten below). Use 0 rather than -1, since -1 can't
+    # be cast to unsigned dtypes.
+    new_labeling = da.zeros(max_label + 1, dtype=arr.dtype)
 
     # Note that both sides are ordered as da.unique returns an ordered array.
     new_labeling[unique_labels] = da.arange(len(unique_labels), dtype=arr.dtype)
