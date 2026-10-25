@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+from typing import Iterator, assert_type
 
 import numpy as np
 import xarray as xr
 import ome_zarr as oz
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
+import ome_zarr_models.v06.multiscales as ozm06ms
 
 from spatialdata._io.io_raster import ElementKey, FutureSpatialData, try_parse_ngff06_multiscale, try_parse_ngff06_scene
 from spatialdata.transformations.graph.edge import IdentityEdge, ScaleEdge
@@ -342,5 +344,41 @@ def test_dumping_multiscales_to_ngff():
     for ct in dumped_scene.coordinate_transformations:
         assert ct in scene.coordinate_transformations
     # assert set(dumped_scene.coordinate_transformations) == set(scene.coordinate_transformations)
+
+    assert dumped_scene.images.keys() == scene.images.keys()
+    for ms_path, original_ms in scene.images.items():
+        dumped_ms = dumped_scene.images[ms_path]
+        for dumped_img, original_img in zip(dumped_ms.images, original_ms.images, strict=True):
+            assert dumped_img.data.shape == original_img.data.shape
+
+        for (dumped_scale, dumped_translation), (original_scale, original_translation) in zip(
+            _get_scales_and_translations(dumped_ms.metadata),
+            _get_scales_and_translations(original_ms.metadata),
+            strict=True,
+        ):
+            np.testing.assert_allclose(dumped_scale.scale, original_scale.scale)
+            np.testing.assert_allclose(dumped_translation.translation, original_translation.translation)
+
+
+def _get_scales_and_translations(
+    multiscale: ozm06ms.Multiscale,
+) -> Iterator[tuple[ozm06trans.Scale, ozm06trans.Translation]]:
+    """Returns each dataset's scale and translation, defaulting to trivial ones if missing."""
+    scale_noop = ozm06trans.Scale(scale=(1.0,) * multiscale.ndim)
+    translation_noop = ozm06trans.Translation(translation=(0.0,) * multiscale.ndim)
+
+    for dataset in multiscale.datasets:
+        transform = dataset.coordinateTransformations[0]
+        if isinstance(transform, ozm06trans.Scale):
+            yield transform, translation_noop
+            continue
+        if isinstance(transform, ozm06trans.Identity):
+            yield scale_noop, translation_noop
+            continue
+        assert_type(transform, ozm06trans.Sequence)
+        scale, translate = transform.transformations
+        assert isinstance(scale, ozm06trans.Scale)
+        assert isinstance(translate, ozm06trans.Translation)
+        yield scale, translate
 
 

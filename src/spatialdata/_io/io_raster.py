@@ -623,8 +623,23 @@ class MultiscalesDumper:
                 oz.OMEZarrLabels(image=dumped_label.images[0]) # FIXME: use from_pyramid, no cs or transfers??
             )
 
+        all_scale_factors: list[dict[str, int]] = []
+        for scale in self.raster_data.values(): # FIXME: is order guaranteed? do we need it?
+            img = scale["image"] # FIXME: using old convention
+            assert not isinstance(img, xr.DataTree)
+            scale_factors: dict[str, int] = {}
+            for ax_name in img.dims:
+                assert isinstance(ax_name, str)
+                scale = scale0.sizes[ax_name] / img.sizes[ax_name]
+                if not scale.is_integer():
+                    raise ValueError(f"scale factors must be ints for now; found {scale}")
+                scale_factors[ax_name] = int(scale)
+            all_scale_factors.append(scale_factors)
+
+        # FIXME: use from_pyramid once it's available
         return oz.OMEZarrMultiscale(
-            image=omz_image, # FIXME: use from_pyramid once it's available
+            scale_factors=all_scale_factors[1:], # scale0 is implicit
+            image=omz_image,
             labels=dumped_labels,
             default_coordinate_system_name=self.intrinsic.provenance.name,
             coordinate_systems=[cs.to_ngff_cs() for cs in self.coord_systems.difference({self.intrinsic})],
