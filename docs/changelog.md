@@ -13,4 +13,5 @@ For developers, please consult the [contributing guide](https://github.com/scver
 
 ### Fixed
 
+- Querying with `filter_table=True` now keeps `uns["<column>_colors"]` in sync with the categories of the filtered table; previously the colors of categories without any remaining rows were dropped while the categories were restored, so colors and categories no longer matched by position.
 - Querying a `SpatialData` object with multiple (batched) bounding boxes now raises an explicit `NotImplementedError` instead of failing with an opaque `AssertionError`. Batched queries are supported when querying a `SpatialElement` directly, but not when querying a `SpatialData` object, since that would require returning one `SpatialData` object per bounding box.
