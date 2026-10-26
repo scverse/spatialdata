@@ -375,16 +375,16 @@ class MapAxisEdge(BaseTransformationEdge):
             try:
                 unmapped_inputs.remove(inp_ax)
             except KeyError as e:
-                raise MissingAxisError(axis_name=inp_ax.name, cs_name=self.input.name) from e
+                raise MissingAxisError(axis_name=inp_ax.name, cs_name=input.name) from e
             try:
                 unmapped_outputs.remove(out_ax)
             except KeyError as e:
-                raise MissingAxisError(axis_name=out_ax.name, cs_name=self.output.name) from e
+                raise MissingAxisError(axis_name=out_ax.name, cs_name=output.name) from e
 
         for ax in unmapped_inputs:
-            raise UnmappedAxisError(axis_name=ax.name, cs_name=self.input.name)
+            raise UnmappedAxisError(axis_name=ax.name, cs_name=input.name)
         for ax in unmapped_outputs:
-            raise UnmappedAxisError(axis_name=ax.name, cs_name=self.output.name)
+            raise UnmappedAxisError(axis_name=ax.name, cs_name=output.name)
 
         self.input_to_output = input_to_output
         super().__init__(input=input, output=output, name=name)
@@ -446,7 +446,7 @@ class ProjectAxisEdge(BaseTransformationEdge):
         ----------
         dropped_inputs
             axes in `input` that will be dropped by this transformation
-        created_inputs
+        created_outputs
             axes in `output` that will be set to 0
 
         Raises

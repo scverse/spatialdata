@@ -193,6 +193,9 @@ def get_union_of_axes(axes: tuple[Axis, ...]) -> tuple[Axis, ...]:
         }
     )
 
+    # Remove duplicates based on the logical key (name, type, unit, long_name).
+    df = df.drop_duplicates(subset=["name", "type", "unit", "long_name"], keep="first")
+
     # Boolean columns that indicate the presence of a value.
     df["unit_not_none"] = df["unit"].notna()
     df["long_name_not_none"] = df["long_name"].notna()
@@ -207,11 +210,15 @@ def get_union_of_axes(axes: tuple[Axis, ...]) -> tuple[Axis, ...]:
             "long_name_not_none",
             "long_name",
         ],
-        ascending=False,
+        ascending=[
+            True,  # NgffAxisType has CHANNEL first, SPACE next, so that we get channel axes before space axes
+            False,
+            False,  # so that those with unit are placed before those without
+            False,
+            False,  # so that those with long_name are placed before those without
+            False,
+        ],
         kind="mergesort",  # stable sort to preserve order of equal keys
     )
-
-    # Remove duplicates based on the logical key (name, type, unit, long_name).
-    df = df.drop_duplicates(subset=["name", "type", "unit", "long_name"], keep="first")
 
     return tuple(df["axis"])

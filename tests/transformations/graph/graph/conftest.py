@@ -15,7 +15,8 @@ from spatialdata.transformations._graph import AffineEdge, Axis, CoordSystem, Sc
 def get_coord_system(cs_name: str) -> CoordSystem:
     return CoordSystem(
         name=cs_name,
-        axes=[Axis(name="x", type="space", unit="micrometer"), Axis(name="y", type="space", unit="micrometer")],
+        axes=(Axis(name="x", type="space", unit="micrometer"), Axis(name="y", type="space", unit="micrometer")),
+        virtual=False,
     )
 
 
