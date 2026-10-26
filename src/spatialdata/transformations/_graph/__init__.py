@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-from spatialdata.transformations._graph.edges.dynamic_project_axis_edges import (
-    DynamicCreateAxisEdge,
-    DynamicDropAxisEdge,
-)
 from spatialdata.transformations._graph.edges.exceptions import (
     AxisRedefinitionError,
     DeterminantDifferentFromOne,
@@ -91,9 +87,6 @@ __all__ = [
     "parse_scale",
     "parse_sequence",
     "parse_translation",
-    # dynamic project edges
-    "DynamicDropAxisEdge",
-    "DynamicCreateAxisEdge",
     # from edge.exceptions
     "NonZeroDroppedAxisError",
     # from exceptions
