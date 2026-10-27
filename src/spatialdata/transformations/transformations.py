@@ -25,6 +25,8 @@ from spatialdata.transformations._graph import (
     TranslationEdge,
     UnmappedAxisError,
 )
+from spatialdata.transformations._graph.exceptions import IncompatibleTransformationOutputCoordinateSystemError
+from spatialdata.transformations._graph.literals import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem, _get_spatial_axes
 from spatialdata.transformations.ngff.ngff_transformations import (
@@ -40,7 +42,6 @@ from spatialdata.transformations.ngff.ngff_transformations import (
 if TYPE_CHECKING:
     from spatialdata._types import ArrayLike, ListOrNDArrayFloating
     from spatialdata.models import SpatialElement
-    from spatialdata.transformations._graph.literals import DEFAULT_COORDINATE_SYSTEM
     from spatialdata.transformations._graph.types import ValidAxis_t
 
 TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]] = {}
@@ -119,15 +120,15 @@ class BaseTransformation(ABC):
     ) -> NgffBaseTransformation:
         pass
 
-    @abstractmethod
-    def _to_ngff_transformation_edge(
+    def _to_ngff_transformation_edge_creating_output_cs(
         self,
         input_coordinate_system: CoordSystem,
         output_coordinate_system_name: str,
+        output_coordinate_system_virtual: bool = False,
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
         """
-        Convert the transformation to an NGFF transformation edge.
+        Convert the transformation to an NGFF transformation edge, creating its output coordinate system
 
         Parameters
         ----------
@@ -135,6 +136,8 @@ class BaseTransformation(ABC):
             The input coordinate system.
         output_coordinate_system_name
             The name for the output coordinate system.
+        output_coordinate_system_virtual
+            Whether the output coordinate system is virtual
         transformation_edge_name
             Optional name for the transformation edge.
 
@@ -142,10 +145,78 @@ class BaseTransformation(ABC):
         -------
         A subclass of BaseTransformationEdge representing an equivalent NGFF coordinate transformation.
         """
+
+        output_coordinate_system = self._get_ngff_output_coordinate_system(
+            input_coordinate_system=input_coordinate_system,
+            output_coordinate_system_name=output_coordinate_system_name,
+            output_coordinate_system_virtual=output_coordinate_system_virtual,
+        )
+
+        return self._define_ngff_transformation_edge_given_valid_output_cs(
+            input_coordinate_system=input_coordinate_system,
+            output_coordinate_system=output_coordinate_system,
+            transformation_edge_name=transformation_edge_name,
+        )
+
+    @abstractmethod
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
         pass
 
+    def _to_ngff_transformation_edge_existing_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+        """
+        Convert the transformation to an NGFF transformation edge, creating its output coordinate system
+
+        Parameters
+        ----------
+        input_coordinate_system
+            The input coordinate system.
+        output_coordinate_system
+            Existing coordinate system to use as output
+        transformation_edge_name
+            Optional name for the transformation edge.
+
+        Returns
+        -------
+        A subclass of BaseTransformationEdge representing an equivalent NGFF coordinate transformation.
+        """
+
+        self.assert_input_output_cs_compatible(input_cs=input_coordinate_system, output_cs=output_coordinate_system)
+
+        return self._define_ngff_transformation_edge_given_valid_output_cs(
+            input_coordinate_system=input_coordinate_system,
+            output_coordinate_system=output_coordinate_system,
+        )
+
+    def assert_input_output_cs_compatible(self, input_cs: CoordSystem, output_cs: CoordSystem) -> None:
+
+        expected_cs = self._get_ngff_output_coordinate_system(
+            input_coordinate_system=input_cs,
+            output_coordinate_system_name="dummy",
+        )
+
+        if set(expected_cs.axes) != set(output_cs.axes):
+            raise IncompatibleTransformationOutputCoordinateSystemError(
+                input_coordinate_system_name=input_cs.name,
+                output_coordinate_system_name=output_cs.name,
+                transformation_class_name=self.__class__.__name__,
+            )
+
     def _get_ngff_output_coordinate_system(
-        self, input_coordinate_system: CoordSystem, output_coordinate_system_name: str
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system_name: str,
+        output_coordinate_system_virtual: bool = False,
     ) -> CoordSystem:
         """
         Get the NGFF output coordinate system for a transformation.
@@ -165,7 +236,9 @@ class BaseTransformation(ABC):
         output_axes_names = self._get_resulting_output_axes(input_coordinate_system.axes_names)
 
         output_axes = tuple(Axis.from_spatialdata_axis_name(name) for name in output_axes_names)
-        return CoordSystem(name=output_coordinate_system_name, axes=output_axes, virtual=False)
+        return CoordSystem(
+            name=output_coordinate_system_name, axes=output_axes, virtual=output_coordinate_system_virtual
+        )
 
     def _get_default_coordinate_system(
         self,
@@ -334,22 +407,15 @@ class Identity(BaseTransformation):
         ngff_transformation = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
         return ngff_transformation
 
-    def _to_ngff_transformation_edge(
+    def _define_ngff_transformation_edge_given_valid_output_cs(
         self,
         input_coordinate_system: CoordSystem,
-        output_coordinate_system_name: str,
+        output_coordinate_system: CoordSystem,
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
 
-        output_coordinate_system = self._get_ngff_output_coordinate_system(
-            input_coordinate_system=input_coordinate_system,
-            output_coordinate_system_name=output_coordinate_system_name,
-        )
-
         return IdentityEdge(
-            input=input_coordinate_system,
-            output=output_coordinate_system,
-            name=transformation_edge_name,
+            input=input_coordinate_system, output=output_coordinate_system, name=transformation_edge_name
         )
 
     def __eq__(self, other: Any) -> bool:
@@ -471,23 +537,32 @@ class MapAxis(BaseTransformation):
         )
         return ngff_transformation
 
-    @override
-    def _to_ngff_transformation_edge(
-        self,
-        input_coordinate_system: CoordSystem,
-        output_coordinate_system_name: str,
-        transformation_edge_name: str | None = None,
-    ) -> BaseTransformationEdge:
-
-        output_coordinate_system = self._get_ngff_output_coordinate_system(
-            input_coordinate_system=input_coordinate_system,
-            output_coordinate_system_name=output_coordinate_system_name,
-        )
+    def _to_ngff_input_output_mapping(
+        self, input_coordinate_system: CoordSystem, output_coordinate_system: CoordSystem
+    ) -> dict[Axis, Axis]:
 
         input_to_output_axes_mapping = {
             Axis.from_spatialdata_axis_name(input_axis_name): Axis.from_spatialdata_axis_name(output_axis_name)
             for output_axis_name, input_axis_name in self.map_axis.items()
         }
+
+        for input_cs_axis in input_coordinate_system.axes:
+            if (input_cs_axis not in input_to_output_axes_mapping) and (input_cs_axis in output_coordinate_system.axes):
+                input_to_output_axes_mapping[input_cs_axis] = input_cs_axis
+
+        return input_to_output_axes_mapping
+
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        input_to_output_axes_mapping = self._to_ngff_input_output_mapping(
+            input_coordinate_system, output_coordinate_system
+        )
 
         try:
             map_axis_edge = MapAxisEdge(
@@ -588,16 +663,13 @@ class Translation(BaseTransformation):
         )
         return ngff_transformation
 
-    def _to_ngff_transformation_edge(
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
         self,
         input_coordinate_system: CoordSystem,
-        output_coordinate_system_name: str,
+        output_coordinate_system: CoordSystem,
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
-
-        output_coordinate_system = self._get_ngff_output_coordinate_system(
-            input_coordinate_system, output_coordinate_system_name
-        )
 
         translation_vector = self.to_translation_vector(axes=output_coordinate_system.axes_names)
 
@@ -694,16 +766,13 @@ class Scale(BaseTransformation):
         )
         return ngff_transformation
 
-    def _to_ngff_transformation_edge(
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
         self,
         input_coordinate_system: CoordSystem,
-        output_coordinate_system_name: str,
+        output_coordinate_system: CoordSystem,
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
-
-        output_coordinate_system = self._get_ngff_output_coordinate_system(
-            input_coordinate_system, output_coordinate_system_name
-        )
 
         scale_vector = self.to_scale_vector(input_coordinate_system.axes_names)
 
@@ -1031,16 +1100,13 @@ class Affine(BaseTransformation):
         )
         return ngff_transformation
 
-    def _to_ngff_transformation_edge(
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
         self,
         input_coordinate_system: CoordSystem,
-        output_coordinate_system_name: str,
+        output_coordinate_system: CoordSystem,
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
-
-        output_coordinate_system = self._get_ngff_output_coordinate_system(
-            input_coordinate_system, output_coordinate_system_name
-        )
 
         affine_matrix = self.to_affine_matrix(
             input_axes=input_coordinate_system.axes_names,
@@ -1199,28 +1265,32 @@ class Sequence(BaseTransformation):
         )
         return ngff_transformation
 
-    def _to_ngff_transformation_edge(
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
         self,
         input_coordinate_system: CoordSystem,
-        output_coordinate_system_name: str,
+        output_coordinate_system: CoordSystem,
         transformation_edge_name: str | None = None,
     ) -> BaseTransformationEdge:
 
-        cs_gen = CsGen(base_name=f"Sequence_from_{input_coordinate_system.name}_to_{output_coordinate_system_name}")
-        output_coordinate_system_names = [cs_gen.get_unique_name() for _t in self.transformations]
-        output_coordinate_system_names[-1] = output_coordinate_system_name
+        cs_gen = CsGen(base_name=f"Sequence_from_{input_coordinate_system.name}_to_{output_coordinate_system.name}")
 
         individual_edges = []
         current_input_cs = input_coordinate_system
-        for t, current_output_coordinate_system_name in zip(
-            self.transformations, output_coordinate_system_names, strict=True
-        ):
-            current_edge = t._to_ngff_transformation_edge(
+        for t in self.transformations[:-1]:
+            current_edge = t._to_ngff_transformation_edge_creating_output_cs(
                 input_coordinate_system=current_input_cs,
-                output_coordinate_system_name=current_output_coordinate_system_name,
+                output_coordinate_system_name=cs_gen.get_unique_name(),
+                output_coordinate_system_virtual=True,
             )
-            current_input_cs = current_edge.output
             individual_edges.append(current_edge)
+            current_input_cs = current_edge.output
+
+        last_edge = self.transformations[-1]._define_ngff_transformation_edge_given_valid_output_cs(
+            input_coordinate_system=current_input_cs,
+            output_coordinate_system=output_coordinate_system,
+        )
+        individual_edges.append(last_edge)
 
         return SequenceEdge(name=transformation_edge_name, transformations=individual_edges)
 

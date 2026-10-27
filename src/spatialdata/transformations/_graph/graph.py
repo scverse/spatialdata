@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import uuid
 from collections.abc import Sequence
 from typing import Any, override
 
@@ -210,6 +212,22 @@ class TransformationGraph:
 
         return None
 
+    def get_elements_in_coordinate_system(self, cs_name: str) -> list[str]:
+        """
+        Returns a list of element names that belong to this coordinate system
+
+        Parameters
+        ----------
+        cs_name
+            Name of a coordinate system
+
+        Returns
+        ----
+        list of element names
+        """
+
+        return [element_name for element_name, cs in self._element_to_cs_mapping.items() if cs.name == cs_name]
+
     def remove_coordinate_system(self, cs: CoordSystem) -> None:
         """
         Remove a coordinate system from the transformation manager.
@@ -289,8 +307,8 @@ class TransformationGraph:
         return self._element_to_cs_mapping[element_name]
 
     def get_outgoing_edges(
-        self, element_name: str, target_coordinate_system_names: Sequence[str] | None
-    ) -> list[BaseTransformationEdge]:
+        self, element_name: str, target_coordinate_system_names: Sequence[str] | None = None
+    ) -> dict[str, BaseTransformationEdge]:
         """
         Get outgoing transformation edges from an element's coordinate system.
 
@@ -303,21 +321,54 @@ class TransformationGraph:
 
         Returns
         -------
-        List of outgoing transformation edges from the element's coordinate system.
+        dict, with edge keys as keys and outgoing transformation edges from the element's coordinate system as values.
         """
         element_coordinate_system = self.get_element_coordinate_system(element_name)
-        outgoing_edges: list[BaseTransformationEdge] = []
+        outgoing_edges: dict[str, BaseTransformationEdge] = {}
 
         successors_to_consider = list(self._graph.successors(element_coordinate_system))
         if target_coordinate_system_names is not None:
             successors_to_consider = [x for x in successors_to_consider if x.name in target_coordinate_system_names]
 
         for successor_coordinate_system in successors_to_consider:
-            edge_data = self._graph[element_coordinate_system][successor_coordinate_system]
-            outgoing_edge_this_successor = [x[TRANSFORM_KEY] for x in edge_data.values()]
-            outgoing_edges += outgoing_edge_this_successor
+            outgoing_edge_this_successor = self.get_direct_transformations(
+                element_coordinate_system, successor_coordinate_system
+            )
+            outgoing_edges |= outgoing_edge_this_successor
 
         return outgoing_edges
+
+    def get_incoming_edges(
+        self, element_name: str, source_coordinate_system_names: Sequence[str] | None = None
+    ) -> dict[str, BaseTransformationEdge]:
+        """
+        Get incoming transformation edges to an element's coordinate system.
+
+        Parameters
+        ----------
+        element_name
+            The name of the element.
+        source_coordinate_system_names
+            Optional list of source coordinate system names to filter by.
+
+        Returns
+        -------
+        dict, with edge keys as keys and transformations from the element's coordinate system as values.
+        """
+        element_coordinate_system = self.get_element_coordinate_system(element_name)
+        incoming_edges: dict[str, BaseTransformationEdge] = {}
+
+        predecessors_to_consider = list(self._graph.successors(element_coordinate_system))
+        if source_coordinate_system_names is not None:
+            predecessors_to_consider = [x for x in predecessors_to_consider if x.name in source_coordinate_system_names]
+
+        for predecessor_coordinate_system in predecessors_to_consider:
+            incoming_edge_this_successor = self.get_direct_transformations(
+                predecessor_coordinate_system, element_coordinate_system
+            )
+            incoming_edges |= incoming_edge_this_successor
+
+        return incoming_edges
 
     def _unset_element(self, element_name: str) -> None:
         """
@@ -337,9 +388,16 @@ class TransformationGraph:
         del self._element_to_cs_mapping[element_name]
 
     @staticmethod
-    def _get_edge_key(edge: BaseTransformationEdge) -> str:
+    def _calc_edge_key(edge: BaseTransformationEdge) -> str:
         """
-        Encode the definition of an edge into a str to be used as graph-wide edge identifier.
+        Encode attributes of an edge into a string to be used as graph-wide edge identifier.
+
+        The string consists of a deterministic part -- {input cs name}->{output cs name}:{edge class name}, followed
+        by a random part.
+
+        It is better to not make edge key a deterministic function of the transformation edge (e.g., using id()),
+        because, when the transformation graph gets deep copied, the transformation edge objects will be recreated,
+        but the edge keys will just be copied, leading to inconsistencies.
 
         Parameters
         ----------
@@ -351,12 +409,15 @@ class TransformationGraph:
         edge_key
             str, the encoded edge identifier.
         """
-        return str(id(edge))
+        base = f"{edge.input.name}->{edge.output.name}:{type(edge).__name__}"
+        salt = uuid.uuid4().hex
+        suffix = hashlib.sha256((base + salt).encode()).hexdigest()[:12]  # short hash
+        return f"{base}-{suffix}"
 
     def add_transformation_edge(
         self,
         transformation_edge: BaseTransformationEdge,
-    ) -> None:
+    ) -> str:
         """
         Add an edge representing a transformation between coordinate systems.
 
@@ -364,6 +425,11 @@ class TransformationGraph:
         ----------
         transformation_edge
             The transformation edge to add.
+
+        Returns
+        -------
+        edge_key
+            str, the encoded edge identifier.
 
         Raises
         ------
@@ -374,13 +440,15 @@ class TransformationGraph:
         self.assert_coordinate_system_exists(source_cs)
         self.assert_coordinate_system_exists(target_cs)
 
-        edge_key = self._get_edge_key(transformation_edge)
+        edge_key = self._calc_edge_key(transformation_edge)
         edge_attributes = {TRANSFORM_KEY: transformation_edge}
         self._graph.add_edge(source_cs, target_cs, key=edge_key, **edge_attributes)
 
+        return edge_key
+
     def get_direct_transformations(
         self, source_cs: CoordSystem, target_cs: CoordSystem
-    ) -> list[BaseTransformationEdge]:
+    ) -> dict[str, BaseTransformationEdge]:
         """
         Retrieve transformations directly defined between coordinate systems.
 
@@ -393,7 +461,7 @@ class TransformationGraph:
 
         Returns
         -------
-        List of transformations (empty if there are no direct transformations).
+        dict, with edge keys as keys and transformations as values (empty if there are no direct transformations).
 
         Raises
         ------
@@ -403,15 +471,16 @@ class TransformationGraph:
         self.assert_coordinate_system_exists(source_cs)
         self.assert_coordinate_system_exists(target_cs)
 
-        transforms = []
+        transforms = {}
         if self._graph.has_edge(source_cs, target_cs):
-            for edge_data in self._graph[source_cs][target_cs].values():
+            for edge_key, edge_data in self._graph[source_cs][target_cs].items():
                 transform: BaseTransformationEdge = edge_data[TRANSFORM_KEY]
-                transforms.append(transform)
+                transforms[edge_key] = transform
         return transforms
 
     def remove_specific_transformation(
         self,
+        edge_key: str,
         transformation_edge: BaseTransformationEdge,
     ) -> None:
         """
@@ -419,6 +488,8 @@ class TransformationGraph:
 
         Parameters
         ----------
+        edge_key
+            unique id of the edge
         transformation_edge
             The transformation edge to remove.
 
@@ -430,10 +501,9 @@ class TransformationGraph:
             If the transformation does not exist.
         """
         source_cs, target_cs = transformation_edge.input, transformation_edge.output
-        expected_edge_key = self._get_edge_key(transformation_edge)
-        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs, edge_key=expected_edge_key)
+        self.assert_an_edge_exists_between_coordinate_systems(source_cs, target_cs, edge_key=edge_key)
         # also checks if source_cs and target_cs exist
-        self._graph.remove_edge(source_cs, target_cs, key=expected_edge_key)
+        self._graph.remove_edge(source_cs, target_cs, key=edge_key)
 
     def remove_all_transformations_between_coordinate_systems(
         self,
@@ -470,7 +540,7 @@ class TransformationGraph:
     def _get_transformation_sequences_from_simple_paths_after_disambiguation(
         self,
         paths: list[list[CoordSystem]],
-        expected_intermediate_edges: Sequence[BaseTransformationEdge] | None,
+        expected_intermediate_edge_keys: Sequence[str] | None,
     ) -> list[SequenceEdge]:
         """
         Traverses paths to form sequence of Transformations.
@@ -481,7 +551,7 @@ class TransformationGraph:
         ----------
         paths
             Sequence of list of nodes.
-        expected_intermediate_edges
+        expected_intermediate_edge_keys
             List of edges, for use when multiple edges are found between two coordinate systems in a path.
 
         Returns
@@ -498,9 +568,8 @@ class TransformationGraph:
                 raise TransformationPathNotSimple([x.name for x in path])
 
         expected_intermediate_transformation_edge_keys = set[str]()
-        if expected_intermediate_edges is not None:
-            for edge_def in expected_intermediate_edges:
-                edge_key = self._get_edge_key(edge_def)
+        if expected_intermediate_edge_keys is not None:
+            for edge_key in expected_intermediate_edge_keys:
                 expected_intermediate_transformation_edge_keys |= {edge_key}
 
         all_sequences = []
@@ -541,7 +610,7 @@ class TransformationGraph:
         self,
         source_cs: CoordSystem,
         target_cs: CoordSystem,
-        expected_intermediate_edges: Sequence[BaseTransformationEdge] = (),
+        expected_intermediate_edge_keys: Sequence[str] = (),
     ) -> list[SequenceEdge]:
         """
         Get all shortest sequences of transformations between two coordinate systems.
@@ -552,8 +621,8 @@ class TransformationGraph:
             The source coordinate system.
         target_cs
             The target coordinate system.
-        expected_intermediate_edges
-            List of intermediate edges expected.
+        expected_intermediate_edge_keys
+            List of keys of intermediate edges.
             Used to choose an edge when multiple edges are found between the same coordinate systems.
 
         Returns
@@ -580,7 +649,7 @@ class TransformationGraph:
 
         try:
             return self._get_transformation_sequences_from_simple_paths_after_disambiguation(
-                paths, expected_intermediate_edges
+                paths, expected_intermediate_edge_keys
             )
         except TransformationPathAmbiguousError as tpae:
             raise TransformationPathAmbiguousError(source_cs.name, target_cs.name) from tpae
@@ -589,7 +658,7 @@ class TransformationGraph:
         self,
         source_cs: CoordSystem,
         target_cs: CoordSystem,
-        expected_intermediate_edges: Sequence[BaseTransformationEdge] = (),
+        expected_intermediate_edge_keys: Sequence[str] = (),
     ) -> list[SequenceEdge]:
         """
         Get all existing sequences of transformations between two coordinate systems.
@@ -600,8 +669,8 @@ class TransformationGraph:
             The source coordinate system.
         target_cs
             The target coordinate system.
-        expected_intermediate_edges
-            List of intermediate edges expected.
+        expected_intermediate_edge_keys
+            List of keys of intermediate edges expected.
             Used to choose an edge when multiple edges are found between the same coordinate systems.
 
         Returns
@@ -628,7 +697,7 @@ class TransformationGraph:
 
         try:
             return self._get_transformation_sequences_from_simple_paths_after_disambiguation(
-                paths, expected_intermediate_edges
+                paths, expected_intermediate_edge_keys
             )
         except TransformationPathAmbiguousError as tpae:
             raise tpae from TransformationPathAmbiguousError(source_cs.name, target_cs.name)
