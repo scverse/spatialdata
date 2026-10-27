@@ -10,12 +10,15 @@ from geopandas import GeoDataFrame
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike
-from spatialdata.transformations._graph import TRANSFORM_KEY
+from spatialdata.literals import TRANSFORM_KEY
+from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale, Sequence
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData
-    from spatialdata.models import MappingToCoordinateSystem_t, SpatialElement
-    from spatialdata.transformations.transformations import Affine, BaseTransformation, Scale
+    from spatialdata.models import SpatialElement
+
+
+MappingToCoordinateSystem_t = dict[str, BaseTransformation]
 
 
 def _get_transformations_from_dict_container(dict_container: Any) -> MappingToCoordinateSystem_t | None:
@@ -81,11 +84,10 @@ def _(e: DataArray, transformations: MappingToCoordinateSystem_t) -> None:
 
 @_set_transformations.register(DataTree)
 def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
-    from spatialdata.transformations._graph.utils import get_axes_names
+    from spatialdata.models import get_axes_names
 
     # set the transformation at the highest level and concatenate with the appropriate scale at each level
     dims = get_axes_names(e)
-    from spatialdata.transformations.transformations import Scale, Sequence
 
     old_shape: ArrayLike | None = None
     for i, (scale, node) in enumerate(dict(e).items()):
@@ -208,7 +210,7 @@ def _(data: DataArray) -> DataArray:
 
 @compute_coordinates.register(DataTree)
 def _(data: DataTree) -> DataTree:
-    from spatialdata.transformations._graph.utils import get_axes_names
+    from spatialdata.models._utils import get_axes_names
 
     spatial_coords = [ax for ax in get_axes_names(data) if ax in ["x", "y", "z"]]
     img_name = list(data["scale0"].data_vars.keys())[0]
@@ -291,3 +293,15 @@ def convert_transformations_to_affine(sdata: SpatialData, coordinate_system: str
             if not isinstance(t, Affine):
                 affine = _get_affine_for_element(element, t)
                 set_transformation(element, transformation=affine, to_coordinate_system=coordinate_system)
+
+
+# added this code as part of a refactoring to catch errors earlier
+def _validate_mapping_to_coordinate_system_type(transformations: MappingToCoordinateSystem_t | None) -> None:
+    if not (
+        transformations is None
+        or isinstance(transformations, dict)
+        and all(isinstance(k, str) and isinstance(v, BaseTransformation) for k, v in transformations.items())
+    ):
+        raise TypeError(
+            f"Transform must be of type {MappingToCoordinateSystem_t} or None, but is of type {type(transformations)}."
+        )

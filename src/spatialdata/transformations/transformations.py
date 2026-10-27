@@ -9,6 +9,8 @@ import scipy
 import xarray as xr
 from xarray import DataArray
 
+from spatialdata.literals import DEFAULT_COORDINATE_SYSTEM
+from spatialdata.models import get_axes_names
 from spatialdata.transformations._graph import (
     AffineEdge,
     Axis,
@@ -26,7 +28,6 @@ from spatialdata.transformations._graph import (
     UnmappedAxisError,
 )
 from spatialdata.transformations._graph.exceptions import IncompatibleTransformationOutputCoordinateSystemError
-from spatialdata.transformations._graph.literals import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem, _get_spatial_axes
 from spatialdata.transformations.ngff.ngff_transformations import (
@@ -1301,7 +1302,6 @@ class Sequence(BaseTransformation):
 
 
 def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
-    from spatialdata.transformations._graph.utils import get_axes_names
 
     input_axes = get_axes_names(element)
     output_axes = transformation._get_resulting_output_axes(input_axes)

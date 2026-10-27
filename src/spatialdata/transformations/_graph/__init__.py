@@ -51,17 +51,11 @@ from spatialdata.transformations._graph.exceptions import (
     TransformationPathNotSimple,
 )
 from spatialdata.transformations._graph.graph import TransformationGraph
-from spatialdata.transformations._graph.literals import (
-    DEFAULT_COORDINATE_SYSTEM,
-    TRANSFORM_KEY,
-    C,
-    NgffAxisType,
-    X,
-    Y,
-    Z,
-    axis_type_mapping_ngff,
+from spatialdata.transformations._graph.utils import (
+    get_instrinsic_coordinate_system,
+    get_spatial_axes,
+    get_union_of_axes,
 )
-from spatialdata.transformations._graph.utils import get_instrinsic_coordinate_system, get_union_of_axes
 from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 __all__ = [
@@ -114,18 +108,10 @@ __all__ = [
     "UnmappedAxisError",
     # from graph
     "TransformationGraph",
-    # from literals
-    "DEFAULT_COORDINATE_SYSTEM",
-    "TRANSFORM_KEY",
-    "X",
-    "Y",
-    "Z",
-    "C",
-    "NgffAxisType",
-    "axis_type_mapping_ngff",
     # from utils
     "get_instrinsic_coordinate_system",
     "get_union_of_axes",
+    "get_spatial_axes",
     # from vert
     "Axis",
     "CoordSystem",

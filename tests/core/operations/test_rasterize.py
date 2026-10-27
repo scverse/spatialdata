@@ -17,8 +17,8 @@ from spatialdata._core.operations.rasterize import rasterize
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models import PointsModel, ShapesModel, TableModel
-from spatialdata.transformations import MapAxis
-from spatialdata.transformations._graph.utils import get_axes_names, get_spatial_axes
+from spatialdata.models._utils import get_axes_names
+from spatialdata.transformations import MapAxis, get_spatial_axes
 from tests.conftest import _get_images, _get_labels
 
 

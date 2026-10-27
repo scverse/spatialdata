@@ -42,13 +42,13 @@ from spatialdata.models import (
     ShapesModel,
     SpatialElement,
     TableModel,
+    convert_region_column_to_categorical,
+    get_axes_names,
     get_model,
     get_table_keys,
     set_channel_names,
 )
-from spatialdata.models._utils import convert_region_column_to_categorical
 from spatialdata.transformations import BaseTransformation, get_transformation
-from spatialdata.transformations._graph.utils import get_axes_names
 
 if TYPE_CHECKING:
     from pandas._typing import DtypeObj

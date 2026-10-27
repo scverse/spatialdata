@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from spatialdata.transformations._graph import Axis, CoordSystem, NgffAxisType
+from spatialdata.literals import NgffAxisType
+from spatialdata.transformations._graph import Axis, CoordSystem
 
 
 # ----------------------------------------------------------------------

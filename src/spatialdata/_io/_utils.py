@@ -30,9 +30,9 @@ from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
 from spatialdata._logging import logger
 from spatialdata._utils import get_pyramid_levels
-from spatialdata.models import MappingToCoordinateSystem_t, SpatialElement
-from spatialdata.models._utils import _validate_mapping_to_coordinate_system_type
+from spatialdata.models import SpatialElement
 from spatialdata.transformations._graph.types import ValidAxis_t
+from spatialdata.transformations._utils import MappingToCoordinateSystem_t, _validate_mapping_to_coordinate_system_type
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
 from spatialdata.transformations.transformations import BaseTransformation
 

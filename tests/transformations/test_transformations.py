@@ -10,8 +10,8 @@ from xarray import DataArray
 
 from spatialdata import transform
 from spatialdata.datasets import blobs
+from spatialdata.literals import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.models import Image2DModel, PointsModel, get_channel_names
-from spatialdata.transformations._graph.literals import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.transformations._graph.types import ValidAxis_t
 from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem

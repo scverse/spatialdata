@@ -13,13 +13,14 @@ import pandas as pd
 from anndata import AnnData
 from dask import array as da
 from dask import config
-from dask.array import Array as DaskArray
 from xarray import DataArray, Dataset, DataTree
 
 from spatialdata._types import ArrayLike, ListOrNDArrayFloating
+from spatialdata.models import get_axes_names
 from spatialdata.transformations import (
     Sequence,
     Translation,
+    compute_coordinates,
     get_transformation,
     set_transformation,
 )
@@ -84,8 +85,6 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     -------
     The unpadded raster.
     """
-    from spatialdata.transformations._graph.utils import get_axes_names
-    from spatialdata.transformations._utils import compute_coordinates
 
     def _compute_paddings(data: DataArray, axis: str) -> tuple[int, int]:
         others = list(data.dims)
@@ -335,37 +334,3 @@ def _error_message_add_element() -> None:
         "write_labels(), write_points(), write_shapes() and write_table(). We are going to make these calls more "
         "ergonomic in a follow up PR."
     )
-
-
-def _check_match_length_channels_c_dim(
-    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str, ...]
-) -> list[str]:
-    """
-    Check whether channel names `c_coords` are of equal length to the `c` dimension of the data.
-
-    Parameters
-    ----------
-    data
-        The image array
-    c_coords
-        The channel names
-    dims
-        The axes names in the order that is the same as the `ImageModel` from which it is derived.
-
-    Returns
-    -------
-    c_coords
-        The channel names as list
-    """
-    c_index = dims.index("c")
-    c_length = (
-        data.shape[c_index] if isinstance(data, DataArray | DaskArray) else data["scale0"]["image"].shape[c_index]
-    )
-    if isinstance(c_coords, str):
-        c_coords = [c_coords]
-    if c_coords is not None and len(c_coords) != c_length:
-        raise ValueError(
-            f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
-            f" with length {c_length}."
-        )
-    return c_coords
