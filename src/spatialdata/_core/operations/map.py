@@ -13,9 +13,8 @@ from dask.array.overlap import coerce_depth
 from xarray import DataArray, DataTree
 
 from spatialdata._types import IntArrayLike
-from spatialdata.models._utils import get_channel_names, get_raster_model_from_data_dims
+from spatialdata.models import get_axes_names, get_channel_names, get_raster_model_from_data_dims
 from spatialdata.transformations import get_transformation
-from spatialdata.transformations._graph.utils import get_axes_names
 
 __all__ = ["map_raster", "relabel_sequential"]
 

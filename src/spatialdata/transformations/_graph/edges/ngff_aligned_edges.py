@@ -11,6 +11,7 @@ import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
 from spatialdata._types import ArrayLike
+from spatialdata.literals import NgffAxisType
 from spatialdata.transformations._graph.edges.exceptions import (
     AxisRedefinitionError,
     DeterminantDifferentFromOne,
@@ -21,7 +22,6 @@ from spatialdata.transformations._graph.edges.exceptions import (
     UnexpectedShapeError,
     UnmappedAxisError,
 )
-from spatialdata.transformations._graph.literals import NgffAxisType
 from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 

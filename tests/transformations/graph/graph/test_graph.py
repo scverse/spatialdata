@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
+from spatialdata.literals import TRANSFORM_KEY
 from spatialdata.transformations._graph import (
-    TRANSFORM_KEY,
     BaseTransformationEdge,
     CannotRemoveCoordinateSystemError,
     CoordinateSystemAlreadyExistsError,

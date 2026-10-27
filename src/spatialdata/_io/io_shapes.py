@@ -26,9 +26,8 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
-from spatialdata.models import ShapesModel
-from spatialdata.transformations._graph import TRANSFORM_KEY
-from spatialdata.transformations._graph.utils import get_axes_names
+from spatialdata.literals import TRANSFORM_KEY
+from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
     _set_transformations,

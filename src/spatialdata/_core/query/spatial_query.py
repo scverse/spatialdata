@@ -25,11 +25,12 @@ from spatialdata.models import (
     PointsModel,
     ShapesModel,
     SpatialElement,
+    get_axes_names,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
 )
+from spatialdata.transformations import get_spatial_axes
 from spatialdata.transformations._graph.types import ValidAxis_t
-from spatialdata.transformations._graph.utils import get_axes_names, get_spatial_axes
 from spatialdata.transformations.operations import set_transformation
 from spatialdata.transformations.transformations import (
     Affine,

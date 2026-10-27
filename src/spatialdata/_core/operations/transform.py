@@ -20,14 +20,14 @@ from xarray import DataArray, Dataset, DataTree
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata._utils import disable_dask_tune_optimization
+from spatialdata.literals import DEFAULT_COORDINATE_SYSTEM, TRANSFORM_KEY
 from spatialdata.models import (
     RasterSchema,
     SpatialElement,
+    get_axes_names,
     get_channel_names,
     get_model,
 )
-from spatialdata.transformations._graph import DEFAULT_COORDINATE_SYSTEM, TRANSFORM_KEY
-from spatialdata.transformations._graph.utils import get_axes_names
 from spatialdata.transformations._utils import _get_scale, compute_coordinates, scale_radii
 
 if TYPE_CHECKING:

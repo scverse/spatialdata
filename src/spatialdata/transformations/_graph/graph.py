@@ -7,6 +7,7 @@ from typing import Any, override
 
 import networkx as nx
 
+from spatialdata.literals import TRANSFORM_KEY
 from spatialdata.transformations._graph.edges.ngff_aligned_edges import BaseTransformationEdge, SequenceEdge
 from spatialdata.transformations._graph.exceptions import (
     CannotRemoveCoordinateSystemError,
@@ -24,7 +25,6 @@ from spatialdata.transformations._graph.exceptions import (
     TransformationPathNotFoundError,
     TransformationPathNotSimple,
 )
-from spatialdata.transformations._graph.literals import TRANSFORM_KEY
 from spatialdata.transformations._graph.vert import CoordSystem
 
 

@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from spatialdata.transformations._graph import Axis, NgffAxisType, get_union_of_axes
+from spatialdata.literals import NgffAxisType
+from spatialdata.transformations._graph import Axis, get_union_of_axes
 
 
 # ----------------------------------------------------------------------

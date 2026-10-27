@@ -6,17 +6,18 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from skimage.transform import estimate_transform
 
 from spatialdata._logging import logger
-from spatialdata.transformations._graph.literals import DEFAULT_COORDINATE_SYSTEM
+from spatialdata.literals import DEFAULT_COORDINATE_SYSTEM
 from spatialdata.transformations._utils import _get_transformations, _set_transformations
+from spatialdata.transformations.transformations import Affine, BaseTransformation, Sequence
 
 if TYPE_CHECKING:
     import networkx as nx
 
     from spatialdata._core.spatialdata import SpatialData
     from spatialdata.models import SpatialElement
-    from spatialdata.transformations.transformations import Affine, BaseTransformation
 
 
 def set_transformation(
@@ -389,11 +390,8 @@ def get_transformation_between_landmarks(
     >>> references_coords = PointsModel(points_reference)
     >>> transformation = get_transformation_between_landmarks(references_coords, moving_coords)
     """
-    from skimage.transform import estimate_transform
-
     from spatialdata import transform
-    from spatialdata.transformations._graph.utils import get_axes_names
-    from spatialdata.transformations.transformations import Affine, Sequence
+    from spatialdata.models import get_axes_names
 
     assert get_axes_names(references_coords) == ("x", "y")
     assert get_axes_names(moving_coords) == ("x", "y")
