@@ -11,14 +11,14 @@ from geopandas import GeoDataFrame
 from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import (
+from spatialdata.models import (
     Image2DModel,
     Image3DModel,
     Labels2DModel,
     Labels3DModel,
     PointsModel,
     RasterSchema,
+    SpatialElement,
     get_model,
 )
 

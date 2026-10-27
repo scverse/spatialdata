@@ -8,6 +8,7 @@ import dask.dataframe as dd
 import geopandas
 import numpy as np
 import pandas as pd
+from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import get_coordinate_dimension
@@ -16,23 +17,13 @@ from shapely.geometry.base import BaseGeometry
 from xarray import DataArray, DataTree
 
 from spatialdata._logging import logger
-from spatialdata._utils import _check_match_length_channels_c_dim
-from spatialdata.transformations.transformations import BaseTransformation
-
-type SpatialElement = DataArray | DataTree | GeoDataFrame | DaskDataFrame
-TRANSFORM_KEY = "transform"
-DEFAULT_COORDINATE_SYSTEM = "global"
-ValidAxis_t = str
-MappingToCoordinateSystem_t = dict[str, BaseTransformation]
-C = "c"
-Z = "z"
-Y = "y"
-X = "x"
+from spatialdata.literals import C, X, Y, Z
 
 if TYPE_CHECKING:
     from anndata import AnnData
 
     from spatialdata.models.models import RasterSchema
+    from spatialdata.models.types import SpatialElement
 
 
 # mypy says that we can't do isinstance(something, SpatialElement),
@@ -54,143 +45,6 @@ def has_type_spatial_element(e: Any) -> bool:
     (i.e in DataArray | DataTree | GeoDataFrame | DaskDataFrame)
     """
     return isinstance(e, DataArray | DataTree | GeoDataFrame | DaskDataFrame)
-
-
-# added this code as part of a refactoring to catch errors earlier
-def _validate_mapping_to_coordinate_system_type(transformations: MappingToCoordinateSystem_t | None) -> None:
-    if not (
-        transformations is None
-        or isinstance(transformations, dict)
-        and all(isinstance(k, str) and isinstance(v, BaseTransformation) for k, v in transformations.items())
-    ):
-        raise TypeError(
-            f"Transform must be of type {MappingToCoordinateSystem_t} or None, but is of type {type(transformations)}."
-        )
-
-
-def validate_axis_name(axis: ValidAxis_t) -> None:
-    """
-    Check if the axis name is valid.
-
-    Parameters
-    ----------
-    axis
-        The axis name
-
-    Raises
-    ------
-    TypeError
-        If the axis name not in ["c", "x", "y", "z"]
-    """
-    if axis not in ["c", "x", "y", "z"]:
-        raise TypeError(f"Invalid axis: {axis}")
-
-
-def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
-    """
-    Check if the names of the axes are valid.
-
-    Parameters
-    ----------
-    axes
-        The names of the axes
-
-    Raises
-    ------
-    TypeError
-        If not in ["c", "x", "y", "z"]
-    """
-    for ax in axes:
-        validate_axis_name(ax)
-    if len(axes) != len(set(axes)):
-        raise ValueError("Axes must be unique.")
-
-
-def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
-    """
-    Get the spatial axes of interest.
-
-    Parameters
-    ----------
-    axes
-        Should be a subset of ['x', 'y', 'z', 'c']
-
-    Returns
-    -------
-    The spatial axes, i.e. the input axes but without 'c'
-    """
-    validate_axes(axes)
-    return tuple(ax for ax in axes if ax in [X, Y, Z])
-
-
-@singledispatch
-def get_axes_names(e: SpatialElement | pd.DataFrame) -> tuple[str, ...]:
-    """
-    Get the dimensions of a SpatialElement.
-
-    Parameters
-    ----------
-    e
-        SpatialElement
-
-    Returns
-    -------
-    Dimensions of the SpatialElement (e.g. ("z", "y", "x"))
-    """
-    raise TypeError(f"Unsupported type: {type(e)}")
-
-
-@get_axes_names.register(DataArray)
-def _(e: DataArray) -> tuple[str, ...]:
-    dims = tuple(str(dim) for dim in e.dims)
-    _validate_dims(dims)
-    return dims
-
-
-@get_axes_names.register(DataTree)
-def _(e: DataTree) -> tuple[str, ...]:
-    if "scale0" in e:
-        # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
-
-        scale0 = e["scale0"]
-        if not isinstance(scale0, DataTree):
-            raise TypeError(f"Expected `scale0` to be a DataTree node, got {type(scale0).__name__}.")
-        variables = list(scale0.values())
-        assert len(variables) == 1
-        xdata = variables[0]
-        dims_data = tuple(str(dim) for dim in xdata.dims)
-
-        _validate_dims(dims_data)
-        return dims_data
-    raise ValueError("Spatialdata DataTree does not contain the scale0 key")
-
-
-@get_axes_names.register(GeoDataFrame)
-def _(e: GeoDataFrame) -> tuple[str, ...]:
-    all_dims = (X, Y, Z)
-    n = get_coordinate_dimension(e.geometry.iloc[0])
-    dims = all_dims[:n]
-    if Z not in dims and Z in e.columns:
-        dims += (Z,)
-    _validate_dims(dims)
-    return dims
-
-
-@get_axes_names.register(DaskDataFrame)
-@get_axes_names.register(pd.DataFrame)
-def _(e: DaskDataFrame) -> tuple[str, ...]:
-    valid_dims = (X, Y, Z)
-    dims = tuple([c for c in valid_dims if c in e.columns])
-    _validate_dims(dims)
-    return dims
-
-
-def _validate_dims(dims: tuple[str, ...]) -> None:
-    for c in dims:
-        if c not in (X, Y, Z, C):
-            raise ValueError(f"Invalid dimension: {c}")
-    if dims not in [(X,), (Y,), (Z,), (C,), (X, Y), (X, Y, Z), (Y, X), (Z, Y, X), (C, Y, X), (C, Z, Y, X)]:
-        raise ValueError(f"Invalid dimensions: {dims}")
 
 
 def points_dask_dataframe_to_geopandas(points: DaskDataFrame, suppress_z_warning: bool = False) -> GeoDataFrame:
@@ -364,7 +218,7 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
     -------
     The raster model corresponding to the dimensions of the data.
     """
-    from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
+    from spatialdata.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel
 
     if not set(dims).issubset({C, Z, Y, X}):
         raise ValueError(f"Invalid dimensions: {dims}")
@@ -375,7 +229,7 @@ def get_raster_model_from_data_dims(dims: tuple[str, ...]) -> type[RasterSchema]
 
 
 def convert_region_column_to_categorical(table: AnnData) -> None:
-    from spatialdata.models.models import TableModel
+    from spatialdata.models import TableModel
 
     if TableModel.ATTRS_KEY in table.uns:
         region_key = table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY_KEY]
@@ -434,3 +288,107 @@ def _get_uint_dtype(value: int) -> str:
     else:
         raise ValueError(f"Maximum cell number is {value}. Values higher than {max_uint64} are not supported.")
     return dtype
+
+
+@singledispatch
+def get_axes_names(e: SpatialElement | pd.DataFrame) -> tuple[str, ...]:
+    """
+    Get the dimensions of a SpatialElement.
+
+    Parameters
+    ----------
+    e
+        SpatialElement
+
+    Returns
+    -------
+    Dimensions of the SpatialElement (e.g. ("z", "y", "x"))
+    """
+    raise TypeError(f"Unsupported type: {type(e)}")
+
+
+@get_axes_names.register(DataTree)
+def _(e: DataTree) -> tuple[str, ...]:
+    if "scale0" in e:
+        # dims_coordinates = tuple(i for i in e["scale0"].dims.keys())
+
+        scale0 = e["scale0"]
+        if not isinstance(scale0, DataTree):
+            raise TypeError(f"Expected `scale0` to be a DataTree node, got {type(scale0).__name__}.")
+        variables = list(scale0.values())
+        assert len(variables) == 1
+        xdata = variables[0]
+        dims_data = tuple(str(dim) for dim in xdata.dims)
+
+        _validate_dims(dims_data)
+        return dims_data
+    raise ValueError("Spatialdata DataTree does not contain the scale0 key")
+
+
+@get_axes_names.register(GeoDataFrame)
+def _(e: GeoDataFrame) -> tuple[str, ...]:
+    all_dims = (X, Y, Z)
+    n = get_coordinate_dimension(e.geometry.iloc[0])
+    dims = all_dims[:n]
+    if Z not in dims and Z in e.columns:
+        dims += (Z,)
+    _validate_dims(dims)
+    return dims
+
+
+@get_axes_names.register(DaskDataFrame)
+@get_axes_names.register(pd.DataFrame)
+def _(e: DaskDataFrame | pd.DataFrame) -> tuple[str, ...]:
+    valid_dims = (X, Y, Z)
+    dims = tuple([c for c in valid_dims if c in e.columns])
+    _validate_dims(dims)
+    return dims
+
+
+@get_axes_names.register(DataArray)
+def _(e: DataArray) -> tuple[str, ...]:
+    dims = tuple(str(dim) for dim in e.dims)
+    _validate_dims(dims)
+    return dims
+
+
+def _validate_dims(dims: tuple[str, ...]) -> None:
+    for c in dims:
+        if c not in (X, Y, Z, C):
+            raise ValueError(f"Invalid dimension: {c}")
+    if dims not in [(X,), (Y,), (Z,), (C,), (X, Y), (X, Y, Z), (Y, X), (Z, Y, X), (C, Y, X), (C, Z, Y, X)]:
+        raise ValueError(f"Invalid dimensions: {dims}")
+
+
+def _check_match_length_channels_c_dim(
+    data: DaskArray | DataArray | DataTree, c_coords: str | list[str], dims: tuple[str, ...]
+) -> list[str]:
+    """
+    Check whether channel names `c_coords` are of equal length to the `c` dimension of the data.
+
+    Parameters
+    ----------
+    data
+        The image array
+    c_coords
+        The channel names
+    dims
+        The axes names in the order that is the same as the `ImageModel` from which it is derived.
+
+    Returns
+    -------
+    c_coords
+        The channel names as list
+    """
+    c_index = dims.index("c")
+    c_length = (
+        data.shape[c_index] if isinstance(data, DataArray | DaskArray) else data["scale0"]["image"].shape[c_index]
+    )
+    if isinstance(c_coords, str):
+        c_coords = [c_coords]
+    if c_coords is not None and len(c_coords) != c_length:
+        raise ValueError(
+            f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
+            f" with length {c_length}."
+        )
+    return c_coords

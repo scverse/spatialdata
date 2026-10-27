@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 from warnings import warn
 
 import numpy as np
@@ -9,6 +9,26 @@ import scipy
 import xarray as xr
 from xarray import DataArray
 
+from spatialdata.literals import DEFAULT_COORDINATE_SYSTEM
+from spatialdata.models import get_axes_names
+from spatialdata.transformations._graph import (
+    AffineEdge,
+    Axis,
+    BaseTransformationEdge,
+    CoordSystem,
+    CsGen,
+    IdentityEdge,
+    IncompatibleCoordSystemsError,
+    MapAxisEdge,
+    MissingAxisError,
+    NGFFCompatibilityError,
+    ScaleEdge,
+    SequenceEdge,
+    TranslationEdge,
+    UnmappedAxisError,
+)
+from spatialdata.transformations._graph.exceptions import IncompatibleTransformationOutputCoordinateSystemError
+from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 from spatialdata.transformations.ngff.ngff_coordinate_system import NgffCoordinateSystem, _get_spatial_axes
 from spatialdata.transformations.ngff.ngff_transformations import (
     NgffAffine,
@@ -23,7 +43,7 @@ from spatialdata.transformations.ngff.ngff_transformations import (
 if TYPE_CHECKING:
     from spatialdata._types import ArrayLike, ListOrNDArrayFloating
     from spatialdata.models import SpatialElement
-    from spatialdata.models._utils import ValidAxis_t
+    from spatialdata.transformations._graph.types import ValidAxis_t
 
 TRANSFORMATIONS_MAP: dict[type[NgffBaseTransformation], type[BaseTransformation]] = {}
 
@@ -38,7 +58,7 @@ class BaseTransformation(ABC):
         This function is to allow to call validate_axes() from this file
         in multiple places while avoiding circular imports.
         """
-        from spatialdata.models._utils import validate_axes
+        from spatialdata.transformations._graph.utils import validate_axes
 
         validate_axes(axes)
 
@@ -63,6 +83,22 @@ class BaseTransformation(ABC):
     def __repr__(self) -> str:
         return self._repr_indent(0)
 
+    @abstractmethod
+    def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+        """
+        Get the resulting output axes for the transformation, given a tuple of input axes.
+
+        Parameters
+        ----------
+        input_axes
+            The input axes.
+
+        Returns
+        -------
+        The output axes after applying the transformation.
+        """
+        pass
+
     @classmethod
     @abstractmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
@@ -85,6 +121,126 @@ class BaseTransformation(ABC):
     ) -> NgffBaseTransformation:
         pass
 
+    def _to_ngff_transformation_edge_creating_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system_name: str,
+        output_coordinate_system_virtual: bool = False,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+        """
+        Convert the transformation to an NGFF transformation edge, creating its output coordinate system
+
+        Parameters
+        ----------
+        input_coordinate_system
+            The input coordinate system.
+        output_coordinate_system_name
+            The name for the output coordinate system.
+        output_coordinate_system_virtual
+            Whether the output coordinate system is virtual
+        transformation_edge_name
+            Optional name for the transformation edge.
+
+        Returns
+        -------
+        A subclass of BaseTransformationEdge representing an equivalent NGFF coordinate transformation.
+        """
+
+        output_coordinate_system = self._get_ngff_output_coordinate_system(
+            input_coordinate_system=input_coordinate_system,
+            output_coordinate_system_name=output_coordinate_system_name,
+            output_coordinate_system_virtual=output_coordinate_system_virtual,
+        )
+
+        return self._define_ngff_transformation_edge_given_valid_output_cs(
+            input_coordinate_system=input_coordinate_system,
+            output_coordinate_system=output_coordinate_system,
+            transformation_edge_name=transformation_edge_name,
+        )
+
+    @abstractmethod
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        pass
+
+    def _to_ngff_transformation_edge_existing_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+        """
+        Convert the transformation to an NGFF transformation edge, creating its output coordinate system
+
+        Parameters
+        ----------
+        input_coordinate_system
+            The input coordinate system.
+        output_coordinate_system
+            Existing coordinate system to use as output
+        transformation_edge_name
+            Optional name for the transformation edge.
+
+        Returns
+        -------
+        A subclass of BaseTransformationEdge representing an equivalent NGFF coordinate transformation.
+        """
+
+        self.assert_input_output_cs_compatible(input_cs=input_coordinate_system, output_cs=output_coordinate_system)
+
+        return self._define_ngff_transformation_edge_given_valid_output_cs(
+            input_coordinate_system=input_coordinate_system,
+            output_coordinate_system=output_coordinate_system,
+        )
+
+    def assert_input_output_cs_compatible(self, input_cs: CoordSystem, output_cs: CoordSystem) -> None:
+
+        expected_cs = self._get_ngff_output_coordinate_system(
+            input_coordinate_system=input_cs,
+            output_coordinate_system_name="dummy",
+        )
+
+        if set(expected_cs.axes) != set(output_cs.axes):
+            raise IncompatibleTransformationOutputCoordinateSystemError(
+                input_coordinate_system_name=input_cs.name,
+                output_coordinate_system_name=output_cs.name,
+                transformation_class_name=self.__class__.__name__,
+            )
+
+    def _get_ngff_output_coordinate_system(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system_name: str,
+        output_coordinate_system_virtual: bool = False,
+    ) -> CoordSystem:
+        """
+        Get the NGFF output coordinate system for a transformation.
+
+        Parameters
+        ----------
+        input_coordinate_system
+            The input coordinate system.
+        output_coordinate_system_name
+            The name for the output coordinate system.
+
+        Returns
+        -------
+        The output coordinate system.
+        """
+
+        output_axes_names = self._get_resulting_output_axes(input_coordinate_system.axes_names)
+
+        output_axes = tuple(Axis.from_spatialdata_axis_name(name) for name in output_axes_names)
+        return CoordSystem(
+            name=output_coordinate_system_name, axes=output_axes, virtual=output_coordinate_system_virtual
+        )
+
     def _get_default_coordinate_system(
         self,
         axes: tuple[ValidAxis_t, ...],
@@ -92,7 +248,6 @@ class BaseTransformation(ABC):
         name: str | None = None,
         default_to_global: bool = False,
     ) -> NgffCoordinateSystem:
-        from spatialdata.transformations.ngff._utils import get_default_coordinate_system
 
         cs = get_default_coordinate_system(axes)
         if unit is not None:
@@ -102,8 +257,6 @@ class BaseTransformation(ABC):
         if name is not None:
             cs.name = name
         elif default_to_global:
-            from spatialdata.models._utils import DEFAULT_COORDINATE_SYSTEM
-
             cs.name = DEFAULT_COORDINATE_SYSTEM
         return cs
 
@@ -230,6 +383,9 @@ class Identity(BaseTransformation):
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         return data
 
+    def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+        return input_axes
+
     @classmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
         assert isinstance(t, NgffIdentity)
@@ -252,6 +408,17 @@ class Identity(BaseTransformation):
         ngff_transformation = NgffIdentity(input_coordinate_system=input_cs, output_coordinate_system=output_cs)
         return ngff_transformation
 
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        return IdentityEdge(
+            input=input_coordinate_system, output=output_coordinate_system, name=transformation_edge_name
+        )
+
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Identity)
 
@@ -272,7 +439,7 @@ class MapAxis(BaseTransformation):
 
     def __init__(self, map_axis: dict[ValidAxis_t, ValidAxis_t]) -> None:
         # to avoid circular imports
-        from spatialdata.models import validate_axis_name
+        from spatialdata.transformations._graph.utils import validate_axis_name
 
         assert isinstance(map_axis, dict)
         for des_ax, src_ax in map_axis.items():
@@ -319,7 +486,7 @@ class MapAxis(BaseTransformation):
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         self._xarray_coords_validate_axes(data)
         data_input_axes = self._xarray_coords_get_coords(data)
-        data_output_axes = _get_current_output_axes(self, data_input_axes)
+        data_output_axes = self._get_resulting_output_axes(input_axes=data_input_axes)
 
         transformed = []
         for ax in data_output_axes:
@@ -332,6 +499,20 @@ class MapAxis(BaseTransformation):
         to_return = xr.concat(transformed, dim="dim")
         to_return = self._xarray_coords_reorder_axes(to_return)
         return to_return
+
+    def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+        map_axis_input_axes = set(self.map_axis.values())
+        set(self.map_axis.keys())
+        to_return = []
+        for ax in input_axes:
+            if ax not in map_axis_input_axes:
+                assert ax not in to_return
+                to_return.append(ax)
+            else:
+                mapped = [ax_out for ax_out, ax_in in self.map_axis.items() if ax_in == ax]
+                assert all(ax_out not in to_return for ax_out in mapped)
+                to_return.extend(mapped)
+        return tuple(to_return)
 
     @classmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
@@ -356,6 +537,46 @@ class MapAxis(BaseTransformation):
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, map_axis=self.map_axis
         )
         return ngff_transformation
+
+    def _to_ngff_input_output_mapping(
+        self, input_coordinate_system: CoordSystem, output_coordinate_system: CoordSystem
+    ) -> dict[Axis, Axis]:
+
+        input_to_output_axes_mapping = {
+            Axis.from_spatialdata_axis_name(input_axis_name): Axis.from_spatialdata_axis_name(output_axis_name)
+            for output_axis_name, input_axis_name in self.map_axis.items()
+        }
+
+        for input_cs_axis in input_coordinate_system.axes:
+            if (input_cs_axis not in input_to_output_axes_mapping) and (input_cs_axis in output_coordinate_system.axes):
+                input_to_output_axes_mapping[input_cs_axis] = input_cs_axis
+
+        return input_to_output_axes_mapping
+
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        input_to_output_axes_mapping = self._to_ngff_input_output_mapping(
+            input_coordinate_system, output_coordinate_system
+        )
+
+        try:
+            map_axis_edge = MapAxisEdge(
+                input=input_coordinate_system,
+                output=output_coordinate_system,
+                name=transformation_edge_name,
+                input_to_output=input_to_output_axes_mapping,
+            )
+        except (IncompatibleCoordSystemsError, MissingAxisError, UnmappedAxisError) as e:
+            raise NGFFCompatibilityError(
+                f"Cannot map the following transformation to an NGFF transformation Edge.\n{repr(self)}"
+            ) from e
+        return map_axis_edge
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, MapAxis) and self.map_axis == other.map_axis
@@ -410,6 +631,9 @@ class Translation(BaseTransformation):
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
 
+    def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+        return input_axes
+
     @classmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
         assert isinstance(t, NgffTranslation)
@@ -439,6 +663,23 @@ class Translation(BaseTransformation):
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, translation=new_translation_vector
         )
         return ngff_transformation
+
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        translation_vector = self.to_translation_vector(axes=output_coordinate_system.axes_names)
+
+        return TranslationEdge(
+            input=input_coordinate_system,
+            output=output_coordinate_system,
+            translation=translation_vector,
+            name=transformation_edge_name,
+        )
 
     def __eq__(self, other: Any) -> bool:
         return (
@@ -496,6 +737,9 @@ class Scale(BaseTransformation):
         to_return = self._xarray_coords_reorder_axes(transformed)
         return to_return
 
+    def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+        return input_axes
+
     @classmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
         assert isinstance(t, NgffScale)
@@ -522,6 +766,23 @@ class Scale(BaseTransformation):
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, scale=new_scale_vector
         )
         return ngff_transformation
+
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        scale_vector = self.to_scale_vector(input_coordinate_system.axes_names)
+
+        return ScaleEdge(
+            input=input_coordinate_system,
+            output=output_coordinate_system,
+            scale=scale_vector,
+            name=transformation_edge_name,
+        )
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Scale) and np.allclose(self.scale, other.scale) and self.axes == other.axes
@@ -782,7 +1043,7 @@ class Affine(BaseTransformation):
     def _transform_coordinates(self, data: DataArray) -> DataArray:
         self._xarray_coords_validate_axes(data)
         data_input_axes = self._xarray_coords_get_coords(data)
-        data_output_axes = _get_current_output_axes(self, data_input_axes)
+        data_output_axes = self._get_resulting_output_axes(data_input_axes)
         matrix = self.to_affine_matrix(data_input_axes, data_output_axes)
         transformed = (matrix @ np.vstack((data.data.T, np.ones(len(data))))).T[:, :-1]
         to_return = DataArray(transformed, coords={"points": data.coords["points"], "dim": list(data_output_axes)})
@@ -798,6 +1059,27 @@ class Affine(BaseTransformation):
         input_axes = tuple(t.input_coordinate_system.axes_names)
         output_axes = tuple(t.output_coordinate_system.axes_names)
         return Affine(matrix=t.affine, input_axes=input_axes, output_axes=output_axes)
+
+    def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+        to_return = []
+        add_affine_output_axes = False
+        for ax in input_axes:
+            if ax not in self.input_axes:
+                assert ax not in to_return
+                to_return.append(ax)
+            else:
+                add_affine_output_axes = True
+        if add_affine_output_axes:
+            for ax in self.output_axes:
+                if ax not in to_return:
+                    to_return.append(ax)
+                else:
+                    raise ValueError(
+                        f"Trying to query an invalid representation of an affine matrix: the ax {ax} is not "
+                        f"an input axis of the affine matrix but it appears both as output as input of the "
+                        f"matrix representation being queried"
+                    )
+        return tuple(to_return)
 
     def to_ngff(
         self,
@@ -818,6 +1100,27 @@ class Affine(BaseTransformation):
             input_coordinate_system=input_cs, output_coordinate_system=output_cs, affine=new_matrix
         )
         return ngff_transformation
+
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        affine_matrix = self.to_affine_matrix(
+            input_axes=input_coordinate_system.axes_names,
+            output_axes=output_coordinate_system.axes_names,
+        )
+
+        return AffineEdge(
+            input=input_coordinate_system,
+            output=output_coordinate_system,
+            linear=affine_matrix[:-1, :-1],
+            translation=affine_matrix[:-1, -1],
+            name=transformation_edge_name,
+        )
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, Affine):
@@ -848,7 +1151,7 @@ class Sequence(BaseTransformation):
             raise ValueError("Input axes must be a subset of output axes.")
 
         current_input_axes = input_axes
-        current_output_axes = _get_current_output_axes(self.transformations[0], current_input_axes)
+        current_output_axes = self.transformations[0]._get_resulting_output_axes(input_axes=current_input_axes)
         m = self.transformations[0].to_affine_matrix(current_input_axes, current_output_axes)
         if DEBUG_SEQUENCE:
             print(f"# 0: current_input_axes = {current_input_axes}, current_output_axes = {current_output_axes}")
@@ -856,7 +1159,7 @@ class Sequence(BaseTransformation):
             print()
         for i, t in enumerate(self.transformations[1:]):
             current_input_axes = current_output_axes
-            current_output_axes = _get_current_output_axes(t, current_input_axes)
+            current_output_axes = t._get_resulting_output_axes(input_axes=current_input_axes)
             if DEBUG_SEQUENCE:
                 print(
                     f"# {i + 1}: current_input_axes = {current_input_axes}, current_output_axes = {current_output_axes}"
@@ -917,6 +1220,13 @@ class Sequence(BaseTransformation):
         self._xarray_coords_validate_axes(data)
         return data
 
+    def _get_resulting_output_axes(self, input_axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+
+        input_axes_this_iteration = input_axes
+        for t in self.transformations:
+            input_axes_this_iteration = t._get_resulting_output_axes(input_axes_this_iteration)
+        return input_axes_this_iteration
+
     @classmethod
     def _from_ngff(cls, t: NgffBaseTransformation) -> BaseTransformation:
         assert isinstance(t, NgffSequence)
@@ -939,7 +1249,7 @@ class Sequence(BaseTransformation):
         converted_transformations = []
         latest_input_axes = input_axes
         for t in self.transformations:
-            latest_output_axes = _get_current_output_axes(t, latest_input_axes)
+            latest_output_axes = t._get_resulting_output_axes(input_axes=latest_input_axes)
             converted_transformations.append(
                 t.to_ngff(
                     input_axes=latest_input_axes,
@@ -956,63 +1266,45 @@ class Sequence(BaseTransformation):
         )
         return ngff_transformation
 
+    @override
+    def _define_ngff_transformation_edge_given_valid_output_cs(
+        self,
+        input_coordinate_system: CoordSystem,
+        output_coordinate_system: CoordSystem,
+        transformation_edge_name: str | None = None,
+    ) -> BaseTransformationEdge:
+
+        cs_gen = CsGen(base_name=f"Sequence_from_{input_coordinate_system.name}_to_{output_coordinate_system.name}")
+
+        individual_edges = []
+        current_input_cs = input_coordinate_system
+        for t in self.transformations[:-1]:
+            current_edge = t._to_ngff_transformation_edge_creating_output_cs(
+                input_coordinate_system=current_input_cs,
+                output_coordinate_system_name=cs_gen.get_unique_name(),
+                output_coordinate_system_virtual=True,
+            )
+            individual_edges.append(current_edge)
+            current_input_cs = current_edge.output
+
+        last_edge = self.transformations[-1]._define_ngff_transformation_edge_given_valid_output_cs(
+            input_coordinate_system=current_input_cs,
+            output_coordinate_system=output_coordinate_system,
+        )
+        individual_edges.append(last_edge)
+
+        return SequenceEdge(name=transformation_edge_name, transformations=individual_edges)
+
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, Sequence):
             return False
         return self.transformations == other.transformations
 
 
-def _get_current_output_axes(
-    transformation: BaseTransformation, input_axes: tuple[ValidAxis_t, ...]
-) -> tuple[ValidAxis_t, ...]:
-    if isinstance(transformation, Identity | Translation | Scale):
-        return input_axes
-    elif isinstance(transformation, MapAxis):
-        map_axis_input_axes = set(transformation.map_axis.values())
-        set(transformation.map_axis.keys())
-        to_return = []
-        for ax in input_axes:
-            if ax not in map_axis_input_axes:
-                assert ax not in to_return
-                to_return.append(ax)
-            else:
-                mapped = [ax_out for ax_out, ax_in in transformation.map_axis.items() if ax_in == ax]
-                assert all(ax_out not in to_return for ax_out in mapped)
-                to_return.extend(mapped)
-        return tuple(to_return)
-    elif isinstance(transformation, Affine):
-        to_return = []
-        add_affine_output_axes = False
-        for ax in input_axes:
-            if ax not in transformation.input_axes:
-                assert ax not in to_return
-                to_return.append(ax)
-            else:
-                add_affine_output_axes = True
-        if add_affine_output_axes:
-            for ax in transformation.output_axes:
-                if ax not in to_return:
-                    to_return.append(ax)
-                else:
-                    raise ValueError(
-                        f"Trying to query an invalid representation of an affine matrix: the ax {ax} is not "
-                        f"an input axis of the affine matrix but it appears both as output as input of the "
-                        f"matrix representation being queried"
-                    )
-        return tuple(to_return)
-    elif isinstance(transformation, Sequence):
-        for t in transformation.transformations:
-            input_axes = _get_current_output_axes(t, input_axes)
-        return input_axes
-    else:
-        raise ValueError("Unknown transformation type.")
-
-
 def _get_affine_for_element(element: SpatialElement, transformation: BaseTransformation) -> Affine:
-    from spatialdata.models import get_axes_names
 
     input_axes = get_axes_names(element)
-    output_axes = _get_current_output_axes(transformation, input_axes)
+    output_axes = transformation._get_resulting_output_axes(input_axes)
     matrix = transformation.to_affine_matrix(input_axes=input_axes, output_axes=output_axes)
     return Affine(matrix, input_axes=input_axes, output_axes=output_axes)
 
@@ -1060,7 +1352,7 @@ def _validate_square_affine_for_decomposition(
         If the linear part of the affine has a large condition number, in which case the decomposition may be
         numerically inaccurate.
     """
-    output_axes = _get_current_output_axes(transformation=transformation, input_axes=input_axes)
+    output_axes = transformation._get_resulting_output_axes(input_axes=input_axes)
     if set(input_axes) != set(output_axes):
         raise ValueError("The transformation should leave the set of input axes unmodified.")
     # the axes may come out in a different order than input_axes; querying in input_axes order makes the matrix

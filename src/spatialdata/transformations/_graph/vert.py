@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Final
 
 import ome_zarr_models.v06.coordinate_transforms as ozm06ct
 
-
-class AxisParsingException(Exception):
-    pass
+from spatialdata.literals import NgffAxisType, axis_type_mapping_ngff
+from spatialdata.transformations._graph.exceptions import AxisParsingException
 
 
 @dataclass(frozen=True)
@@ -16,7 +15,7 @@ class Axis:
     """Representation of a coordinate system axis"""
 
     name: Final[str]
-    type: Final[Literal["space", "channel"]]
+    type: Final[NgffAxisType]
     unit: Final[str | None] = None
     "unit of the axis. For a set of valid options see https://ngff.openmicroscopy.org/"
     long_name: Final[str | None] = None
@@ -58,16 +57,36 @@ class Axis:
             raise AxisParsingException("Axis doesn't have a name")
         if model.type is None:
             raise AxisParsingException("Axis doesn't have a type")
-        if model.type not in ("channel", "space"):
-            raise AxisParsingException(f"Can't handle axis of type {model.type}")
+        try:
+            axis_type = NgffAxisType(model.type)
+        except ValueError as ve:
+            raise AxisParsingException(f"Can't handle axis of type {model.type}") from ve
         if not isinstance(model.unit, (str, type(None))):
             raise AxisParsingException("Can't handle axis unit")
         return Axis(
             name=name,
-            type=model.type,  # type: ignore[arg-type]
+            type=axis_type,
             unit=model.unit,
             long_name=model.longName,
         )
+
+    @classmethod
+    def from_spatialdata_axis_name(cls, axis_name: str, unit: None = None) -> Axis:
+        """
+        Create an Axis from a spatialdata axis name.
+
+        Parameters
+        ----------
+        axis_name
+            The name of the axis (e.g., 'x', 'y', 'z', 'c').
+        unit
+            Optional unit for the axis.
+
+        Returns
+        -------
+        An Axis object with the specified name and corresponding type.
+        """
+        return cls(name=axis_name, type=axis_type_mapping_ngff[axis_name], unit=unit)
 
 
 class CoordSystemParsingException(Exception):

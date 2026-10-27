@@ -10,7 +10,9 @@ from warnings import warn
 import numpy as np
 import ome_zarr_models.v06.coordinate_transforms as ozm06trans
 
-from spatialdata._core.transformation_manager.exceptions import (
+from spatialdata._types import ArrayLike
+from spatialdata.literals import NgffAxisType
+from spatialdata.transformations._graph.edges.exceptions import (
     AxisRedefinitionError,
     DeterminantDifferentFromOne,
     EmptyTransformSequenceError,
@@ -20,8 +22,7 @@ from spatialdata._core.transformation_manager.exceptions import (
     UnexpectedShapeError,
     UnmappedAxisError,
 )
-from spatialdata._types import ArrayLike
-from spatialdata.transformations.graph.vert import Axis, CoordSystem
+from spatialdata.transformations._graph.vert import Axis, CoordSystem
 
 
 class BaseTransformationEdge(ABC):
@@ -297,7 +298,8 @@ class IdentityEdge(BaseTransformationEdge):
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="Axes must have the same number of dimensions"
+                axes_error_message="Axes must have the same number of dimensions",
+                transformation_name=self.__class__.__name__,
             )
         super().__init__(input=input, output=output, name=name)
 
@@ -353,12 +355,19 @@ class MapAxisEdge(BaseTransformationEdge):
         ------
         IncompatibleCoordSystemsError
             if `input` and `output` don't have the number of axes
+        MissingAxisError
+            if an axis specified among keys of `input_to_output` is not in `input`
+            or
+            if an axis specified among values of `input_to_output` is not in `output`
+        UnmappedAxisError
+            if an axis specified in `input` is not a key of `input_to_output`
+            or
+            if an axis specified in `output` is not a value of `input_to_output`
+
         """
 
         if input.num_axes != output.num_axes:
-            raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="Input and output must have the same number of axes"
-            )
+            raise IncompatibleCoordSystemsError(axes_error_message="Input and output must have the same number of axes")
 
         unmapped_inputs = set(input.axes)
         unmapped_outputs = set(output.axes)
@@ -366,16 +375,16 @@ class MapAxisEdge(BaseTransformationEdge):
             try:
                 unmapped_inputs.remove(inp_ax)
             except KeyError as e:
-                raise MissingAxisError(axis=inp_ax, cs=self.input) from e
+                raise MissingAxisError(axis_name=inp_ax.name, cs_name=input.name) from e
             try:
                 unmapped_outputs.remove(out_ax)
             except KeyError as e:
-                raise MissingAxisError(axis=out_ax, cs=self.output) from e
+                raise MissingAxisError(axis_name=out_ax.name, cs_name=output.name) from e
 
         for ax in unmapped_inputs:
-            raise UnmappedAxisError(axis=ax, cs=self.input)
+            raise UnmappedAxisError(axis_name=ax.name, cs_name=input.name)
         for ax in unmapped_outputs:
-            raise UnmappedAxisError(axis=ax, cs=self.output)
+            raise UnmappedAxisError(axis_name=ax.name, cs_name=output.name)
 
         self.input_to_output = input_to_output
         super().__init__(input=input, output=output, name=name)
@@ -437,7 +446,7 @@ class ProjectAxisEdge(BaseTransformationEdge):
         ----------
         dropped_inputs
             axes in `input` that will be dropped by this transformation
-        created_inputs
+        created_outputs
             axes in `output` that will be set to 0
 
         Raises
@@ -451,10 +460,10 @@ class ProjectAxisEdge(BaseTransformationEdge):
 
         for axis in dropped_inputs:
             if axis not in input.axes:
-                raise MissingAxisError(axis=axis, cs=input)
+                raise MissingAxisError(axis_name=axis.name, cs_name=input.name)
         for axis in created_outputs:
             if axis not in output.axes:
-                raise MissingAxisError(axis=axis, cs=output)
+                raise MissingAxisError(axis_name=axis.name, cs_name=output.name)
         if input.num_axes - len(dropped_inputs) + len(created_outputs) != output.num_axes:
             message = f"Can't map from {input} to {output}"
             if dropped_inputs:
@@ -462,9 +471,7 @@ class ProjectAxisEdge(BaseTransformationEdge):
             if created_outputs:
                 message += f" creating {created_outputs}"
             raise IncompatibleCoordSystemsError(
-                input=input,
-                output=output,
-                message=message,
+                axes_error_message=message,
             )
 
         self.dropped_inputs = set(dropped_inputs)
@@ -472,6 +479,7 @@ class ProjectAxisEdge(BaseTransformationEdge):
         super().__init__(name=name, input=input, output=output)
 
     def to_affine(self, name: str | None = None) -> AffineEdge:
+
         linear = np.zeros((self.output.num_axes, self.input.num_axes), dtype=float)
         input_indices = iter(range(self.input.num_axes))
         for out_idx, out_ax in enumerate(self.output.axes):
@@ -543,9 +551,7 @@ class TranslationEdge(BaseTransformationEdge):
             if `translation`'s shape doesn't match `input`
         """
         if input.num_axes != output.num_axes:
-            raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="Number of input and output axes must be the same"
-            )
+            raise IncompatibleCoordSystemsError(axes_error_message="Number of input and output axes must be the same")
         expected_translation_shape = (input.num_axes,)
         if translation.shape != expected_translation_shape:
             raise UnexpectedShapeError(
@@ -622,7 +628,7 @@ class ScaleEdge(BaseTransformationEdge):
             raise UnexpectedShapeError(array_name="scale", array_shape=scale.shape, expected_shape=expected_scale_shape)
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="input and output must have same number of dimensions"
+                axes_error_message="input and output must have same number of dimensions"
             )
         self.scale = scale
         super().__init__(input=input, output=output, name=name)
@@ -697,7 +703,7 @@ class RotationEdge(BaseTransformationEdge):
         """
         if input.num_axes != output.num_axes:
             raise IncompatibleCoordSystemsError(
-                input=input, output=output, message="input and output should have the same numbe rof axes"
+                axes_error_message="input and output should have the same number of axes"
             )
         expected_shape = (output.num_axes, input.num_axes)
         if linear_matrix.shape != expected_shape:
@@ -775,9 +781,7 @@ class SequenceEdge(BaseTransformationEdge):
         for transf_idx, current_transf in enumerate(transformations[1:], start=1):
             if previous_transf.output != current_transf.input:
                 raise IncompatibleCoordSystemsError(
-                    input=current_transf.input,
-                    output=previous_transf.output,
-                    message=(
+                    axes_error_message=(
                         f"Output of transformation #{transf_idx - 1} is different "
                         f"from input of transformation #{transf_idx}"
                     ),
@@ -873,16 +877,16 @@ class ByDimensionEdge(BaseTransformationEdge):
         for t in transformations:
             for ax in t.input.axes:
                 if ax not in input.axes:
-                    raise MissingAxisError(axis=ax, cs=input)
+                    raise MissingAxisError(axis_name=ax.name, cs_name=input.name)
             for ax in t.output.axes:
                 if ax not in output.axes:
-                    raise MissingAxisError(axis=ax, cs=output)
+                    raise MissingAxisError(axis_name=ax.name, cs_name=output.name)
                 if ax.name in defined_output_axes:
-                    raise AxisRedefinitionError(axis=ax)
+                    raise AxisRedefinitionError(axis_name=ax.name)
                 defined_output_axes.add(ax.name)
         for ax in output.axes:
             if ax.name not in defined_output_axes:
-                raise UnmappedAxisError(axis=ax, cs=output)
+                raise UnmappedAxisError(axis_name=ax.name, cs_name=output.name)
 
         self.transformations = tuple(transformations)
         super().__init__(input=input, output=output, name=name)
@@ -963,24 +967,79 @@ class CsGen:
         self._cs_count: int = 0
         super().__init__()
 
+    def get_unique_name(self) -> str:
+        """
+        Generate a unique name for a coordinate system, based on self._base_name and self._cs_count.
+
+        Returns
+        -------
+        A unique name string.
+        """
+
+        unique_name = f"{self._base_name}{self._cs_count}"
+        self._cs_count += 1
+        return unique_name
+
     def generate(self, *, num_axes: int) -> CoordSystem:
-        out = CoordSystem(
-            name=f"{self._base_name}{self._cs_count}",
+        """
+        Generate a coordinate system with the specified number of axes.
+
+        Parameters
+        ----------
+        num_axes
+            The number of axes for the coordinate system.
+
+        Returns
+        -------
+        A CoordSystem with the specified number of axes.
+        """
+        return CoordSystem(
+            name=self.get_unique_name(),
             axes=tuple(
                 Axis(
                     name=f"axis_{ax_idx}",
-                    type="space",  # FIXME
+                    type=NgffAxisType.SPACE,  # FIXME
                 )
                 for ax_idx in range(num_axes)
             ),
             virtual=True,
         )
-        self._cs_count += 1
-        return out
+
+    def generate_with_axes(self, *, axes: tuple[Axis]) -> CoordSystem:
+        """
+        Generate a coordinate system with the specified axes.
+
+        Parameters
+        ----------
+        axes
+            The axes to use for the coordinate system.
+
+        Returns
+        -------
+        A CoordSystem with the specified axes.
+        """
+
+        return CoordSystem(
+            name=self.get_unique_name(),
+            axes=axes,
+            virtual=True,
+        )
 
     def generate_like(self, other: CoordSystem) -> CoordSystem:
-        out = CoordSystem(
-            name=f"{self._base_name}{self._cs_count}",
+        """
+        Generate a coordinate system similar to another coordinate system.
+
+        Parameters
+        ----------
+        other
+            The coordinate system to use as a template.
+
+        Returns
+        -------
+        A CoordSystem with the same axes as the template but a unique name.
+        """
+        return CoordSystem(
+            name=self.get_unique_name(),
             axes=tuple(
                 Axis(
                     name=axis.name,
@@ -992,8 +1051,6 @@ class CsGen:
             ),
             virtual=True,
         )
-        self._cs_count += 1
-        return out
 
 
 def parse_identity(
@@ -1187,7 +1244,7 @@ def parse_ngff_transf(
     model: ozm06trans.AnyTransform,
     output: CoordSystem | CsGen,
 ) -> BaseTransformationEdge:
-    """Parse an NGFF coordinate transformation model into a `BaseTransfEdge`"""
+    """Parse an NGFF coordinate transformation model into a `BaseTransformationEdge`"""
     if isinstance(model, ozm06trans.Identity):
         return parse_identity(model, input=input, out=output)
     elif isinstance(model, ozm06trans.Translation):

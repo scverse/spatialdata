@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from spatialdata.transformations import graph
+from spatialdata.transformations._graph import get_spatial_axes
+from spatialdata.transformations._utils import compute_coordinates
 from spatialdata.transformations.operations import (
     align_elements_using_landmarks,
     get_transformation,
@@ -21,7 +22,6 @@ from spatialdata.transformations.transformations import (
 )
 
 __all__ = [
-    "graph",
     "BaseTransformation",
     "Identity",
     "MapAxis",
@@ -36,4 +36,7 @@ __all__ = [
     "get_transformation_between_landmarks",
     "align_elements_using_landmarks",
     "remove_transformations_to_coordinate_system",
+    "compute_coordinates",
+    # utils
+    "get_spatial_axes",
 ]

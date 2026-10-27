@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pandas as pd
+
+from spatialdata.literals import X, Y, Z
+from spatialdata.models import get_axes_names
+from spatialdata.transformations._graph.vert import Axis, CoordSystem
+
+if TYPE_CHECKING:
+    from spatialdata.models import SpatialElement
+    from spatialdata.transformations._graph.types import ValidAxis_t
+
+
+def get_intrinsic_coordinate_system_name(element_key: str) -> str:
+
+    return f"{element_key}_intrinsic"
+
+
+def get_instrinsic_coordinate_system(
+    element_to_be_added_to_graph: SpatialElement, coordinate_system_name: str
+) -> CoordSystem:
+    """
+    Create a coordinate system object from a spatial element, which can be added to a graph.
+
+    Parameters
+    ----------
+    element_to_be_added_to_graph
+        The spatial element for which to create a coordinate system.
+    coordinate_system_name
+        The name to use for the coordinate system.
+
+    Returns
+    -------
+    A CoordSystem object representing the default coordinate system for the element.
+    """
+    ngff_axes = []
+    for axis_name in get_axes_names(element_to_be_added_to_graph):
+        ngff_axis = Axis.from_spatialdata_axis_name(axis_name)
+        ngff_axes.append(ngff_axis)
+    return CoordSystem(name=coordinate_system_name, axes=tuple(ngff_axes), virtual=False)
+
+
+def validate_axis_name(axis: ValidAxis_t) -> None:
+    """
+    Check if the axis name is valid.
+
+    Parameters
+    ----------
+    axis
+        The axis name
+
+    Raises
+    ------
+    TypeError
+        If the axis name not in ["c", "x", "y", "z"]
+    """
+    if axis not in ["c", "x", "y", "z"]:
+        raise TypeError(f"Invalid axis: {axis}")
+
+
+def validate_axes(axes: tuple[ValidAxis_t, ...]) -> None:
+    """
+    Check if the names of the axes are valid.
+
+    Parameters
+    ----------
+    axis
+        The names of the axes
+
+    Raises
+    ------
+    TypeError
+        If not in ["c", "x", "y", "z"]
+    """
+    for ax in axes:
+        validate_axis_name(ax)
+    if len(axes) != len(set(axes)):
+        raise ValueError("Axes must be unique.")
+
+
+def get_spatial_axes(axes: tuple[ValidAxis_t, ...]) -> tuple[ValidAxis_t, ...]:
+    """
+    Get the spatial axes of interest.
+
+    Parameters
+    ----------
+    axes
+        Should be a subset of ['x', 'y', 'z', 'c']
+
+    Returns
+    -------
+    The spatial axes, i.e. the input axes but without 'c'
+    """
+    validate_axes(axes)
+    return tuple(ax for ax in axes if ax in [X, Y, Z])
+
+
+def get_union_of_axes(axes: tuple[Axis, ...]) -> tuple[Axis, ...]:
+    """
+    Produce a union of ``Axis`` objects, dropping duplicates and ordering reverse alphabetically.
+
+    The ordering favors non‑None values for ``unit`` and ``long_name``.
+    Axes that share the same ``name`` **and** ``type`` are considered duplicates;
+    only the first occurrence (according to the sorted order) is retained.
+    """
+    # ------------------------------------------------------------------
+    # Build a DataFrame that holds the original Axis objects together with
+    # their attributes and auxiliary “non‑null” flags.
+    # ------------------------------------------------------------------
+    df = pd.DataFrame(
+        {
+            "axis": pd.Series(axes, dtype="object"),  # original Axis objects
+            "name": pd.Series([ax.name for ax in axes], dtype="string"),
+            "type": pd.Series([ax.type for ax in axes], dtype="object"),
+            "unit": pd.Series([ax.unit for ax in axes], dtype="string"),
+            "long_name": pd.Series([ax.long_name for ax in axes], dtype="string"),
+        }
+    )
+
+    # Remove duplicates based on the logical key (name, type, unit, long_name).
+    df = df.drop_duplicates(subset=["name", "type", "unit", "long_name"], keep="first")
+
+    # Boolean columns that indicate the presence of a value.
+    df["unit_not_none"] = df["unit"].notna()
+    df["long_name_not_none"] = df["long_name"].notna()
+
+    # Sort axes in descending (alphabetical) order
+    df = df.sort_values(
+        by=[
+            "type",
+            "name",
+            "unit_not_none",
+            "unit",
+            "long_name_not_none",
+            "long_name",
+        ],
+        ascending=[
+            True,  # NgffAxisType has CHANNEL first, SPACE next, so that we get channel axes before space axes
+            False,
+            False,  # so that those with unit are placed before those without
+            False,
+            False,  # so that those with long_name are placed before those without
+            False,
+        ],
+        kind="mergesort",  # stable sort to preserve order of equal keys
+    )
+
+    return tuple(df["axis"])

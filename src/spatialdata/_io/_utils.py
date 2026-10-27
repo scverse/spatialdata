@@ -30,14 +30,11 @@ from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io.format import RasterFormatType, RasterFormatV01, RasterFormatV02, RasterFormatV03
 from spatialdata._logging import logger
 from spatialdata._utils import get_pyramid_levels
-from spatialdata.models._utils import (
-    MappingToCoordinateSystem_t,
-    SpatialElement,
-    ValidAxis_t,
-    _validate_mapping_to_coordinate_system_type,
-)
+from spatialdata.models import SpatialElement
+from spatialdata.transformations._graph.types import ValidAxis_t
+from spatialdata.transformations._utils import MappingToCoordinateSystem_t, _validate_mapping_to_coordinate_system_type
 from spatialdata.transformations.ngff.ngff_transformations import NgffBaseTransformation
-from spatialdata.transformations.transformations import BaseTransformation, _get_current_output_axes
+from spatialdata.transformations.transformations import BaseTransformation
 
 
 def _get_transformations_from_ngff_dict(
@@ -70,7 +67,7 @@ def overwrite_coordinate_transformations_non_raster(
     _validate_mapping_to_coordinate_system_type(transformations)
     ngff_transformations = []
     for target_coordinate_system, t in transformations.items():
-        output_axes = _get_current_output_axes(transformation=t, input_axes=tuple(axes))
+        output_axes = t._get_resulting_output_axes(input_axes=tuple(axes))
         ngff_transformations.append(
             t.to_ngff(
                 input_axes=tuple(axes),
@@ -112,7 +109,7 @@ def overwrite_coordinate_transformations_raster(
     # prepare the transformations in the dict representation
     ngff_transformations = []
     for target_coordinate_system, t in transformations.items():
-        output_axes = _get_current_output_axes(transformation=t, input_axes=tuple(axes))
+        output_axes = t._get_resulting_output_axes(input_axes=tuple(axes))
         ngff_transformations.append(
             t.to_ngff(
                 input_axes=tuple(axes),

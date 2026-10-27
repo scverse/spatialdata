@@ -138,7 +138,9 @@ for method_name in [
 ]:
     wrap_method_with_attrs(method_name=method_name, dask_class=DaskSeries)
 
-wrap_indexer_with_attrs(indexer_name="loc", dask_class=DaskDataFrame)
-wrap_indexer_with_attrs(indexer_name="iloc", dask_class=DaskDataFrame)
-wrap_indexer_with_attrs(indexer_name="loc", dask_class=DaskSeries)
-# DaskSeries do not have iloc
+
+def register_attrs_accessor_dask_df_series() -> None:
+    wrap_indexer_with_attrs(indexer_name="loc", dask_class=DaskDataFrame)
+    wrap_indexer_with_attrs(indexer_name="iloc", dask_class=DaskDataFrame)
+    wrap_indexer_with_attrs(indexer_name="loc", dask_class=DaskSeries)
+    # DaskSeries do not have iloc

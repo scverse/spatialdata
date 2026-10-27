@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING
 from anndata import AnnData
 from xarray import DataArray, DataTree
 
-from spatialdata.models import SpatialElement, get_axes_names, get_spatial_axes
+from spatialdata.models import SpatialElement, get_axes_names
+from spatialdata.transformations import get_spatial_axes
 
 if TYPE_CHECKING:
     from spatialdata._core.spatialdata import SpatialData

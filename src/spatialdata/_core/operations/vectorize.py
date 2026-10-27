@@ -30,8 +30,8 @@ from spatialdata.models import (
     SpatialElement,
     get_axes_names,
     get_model,
+    points_dask_dataframe_to_geopandas,
 )
-from spatialdata.models._utils import points_dask_dataframe_to_geopandas
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import Identity
 
