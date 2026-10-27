@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import warnings
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Iterable, Mapping
 from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -58,7 +58,6 @@ if TYPE_CHECKING:
         SpatialDataContainerFormatType,
         SpatialDataFormatType,
     )
-    from spatialdata.transformations._graph import BaseTransformationEdge
 
 
 class SpatialData:
@@ -178,9 +177,54 @@ class SpatialData:
         for element_set in (images, labels, shapes, points):
             if element_set is not None:
                 for element_key, element in element_set.items():
-                    self._initialize_coordinate_transforms_from_element_attrs(
+                    self.transformations._add_new_element_to_graph_creating_default_cs(
                         new_element=element, new_element_key=element_key
                     )
+
+        all_element_dict = (images or {}) | (labels or {}) | (shapes or {}) | (points or {})
+        elements_grouped_by_transformations = self.group_elements_by_target_cs(all_element_dict.keys())
+
+        for target_cs_name, element_name_transformation_config in elements_grouped_by_transformations.items():
+            self.transformations.set_transformations_from_elements_to_common_cs(
+                target_cs_name=target_cs_name,
+                element_name_transformation_config=element_name_transformation_config,
+            )
+
+    def group_elements_by_target_cs(
+        self, spatial_element_names: Iterable[str]
+    ) -> dict[str, dict[str, BaseTransformation]]:
+        """
+        Groups SpatialElement objects by target coordinate systems
+
+        Based on the transformation information in their .attrs
+
+        Parameters
+        ----------
+        spatial_element_names
+            names of SpatialElement objects
+
+        Returns
+        -------
+        dictionary with target coordinate systems as keys and element-wise transformation information as values.
+        These values are themselves dictionaries with element_names as keys and transformation objects mapping
+        element to the corresponding target coordinate system as values
+        """
+        spatial_elements_grouped_by_transformations: dict[str, dict[str, BaseTransformation]] = {}
+        for element_name in spatial_element_names:
+            element = self.get(element_name)
+            if (element is not None) and isinstance(element, SpatialElement):
+                transformations_config = get_transformation(element, get_all=True)
+                for target_cs_name, transformation_object in transformations_config.items():
+                    if target_cs_name in spatial_elements_grouped_by_transformations:
+                        spatial_elements_grouped_by_transformations[target_cs_name][element_name] = (
+                            transformation_object
+                        )
+                    else:
+                        spatial_elements_grouped_by_transformations[target_cs_name] = {
+                            element_name: transformation_object
+                        }
+
+        return spatial_elements_grouped_by_transformations
 
     def validate_table_in_spatialdata(self, table: AnnData) -> None:
         """
@@ -746,18 +790,6 @@ class SpatialData:
             tables = self.tables
 
         return tables
-
-    def _initialize_coordinate_transforms_from_element_attrs(
-        self, new_element: SpatialElement, new_element_key: str
-    ) -> list[BaseTransformationEdge]:
-        transforms: dict[str, BaseTransformation] = get_transformation(new_element, get_all=True)
-
-        self.transformations._add_new_element_to_graph_creating_default_cs(
-            new_element=new_element, new_element_key=new_element_key
-        )
-        return self.transformations.set_element_transformations(
-            element_name=new_element_key, transformations_config=transforms
-        )
 
     def rename_coordinate_systems(self, rename_dict: dict[str, str]) -> None:
         """
@@ -2390,6 +2422,12 @@ class SpatialData:
 
         return found[0]
 
+    def assert_element_does_not_exist(self, element_name: str) -> None:
+        """Raises a key error if an element with name `element_name` already exists."""
+        existing_element_names = [x[1] for x in self.gen_elements()]
+        if element_name in existing_element_names:
+            raise KeyError(f"Element with name '{element_name}' already exists")
+
     @classmethod
     def init_from_elements(
         cls,
@@ -2559,20 +2597,44 @@ class SpatialData:
         schema = get_model(value)
         if schema in (Image2DModel, Image3DModel):
             assert isinstance(value, DataArray | DataTree)
+
             self.images[key] = value
-            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
+            # this will throw KeyError if we try to assign an element of different type, but with the same name as an
+            # existing spatial element; will overwrite if it is the same type
+            self.transformations._remove_element_from_graph_if_exists(key)
+            self.transformations._add_new_element_to_graph_creating_default_cs(new_element=value, new_element_key=key)
+            # TODO add transformations from element attrs to graph
+
         elif schema in (Labels2DModel, Labels3DModel):
             assert isinstance(value, DataArray | DataTree)
+
             self.labels[key] = value
-            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
+            # this will throw KeyError if we try to assign an element of different type, but with the same name as an
+            # existing spatial element; will overwrite if it is the same type
+            self.transformations._remove_element_from_graph_if_exists(key)
+            self.transformations._add_new_element_to_graph_creating_default_cs(new_element=value, new_element_key=key)
+            # TODO add transformations from element attrs to graph
+
         elif schema == PointsModel:
             assert isinstance(value, DaskDataFrame)
+
             self.points[key] = value
-            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
+            # this will throw KeyError if we try to assign an element of different type, but with the same name as an
+            # existing spatial element; will overwrite if it is the same type
+            self.transformations._remove_element_from_graph_if_exists(key)
+            self.transformations._add_new_element_to_graph_creating_default_cs(new_element=value, new_element_key=key)
+            # TODO add transformations from element attrs to graph
+
         elif schema == ShapesModel:
             assert isinstance(value, GeoDataFrame)
+
             self.shapes[key] = value
-            self._initialize_coordinate_transforms_from_element_attrs(new_element=value, new_element_key=key)
+            # this will throw KeyError if we try to assign an element of different type, but with the same name as an
+            # existing spatial element; will overwrite if it is the same type
+            self.transformations._remove_element_from_graph_if_exists(key)
+            self.transformations._add_new_element_to_graph_creating_default_cs(new_element=value, new_element_key=key)
+            # TODO add transformations from element attrs to graph
+
         elif schema == TableModel:
             assert isinstance(value, AnnData)
             self.validate_table_in_spatialdata(value)
@@ -2592,6 +2654,7 @@ class SpatialData:
         """
         element_type, _, _ = self._find_element(key)
         getattr(self, element_type).__delitem__(key)
+        self.transformations._remove_element_from_graph_if_exists(key)
 
     @property
     def attrs(self) -> dict[str, JSONValue]:

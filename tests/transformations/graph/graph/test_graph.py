@@ -183,11 +183,9 @@ def test_add_transformation(fully_connected_two_point_graph):
     tm.add_coordinate_system(cs1)
     tm.add_coordinate_system(cs2)
 
-    tm.add_transformation_edge(transform_edge)
+    edge_key = tm.add_transformation_edge(transform_edge)
 
     assert tm._graph.has_edge(cs1, cs2)
-    # Get the first edge key and check the transformation
-    edge_key = tm._get_edge_key(transform_edge)
     assert tm._graph[cs1][cs2][edge_key][TRANSFORM_KEY] is transform_edge
 
 
@@ -203,9 +201,9 @@ def test_add_transformation_existing_edge(fully_connected_two_point_graph):
 
     # Add same transformation again between the same coordinate systems
     tm.add_transformation_edge(transform_edge)
-    # Should have just rewritten the edge
+
     assert tm._graph.has_edge(cs1, cs2)
-    assert len(tm._graph[cs1][cs2]) == 1
+    assert len(tm._graph[cs1][cs2]) == 2
 
 
 def test_add_transformation_nonexistent_cs(fully_connected_two_point_graph):
@@ -235,7 +233,7 @@ def test_get_direct_transformations(fully_connected_two_point_graph):
 
     retrieved = tm.get_direct_transformations(cs1, cs2)
     assert len(retrieved) == 1
-    assert retrieved[0] is transform_edge
+    assert next(iter(retrieved.values())) is transform_edge
 
 
 def test_get_direct_transformations_nonexistent(fully_connected_two_point_graph):
@@ -246,7 +244,7 @@ def test_get_direct_transformations_nonexistent(fully_connected_two_point_graph)
     tm.add_coordinate_system(cs2)
 
     retrieved = tm.get_direct_transformations(cs1, cs2)
-    assert retrieved == []
+    assert retrieved == {}
 
 
 def test_remove_all_transformations_between_coordinate_systems(fully_connected_two_point_graph, mocker):
@@ -290,11 +288,10 @@ def test_remove_specific_transformation_between_coordinate_systems(five_point_gr
     tm.add_coordinate_system(cs5)
 
     tm.add_transformation_edge(transform6)
-    tm.add_transformation_edge(transform7)
+    edge_key7 = tm.add_transformation_edge(transform7)
 
-    tm.remove_specific_transformation(transform7)
-    edge_key = tm._get_edge_key(transform7)
-    assert not tm._graph.has_edge(cs3, cs5, key=edge_key)
+    tm.remove_specific_transformation(edge_key7, transform7)
+    assert not tm._graph.has_edge(cs3, cs5, key=edge_key7)
 
 
 def test_remove_specific_transformation_between_coordinate_systems_non_existent(five_point_graph):
@@ -313,7 +310,7 @@ def test_remove_specific_transformation_between_coordinate_systems_non_existent(
     with pytest.raises(
         TransformationNotFoundError, match=f"Transformation from '{cs3.name}' to '{cs5.name}' not found"
     ):
-        tm.remove_specific_transformation(transform7)
+        tm.remove_specific_transformation("irrelevant", transform7)
 
 
 def assert_sequences_equivalent(
@@ -412,18 +409,18 @@ def test_get_all_shortest_transformation_sequences_multiple_paths_multiple_edges
     tm.add_coordinate_system(cs4)
     tm.add_coordinate_system(cs5)
 
-    tm.add_transformation_edge(transform1)
-    tm.add_transformation_edge(transform3)
-    tm.add_transformation_edge(transform4)
-    tm.add_transformation_edge(transform2)
+    tm.add_transformation_edge(transform1)  # cs1 -> cs2
+    tm.add_transformation_edge(transform3)  # cs2 -> cs3
+    tm.add_transformation_edge(transform4)  # cs1 -> cs4
+    tm.add_transformation_edge(transform2)  # cs4 -> cs3
     # tm.add_transformation(cs1, cs3, transform3)
-    tm.add_transformation_edge(transform6)
-    tm.add_transformation_edge(transform7)
+    key6 = tm.add_transformation_edge(transform6)  # cs3 -> cs5
+    tm.add_transformation_edge(transform7)  # cs3 -> cs5
 
-    expected_intermediate_edges = [transform6]
+    expected_intermediate_edges = [key6]
 
     sequences = tm.get_all_shortest_transformation_sequences(
-        cs1, cs5, expected_intermediate_edges=expected_intermediate_edges
+        cs1, cs5, expected_intermediate_edge_keys=expected_intermediate_edges
     )
     assert_sequences_equivalent(sequences, [[transform1, transform3, transform6], [transform4, transform2, transform6]])
 
@@ -516,11 +513,13 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_success(
     tm.add_transformation_edge(transform4)
     tm.add_transformation_edge(transform2)
     tm.add_transformation_edge(transform5)
-    tm.add_transformation_edge(transform6)
+    key6 = tm.add_transformation_edge(transform6)
     tm.add_transformation_edge(transform7)
 
-    expected_intermediate_edges = [transform6]
-    sequences = tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_edges=expected_intermediate_edges)
+    expected_intermediate_edges = [key6]
+    sequences = tm.get_all_transformation_sequences(
+        cs1, cs5, expected_intermediate_edge_keys=expected_intermediate_edges
+    )
     assert_sequences_equivalent(
         sequences,
         [[transform1, transform3, transform6], [transform4, transform2, transform6], [transform5, transform6]],
@@ -573,14 +572,14 @@ def test_get_all_transformation_sequences_multiple_paths_multiple_edges_multiple
     tm.add_transformation_edge(transform4)
     tm.add_transformation_edge(transform2)
     tm.add_transformation_edge(transform5)
-    tm.add_transformation_edge(transform6)
-    tm.add_transformation_edge(transform7)
+    key6 = tm.add_transformation_edge(transform6)
+    key7 = tm.add_transformation_edge(transform7)
 
-    expected_intermediate_edges = [transform6, transform7]
+    expected_intermediate_edges = [key6, key7]
 
     expected_msg = f"Transformation Path ambiguous from {cs3.name} to {cs5.name}."
     with pytest.raises(TransformationPathAmbiguousMultipleEdgeExpectedError, match=expected_msg):
-        tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_edges=expected_intermediate_edges)
+        tm.get_all_transformation_sequences(cs1, cs5, expected_intermediate_edge_keys=expected_intermediate_edges)
 
 
 def test_get_transformation_sequences_from_simple_paths_after_disambiguation_with_non_simple_paths(
