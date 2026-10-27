@@ -4,9 +4,10 @@ import importlib
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Any
 
-import spatialdata.models._accessor
+from spatialdata.models._accessor import register_attrs_accessor_dask_df_series
 
 # Import registers Dask .attrs accessor, enabling metadata handling on Dask collections
+register_attrs_accessor_dask_df_series()
 
 __version__ = version("spatialdata")
 
