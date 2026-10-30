@@ -105,4 +105,4 @@ Marconato, L., Palla, G., Yamauchi, K.A. et al. SpatialData: an open and univers
 [link-notebooks]: https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
-[denbi-survey]: https://de.surveymonkey.com/r/denbi-service?sc=X&tool=Y
+[denbi-survey]: https://www.surveymonkey.de/r/denbi-service?sc=hd-hub&tool=spatialdata
