@@ -537,7 +537,9 @@ def _left_join_spatialelement_table(
         # restore the original table row order, as would be expected for a semi-join.
         if match_rows == "no":
             joined_indices = joined_indices.sort_values()
-    joined_table = table[joined_indices.tolist(), :].copy() if joined_indices is not None else None
+    joined_table = (
+        table[joined_indices.tolist(), :].copy() if joined_indices is not None and len(joined_indices) > 0 else None
+    )
     _inplace_fix_subset_categorical_obs(subset_adata=joined_table, original_adata=table)
     if joined_table is not None:
         joined_table.uns[TableModel.ATTRS_KEY][TableModel.REGION_KEY] = _region_as_str_if_list_of_len_one(
