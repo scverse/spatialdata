@@ -1,0 +1,1217 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
+from typing import Final
+from warnings import warn
+
+import numpy as np
+import ome_zarr_models.v06.coordinate_transforms as ozm06ct
+
+import spatialdata._core.transformation_manager.exceptions as ex
+from spatialdata._types import ArrayLike
+import spatialdata.transformations.graph.vert as vert
+
+
+class BaseTransformationEdge(ABC):
+    """Base class for all the transformations defined by the NGFF specification."""
+
+    input: Final[vert.CoordSystem]
+    output: Final[vert.CoordSystem]
+
+    def __init__(
+        self,
+        *,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> None:
+        self.input = input
+        self.output = output
+        super().__init__()
+
+    def __repr__(self) -> str:
+        domain = ", ".join(self.input.axes_names)
+        codomain = ", ".join(self.output.axes_names)
+        return f"{type(self).__name__} ({domain} -> {codomain})"
+
+    @abstractmethod
+    def inverse(self) -> BaseTransformationEdge | None:
+        """Return the inverse of the transformation if it exists"""
+
+    @abstractmethod
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+
+    @abstractmethod
+    def to_affine(self) -> AffineEdge:
+        """Convert the transformation to an affine transformation, whenever the conversion can be made."""
+
+    def _validate_transform_points_shapes(self, points: ArrayLike) -> None:
+        """
+        Validate if the shape of the points (coordinates to be transformed) are consistent with the input size of the
+        transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        input_size = len(self.input.axes)
+        if len(points.shape) != 2 or points.shape[1] != input_size:
+            raise ex.UnexpectedShapeError(
+                array_name="points",
+                expected_shape=f"(<number of points>, {self.input.num_axes})",
+                array_shape=points.shape,
+            )
+
+    # order of the composition: self is applied first, then the transformation passed as argument
+    def compose_with(self, transformation: BaseTransformationEdge) -> BaseTransformationEdge:
+        """
+        Compose the transfomation object with another transformation
+
+        Parameters
+        ----------
+        transformation
+            The transformation to compose with.
+
+        Returns
+        -------
+        The compoesed transformation.
+
+        Notes
+        -------
+        Self is applied first, then the transformation passed as argument.
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            if this transformation's output coordinate system doesn't match `transformation`'s input
+        """
+        return SequenceEdge(transformations=[self, transformation])
+
+    @abstractmethod
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.AnyTransform:
+        pass
+
+
+class AffineEdge(BaseTransformationEdge):
+    """The Affine transformation from the NGFF specification."""
+
+    linear: Final[ArrayLike]
+    translation: Final[ArrayLike]
+    affine: Final[ArrayLike]
+
+    def __init__(
+        self,
+        *,
+        linear: ArrayLike,
+        translation: ArrayLike | None = None,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        linear
+            The linear part of this transformation, i.e., the one that keeps
+            the origin in the same place. Shape must be (output.num_axes, input.num_axes)
+        translation y
+            The translation part of this transformation, of shape (output.num_axes,)
+        input
+            Input coordinate system of the transformation.
+        output
+            Output coordinate system of the transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `linear`'s shape isn't (output.num_axes, input.num_axes) or
+            if `translation`'s shape isn't (output.num_axes,)
+        """
+        num_inputs = input.num_axes
+        num_outputs = output.num_axes
+        translation = np.zeros(num_outputs) if translation is None else translation
+
+        expected_linear_shape = (num_outputs, num_inputs)
+        if linear.shape != expected_linear_shape:
+            raise ex.UnexpectedShapeError(
+                array_name="linear", array_shape=linear.shape, expected_shape=expected_linear_shape
+            )
+        expected_translation_shape = (num_outputs,)
+        if translation.shape != expected_translation_shape:
+            raise ex.UnexpectedShapeError(
+                array_name="translation", array_shape=translation.shape, expected_shape=expected_translation_shape
+            )
+
+        self.linear = linear
+        self.translation = translation
+
+        self.affine = np.zeros((num_outputs + 1, num_inputs + 1))
+        self.affine[:-1, :-1] = self.linear
+        self.affine[:-1, -1] = self.translation
+        self.affine[-1, -1] = 1
+
+        super().__init__(input=input, output=output)
+
+    def __repr__(self) -> str:
+        s = super().__repr__() + "\n"
+        s += "\n".join(str(row) for row in self.affine)
+        return s
+
+    @classmethod
+    def from_affine_matrix(
+        cls,
+        *,
+        affine_matrix: ArrayLike,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> AffineEdge:
+        """Creates an AffineEdge from a raw affine matrix in homogenous coordinates
+
+        Parameters
+        ----------
+        affine_matrix
+            row-major, (output.num_axes + 1, input.num_axes + 1) matrix with:
+                - linear part at the top left
+                - translation as the rightmost column
+                - last row is [0, 0, ..., 0, 1]
+        input
+            Input coordinate system of the transformation.
+        output
+            Output coordinate system of the transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `affine_matrix`'s shape isn't (output.num_axes + 1, input.num_axes + 1)
+        """
+        return AffineEdge(
+            linear=affine_matrix[:-1, :-1],
+            translation=affine_matrix[:-1, -1],
+            input=input,
+            output=output,
+        )
+
+    def inverse(self) -> BaseTransformationEdge | None:
+        cond = np.linalg.cond(self.affine)
+        if cond > 1e10:
+            warn(
+                f"Inverting an affine matrix with large condition number ({cond:.2e})",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        try:
+            # FIXME: I think there are more efficient/precise ways to invert a matrix
+            inv = np.linalg.inv(self.affine)
+        except np.linalg.LinAlgError:
+            return None
+        return AffineEdge(
+            linear=inv[:-1, :-1],
+            translation=inv[:-1, -1],
+            input=self.output,
+            output=self.input,
+        )
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        self._validate_transform_points_shapes(points)
+        return (points @ self.linear.T) + self.translation
+
+    def to_affine(self) -> AffineEdge:
+        return AffineEdge(input=self.input, output=self.output, linear=self.linear, translation=self.translation)
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.Affine:
+        return ozm06ct.Affine(
+            name=name,
+            affine=tuple(tuple(row) for row in self.affine[:-1, :]),
+            input=input,
+            output=output,
+        )
+
+
+class IdentityEdge(BaseTransformationEdge):
+    """The Identity transformation from the NGFF specification."""
+
+    def __init__(
+        self,
+        *,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        input
+            Input coordinate system of the transformation.
+        output
+            Output coordinate system of the transformation.
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            if `input` and `output` don't have the same number of axes
+        """
+        if input.num_axes != output.num_axes:
+            raise ex.IncompatibleCoordSystemsError(
+                input=input, output=output, message="Axes must have the same number of dimensions"
+            )
+        super().__init__(input=input, output=output)
+
+    def inverse(self) -> BaseTransformationEdge:
+        return IdentityEdge(input=self.output, output=self.input)
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        self._validate_transform_points_shapes(points)
+        return points
+
+    def to_affine(self) -> AffineEdge:
+        return AffineEdge(
+            linear=np.identity(self.input.num_axes),
+            input=self.input,
+            output=self.output,
+        )
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.Identity:
+        return ozm06ct.Identity(
+            name=name,
+            input=input,
+            output=output,
+        )
+
+
+class MapAxisEdge(BaseTransformationEdge):
+    """The MapAxis transformation from the NGFF specification."""
+
+    def __init__(
+        self,
+        *,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+        input_to_output: Mapping[vert.Axis, vert.Axis],
+    ) -> None:
+        """
+        Parameters
+        ----------
+        input
+            Input coordinate system of the transformation.
+        output
+            Output coordinate system of the transformation. Must
+            have the same number of axes as `input`
+        input_to_output
+            A mapping from
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            if `input` and `output` don't have the number of axes
+        """
+
+        if input.num_axes != output.num_axes:
+            raise ex.IncompatibleCoordSystemsError(
+                input=input, output=output, message="Input and output must have the same number of axes"
+            )
+
+        unmapped_inputs = set(input.axes)
+        unmapped_outputs = set(output.axes)
+        for inp_ax, out_ax in input_to_output.items():
+            try:
+                unmapped_inputs.remove(inp_ax)
+            except KeyError as e:
+                raise ex.MissingAxisError(axis=inp_ax, cs=self.input) from e
+            try:
+                unmapped_outputs.remove(out_ax)
+            except KeyError as e:
+                raise ex.MissingAxisError(axis=out_ax, cs=self.output) from e
+
+        for ax in unmapped_inputs:
+            raise ex.UnmappedAxisError(axis=ax, cs=self.input)
+        for ax in unmapped_outputs:
+            raise ex.UnmappedAxisError(axis=ax, cs=self.output)
+
+        self.input_to_output = input_to_output
+        super().__init__(input=input, output=output)
+
+    def __repr__(self) -> str:
+        s = super().__repr__() + "\n"
+        s += "\n".join(f"    {out.name} <- {inp.name}\n" for out, inp in self.input_to_output.items())
+        return s
+
+    def inverse(self) -> BaseTransformationEdge:
+        return MapAxisEdge(
+            input=self.output,
+            output=self.input,
+            input_to_output={out: inp for inp, out in self.input_to_output.items()},
+        )
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        self._validate_transform_points_shapes(points)
+        output_to_input = {out_ax: in_ax for in_ax, out_ax in self.input_to_output.items()}
+        new_indices = [self.input.axes.index(output_to_input[out_ax]) for out_ax in self.output.axes]
+        assert len(new_indices) == self.output.num_axes
+        mapped = points[:, new_indices]
+        assert isinstance(mapped, np.ndarray)
+        return mapped
+
+    def to_affine(self) -> AffineEdge:
+        linear = np.zeros((self.output.num_axes, self.input.num_axes))
+        for inp_ax, out_ax in self.input_to_output.items():
+            inp_idx = self.input.axes.index(inp_ax)
+            out_idx = self.output.axes.index(out_ax)
+            linear[out_idx, inp_idx] = 1
+        return AffineEdge(linear=linear, input=self.input, output=self.output)
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.MapAxis:
+        mapAxis: list[int] = [self.input.axes.index(out_ax) for out_ax in self.output.axes]
+        return ozm06ct.MapAxis(
+            name=name,
+            mapAxis=tuple(mapAxis),
+            input=input,
+            output=output,
+        )
+
+
+class ProjectAxisEdge(BaseTransformationEdge):
+    dropped_inputs: Final[set[vert.Axis]]
+    created_outputs: Final[set[vert.Axis]]
+
+    def __init__(
+        self,
+        *,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+        dropped_inputs: set[vert.Axis],
+        created_outputs: set[vert.Axis],
+    ) -> None:
+        """
+        Parameters
+        ----------
+        dropped_inputs
+            axes in `input` that will be dropped by this transformation
+        created_inputs
+            axes in `output` that will be set to 0
+
+        Raises
+        ------
+        MissingAxisError
+            axis in `dropped_inputs` not in `input`
+            axis in `created_outputs` not in `output`
+        IncompatibleCoordSystemsError
+            when input can't be mapped to output given dropped_inputs and created_outputs
+        """
+
+        for axis in dropped_inputs:
+            if axis not in input.axes:
+                raise ex.MissingAxisError(axis=axis, cs=input)
+        for axis in created_outputs:
+            if axis not in output.axes:
+                raise ex.MissingAxisError(axis=axis, cs=output)
+        if input.num_axes - len(dropped_inputs) + len(created_outputs) != output.num_axes:
+            message = f"Can't map from {input} to {output}"
+            if dropped_inputs:
+                message += f" dropping {dropped_inputs}"
+            if created_outputs:
+                message += f" creating {created_outputs}"
+            raise ex.IncompatibleCoordSystemsError(
+                input=input,
+                output=output,
+                message=message,
+            )
+
+        self.dropped_inputs = set(dropped_inputs)
+        self.created_outputs = set(created_outputs)
+        super().__init__(input=input, output=output)
+
+    def to_affine(self) -> AffineEdge:
+        linear = np.zeros((self.output.num_axes, self.input.num_axes), dtype=float)
+        input_indices = iter(range(self.input.num_axes))
+        for out_idx, out_ax in enumerate(self.output.axes):
+            if out_ax in self.created_outputs:
+                continue
+            in_idx = next(input_indices)
+            if in_idx in self.dropped_inputs:
+                continue
+            linear[out_idx, in_idx] = 1
+
+        return AffineEdge(input=self.input, output=self.output, linear=linear)
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        return self.to_affine().transform_points(points)
+
+    def inverse(self) -> BaseTransformationEdge | None:
+        # FIXME: there may be other cases where this is invertible
+        if self.input.num_axes != self.output.num_axes:
+            return None
+        if len(self.dropped_inputs) > 0:
+            return None
+        if len(self.created_outputs) > 0:
+            return None
+        return ProjectAxisEdge(
+            input=self.output,
+            output=self.input,
+            dropped_inputs=set(),
+            created_outputs=set(),
+        )
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.ProjectAxis:
+        return ozm06ct.ProjectAxis(
+            name=name,
+            createdOutputs=tuple(self.output.axes.index(co) for co in self.created_outputs) or None,
+            droppedInputs=tuple(self.input.axes.index(di) for di in self.dropped_inputs) or None,
+            input=input,
+            output=output,
+        )
+
+
+class TranslationEdge(BaseTransformationEdge):
+    """The Translation transformation from the NGFF specification."""
+
+    def __init__(
+        self,
+        *,
+        translation: ArrayLike,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        translation
+            A vector of shape (input.num_axes,) specifying the translation along each axis.
+        input
+            Input coordinate system of the transformation.
+        output
+            Output coordinate system of the transformation.
+
+        Raises
+        ------
+        IncompatibleCoordSystemsError
+            If the input and output have different number of dimensions
+        UnexpectedShapeError
+            if `translation`'s shape doesn't match `input`
+        """
+        if input.num_axes != output.num_axes:
+            raise ex.IncompatibleCoordSystemsError(
+                input=input, output=output, message="Number of input and output axes must be the same"
+            )
+        expected_translation_shape = (input.num_axes,)
+        if translation.shape != expected_translation_shape:
+            raise ex.UnexpectedShapeError(
+                array_name="translation",
+                array_shape=translation.shape,
+                expected_shape=expected_translation_shape,
+            )
+        self.translation = translation
+        super().__init__(input=input, output=output)
+
+    def __repr__(self) -> str:
+        return super().__repr__() + str(self.translation)
+
+    def inverse(self) -> BaseTransformationEdge:
+        return TranslationEdge(
+            translation=-self.translation,
+            input=self.output,
+            output=self.input,
+        )
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        self._validate_transform_points_shapes(points)
+        return points + self.translation
+
+    def to_affine(self) -> AffineEdge:
+        return AffineEdge(
+            linear=np.identity(self.input.num_axes),
+            translation=self.translation,
+            input=self.input,
+            output=self.output,
+        )
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.Translation:
+        return ozm06ct.Translation(
+            name=name,
+            input=input,
+            output=output,
+            translation=tuple(self.translation),
+        )
+
+
+class ScaleEdge(BaseTransformationEdge):
+    """The Scale transformation from the NGFF specification."""
+
+    def __init__(
+        self,
+        *,
+        scale: ArrayLike,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        scale
+            A vector specifying the scale along each axis of `input`.
+        input
+            Input coordinate system of the transformation.
+        output
+            Output coordinate system of the transformation.
+
+        Raises
+        ------
+        UnexpectedShapeError
+            If scale doesn't have the same number of elements as input has axes
+        IncompatibleCoordSystemsError
+            If input and output have different number of axes
+        """
+        expected_scale_shape = (input.num_axes,)
+        if scale.shape != expected_scale_shape:
+            raise ex.UnexpectedShapeError(array_name="scale", array_shape=scale.shape, expected_shape=expected_scale_shape)
+        if input.num_axes != output.num_axes:
+            raise ex.IncompatibleCoordSystemsError(
+                input=input, output=output, message="input and output must have same number of dimensions"
+            )
+        self.scale = scale
+        super().__init__(input=input, output=output)
+
+    def __repr__(self) -> str:
+        return super().__repr__() + str(self.scale)
+
+    def inverse(self) -> ScaleEdge | None:
+        if any(s == 0 for s in self.scale):
+            return None
+        new_scale = 1 / self.scale
+        return ScaleEdge(
+            scale=new_scale,
+            input=self.output,
+            output=self.input,
+        )
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        self._validate_transform_points_shapes(points)
+        return points * self.scale
+
+    def to_affine(self) -> AffineEdge:
+        return AffineEdge(
+            linear=np.diag(self.scale),
+            input=self.input,
+            output=self.output,
+        )
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.Scale:
+        return ozm06ct.Scale(
+            name=name,
+            input=input,
+            output=output,
+            scale=tuple(self.scale),
+        )
+
+
+class RotationEdge(BaseTransformationEdge):
+    """The Rotation transformation from the NGFF specification."""
+
+    rotation: Final[ArrayLike]
+
+    def __init__(
+        self,
+        *,
+        linear_matrix: ArrayLike,
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        linear_matrix
+            And orthonormal matrix of shape (output.num_axes, input.num_axes)
+        input
+            Input coordinate system of the transformation.
+        output
+            Output coordinate system of the transformation.
+        Raises
+        ------
+        UnexpectedShapeError
+            if linear_matrix's shape isn't (output.num_axes, input.num_axes)
+        IncompatibleCoordSystemsError
+            if input and output don't have the same number of axes
+        DeterminantDifferentFromOne
+            if linear_matrix doesn't have determinant ~= 1
+        NotOrthonormal
+            if linear_matrix is not orthonormal
+        """
+        if input.num_axes != output.num_axes:
+            raise ex.IncompatibleCoordSystemsError(
+                input=input, output=output, message="input and output should have the same numbe rof axes"
+            )
+        expected_shape = (output.num_axes, input.num_axes)
+        if linear_matrix.shape != expected_shape:
+            raise ex.UnexpectedShapeError(
+                array_name="linear_matrix", array_shape=linear_matrix.shape, expected_shape=expected_shape
+            )
+        if not np.allclose(linear_matrix.T @ linear_matrix, np.identity(input.num_axes)):
+            raise ex.NotOrthonormalError(matrix=linear_matrix)
+        if not np.isclose(np.linalg.det(linear_matrix), 1.0):
+            raise ex.DeterminantDifferentFromOne(matrix=linear_matrix)
+        linear_matrix.flags.writeable = False
+        self.rotation = linear_matrix
+        super().__init__(input=input, output=output)
+
+    def __repr__(self) -> str:
+        s = super().__repr__() + "\n"
+        s += "\n".join(str(row) for row in self.rotation)
+        return s
+
+    def inverse(self) -> BaseTransformationEdge:
+        return RotationEdge(
+            linear_matrix=self.rotation.T,
+            input=self.output,
+            output=self.input,
+        )
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        self._validate_transform_points_shapes(points)
+        return points @ self.rotation.T
+
+    def to_affine(self) -> AffineEdge:
+        return AffineEdge(
+            linear=self.rotation,
+            input=self.input,
+            output=self.output,
+        )
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.Rotation:
+        return ozm06ct.Rotation(
+            name=name,
+            input=input,
+            output=output,
+            rotation=tuple(tuple(row) for row in self.rotation),
+        )
+
+
+class SequenceEdge(BaseTransformationEdge):
+    """The Sequence transformation from the NGFF specification."""
+
+    def __init__(
+        self,
+        *,
+        transformations: Sequence[BaseTransformationEdge],
+    ) -> None:
+        """
+        Init the NgffSequence object.
+
+        Parameters
+        ----------
+        transformations
+            The transformations which compose the sequence.
+        Raises
+        ------
+        EmptyTransformSequence
+            if `transformations` is empty
+        IncompatibleCoordSystemsError
+            if any item in `transformations` is incompatible with its neighbors
+        """
+        if len(transformations) == 0:
+            raise ex.EmptyTransformSequenceError()
+        previous_transf = transformations[0]
+        for transf_idx, current_transf in enumerate(transformations[1:], start=1):
+            if previous_transf.output != current_transf.input:
+                raise ex.IncompatibleCoordSystemsError(
+                    input=current_transf.input,
+                    output=previous_transf.output,
+                    message=(
+                        f"Output of transformation #{transf_idx - 1} is different "
+                        f"from input of transformation #{transf_idx}"
+                    ),
+                )
+            previous_transf = current_transf
+        self.transformations = transformations
+        super().__init__(
+            input=transformations[0].input,
+            output=transformations[-1].output,
+        )
+
+    def __repr__(self) -> str:
+        from textwrap import indent
+
+        out = super().__repr__() + " [\n"
+        for t in self.transformations:
+            out += indent(repr(t), prefix="    ") + "\n"
+        out += "]"
+        return out
+
+    def inverse(self) -> SequenceEdge | None:
+        inverted: list[BaseTransformationEdge] = []
+        for t in reversed(self.transformations):
+            inv = t.inverse()
+            if inv is None:
+                return None
+            inverted.append(inv)
+        return SequenceEdge(transformations=inverted)
+
+    def to_affine(self) -> AffineEdge:
+        composed = self.transformations[0].to_affine().affine
+        for t in self.transformations[1:]:
+            a = t.to_affine()
+            composed = a.affine @ composed
+        return AffineEdge.from_affine_matrix(
+            affine_matrix=composed,
+            input=self.input,
+            output=self.output,
+        )
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        return self.to_affine().transform_points(points)  # FIXME
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.Sequence:
+        inner_transfs: list[ozm06ct.AnyTransform] = []
+        for idx, t in enumerate(self.transformations):
+            inp = input if idx == 0 else None
+            out = output if idx == (len(self.transformations) - 1) else None
+            inner_transfs.append(t.to_ngff_transform(name=None, input=inp, output=out))
+
+        return ozm06ct.Sequence(
+            name=name,
+            input=input,
+            output=output,
+            transformations=tuple(inner_transfs),
+        )
+
+
+class ByDimensionEdge(BaseTransformationEdge):
+    """The ByDimension transformation from the NGFF specification."""
+
+    transformations: Final[Sequence[BaseTransformationEdge]]
+
+    def __init__(
+        self,
+        *,
+        transformations: Sequence[BaseTransformationEdge],
+        input: vert.CoordSystem,
+        output: vert.CoordSystem,
+    ) -> None:
+        """
+        Parameters
+        ----------
+        transformations
+            A list of transformations, whose set of output coordinate systems partition the output coordinate system of
+            the ByDimension transformation.
+        input
+            The input coordinate system of the transformation.
+        output
+            The output coordinate system of the transformation.
+        Raises
+        ------
+        MissingAxisError
+            if any input axis from `transformations` is not present in `input` or
+            if any output axis from `transformations` is not present in `output`.
+        AxisRedefinitionError
+            if an output axis is specified by more than one item of `transformations`
+        UnmappedAxisError
+            if axis of `output` is not covered by any item of `transformations`
+        """
+        # we check that:
+        # 1. each input from each transformation in self.transformation must appear in the set of input axes
+        # 2. each output from each transformation in self.transformation must appear at most once in the set of output
+        # axes
+        defined_output_axes: set[str] = set()
+        for t in transformations:
+            for ax in t.input.axes:
+                if ax not in input.axes:
+                    raise ex.MissingAxisError(axis=ax, cs=input)
+            for ax in t.output.axes:
+                if ax not in output.axes:
+                    raise ex.MissingAxisError(axis=ax, cs=output)
+                if ax.name in defined_output_axes:
+                    raise ex.AxisRedefinitionError(axis=ax)
+                defined_output_axes.add(ax.name)
+        for ax in output.axes:
+            if ax.name not in defined_output_axes:
+                raise ex.UnmappedAxisError(axis=ax, cs=output)
+
+        self.transformations = tuple(transformations)
+        super().__init__(input=input, output=output)
+
+    def __repr__(self) -> str:
+        from textwrap import indent
+
+        out = super().__repr__() + " [\n"
+        for t in self.transformations:
+            out += indent(repr(t), prefix="    ") + "\n"
+        out += "]"
+        return out
+
+    def inverse(self) -> BaseTransformationEdge | None:
+        inverse_transformations: list[BaseTransformationEdge] = []
+        for t in self.transformations:
+            inv = t.inverse()
+            if inv is None:
+                return None
+            inverse_transformations.append(inv)
+        return ByDimensionEdge(
+            transformations=inverse_transformations,
+            input=self.output,
+            output=self.input,
+        )
+
+    def transform_points(self, points: ArrayLike) -> ArrayLike:
+        """
+        Transform points (coordinates).
+
+        Raises
+        ------
+        UnexpectedShapeError
+            if `points`'s shape is incompatible with this transformation's input shape
+        """
+        input_axes = self.input.axes_names
+        output_axes = self.output.axes_names
+        self._validate_transform_points_shapes(points)
+        output_columns: dict[str, ArrayLike] = {}
+        for t in self.transformations:
+            input_columns = [points[:, input_axes.index(ax)] for ax in t.input.axes_names]
+            input_columns_stacked: ArrayLike = np.stack(input_columns, axis=1)
+            output_columns_t = t.transform_points(input_columns_stacked)
+            for ax, col in zip(t.output.axes_names, output_columns_t.T, strict=True):
+                output_columns[ax] = col  # type: ignore[assignment]
+        output: ArrayLike = np.stack([output_columns[ax] for ax in output_axes], axis=1)
+        return output
+
+    def to_affine(self) -> AffineEdge:
+        input_axes = self.input.axes_names
+        output_axes = self.output.axes_names
+        m = np.zeros((len(output_axes) + 1, len(input_axes) + 1))
+        m[-1, -1] = 1
+        for t in self.transformations:
+            t_affine = t.to_affine()
+            target_output_indices = [output_axes.index(ax) for ax in t.output.axes_names if ax in output_axes]
+            source_output_indices = [t.output.axes_names.index(ax) for ax in t.output.axes_names]
+            target_input_indices = [input_axes.index(ax) for ax in t.input.axes_names] + [-1]
+            m[np.ix_(target_output_indices, target_input_indices)] = t_affine.affine[source_output_indices, :]
+        return AffineEdge.from_affine_matrix(
+            affine_matrix=m,
+            input=self.input,
+            output=self.output,
+        )
+
+    def to_ngff_transform(
+        self,
+        *,
+        name: str | None,
+        input: ozm06ct.CoordinateSystemIdentifier | None,
+        output: ozm06ct.CoordinateSystemIdentifier | None,
+    ) -> ozm06ct.ByDimension:
+        raise NotImplementedError()
+        # by_dim_transfs: list[ozm06ct.ByDimension] = []
+        # for t in self.transformations:
+        #     input_axes = tuple(self.input.axes_names.index(ax_name) for ax_name in t.input.axes_names)
+        #     output_axes = tuple(self.output.axes_names.index(ax_name) for ax_name in t.output.axes_names)
+        #     by_dim_transfs.append(
+        #         ozm06ct.ByDimension(
+        #             # inputAxes=input_axes,
+        #             # outputAxes=output_axes,
+        #             transformations=t.to_ngff_transform(name=None, input=None, output=None),
+        #             input=None,
+        #             output=None,
+        #         )
+        #     )
+        # return ozm06ct.ByDimension(
+        #     name=name,
+        #     input=input,
+        #     output=output,
+        #     transformations=tuple(by_dim_transfs),
+        # )
+
+
+def parse_identity(
+    model: ozm06ct.Identity,
+    *,
+    input: vert.CoordSystem,
+    output: vert.CoordSystem | None,
+) -> IdentityEdge:
+    """Parse an `Identity` NGFF transformation model into an `IdentityEdge`."""
+    if output is None:
+        output = vert.CoordSystem.create_dummy(axes=input.num_axes)
+    return IdentityEdge(input=input, output=output)
+
+
+def parse_translation(
+    model: ozm06ct.Translation,
+    *,
+    input: vert.CoordSystem,
+    output: vert.CoordSystem | None,
+) -> TranslationEdge:
+    """Parse a `Translation` NGFF transformation model into a `TranslationEdge`."""
+    if output is None:
+        output = vert.CoordSystem.create_dummy(axes=input.num_axes)
+    return TranslationEdge(
+        translation=np.asarray(model.translation, dtype=float),
+        input=input,
+        output=output,
+    )
+
+
+def parse_project_axis(
+    model: ozm06ct.ProjectAxis, *, input: vert.CoordSystem, output: vert.CoordSystem | None
+) -> ProjectAxisEdge:
+    """Parse a `ProjectAxis` NGFF transformation model into a `ProjectAxisEdge`."""
+    if output is None:
+        num_dropped_inputs = len(model.droppedInputs or ())
+        num_created_outputs = len(model.createdOutputs or ())
+        num_output_axes = input.num_axes - num_dropped_inputs + num_created_outputs
+        output = vert.CoordSystem.create_dummy(axes=num_output_axes)
+
+    return ProjectAxisEdge(
+        created_outputs={output.axes[i] for i in model.createdOutputs or ()},
+        dropped_inputs={input.axes[i] for i in model.droppedInputs or ()},
+        input=input,
+        output=output,
+    )
+
+
+def parse_scale(
+    model: ozm06ct.Scale,
+    *,
+    input: vert.CoordSystem,
+    output: vert.CoordSystem | None,
+) -> ScaleEdge:
+    """Parse a `Scale` NGFF transformation model into a `ScaleEdge`."""
+    return ScaleEdge(
+        scale=np.asarray(model.scale, dtype=float),
+        input=input,
+        output=output or vert.CoordSystem.create_dummy(axes=input.num_axes),
+    )
+
+
+def parse_map_axis(model: ozm06ct.MapAxis, *, input: vert.CoordSystem, output: vert.CoordSystem | None) -> MapAxisEdge:
+    """Parse a `MapAxis` NGFF transformation model into a `MapAxisEdge`."""
+    if output is None:
+        output = vert.CoordSystem.create_dummy(axes=[input.axes[i] for i in model.mapAxis])
+    input_to_output = {
+        input.axes[inp_idx]: output_axis for inp_idx, output_axis in zip(model.mapAxis, output.axes, strict=True)
+    }
+    return MapAxisEdge(input=input, output=output, input_to_output=input_to_output)
+
+
+def parse_affine(model: ozm06ct.Affine, *, input: vert.CoordSystem, output: vert.CoordSystem | None) -> AffineEdge:
+    """Parse an `Affine` NGFF transformation model into an `AffineEdge`."""
+    num_output_axes = len(model.affine_matrix)  # spec doesn't save last row
+    if output is None:
+        output = vert.CoordSystem.create_dummy(axes=num_output_axes)
+    affine_array = np.asarray(model.affine_matrix, dtype=float)
+    return AffineEdge(linear=affine_array[:, :-1], translation=affine_array[:, -1], input=input, output=output)
+
+
+def parse_rotation(model: ozm06ct.Rotation, *, input: vert.CoordSystem, output: vert.CoordSystem | None) -> RotationEdge:
+    """Parse a `Rotation` NGFF transformation model into a `RotationEdge`."""
+    num_output_axes = len(model.rotation_matrix)
+    if output is None:
+        output = vert.CoordSystem.create_dummy(axes=num_output_axes)
+    return RotationEdge(
+        linear_matrix=np.asarray(model.rotation_matrix, dtype=float),
+        input=input,
+        output=output,
+    )
+
+
+def parse_sequence(
+    model: ozm06ct.Sequence,
+    *,
+    input: vert.CoordSystem,
+    output: vert.CoordSystem | None,
+) -> SequenceEdge:
+    """Parse a `Sequence` NGFF transformation model into a `SequenceEdge`."""
+    parsed_inners: list[BaseTransformationEdge] = []
+
+    parsed = parse_ngff_transf(
+        input=input,
+        model=model.transformations[0],
+        output=output if len(model.transformations) == 1 else None,
+    )
+    parsed_inners.append(parsed)
+
+    for t in model.transformations[1:-1]:
+        parsed = parse_ngff_transf(input=parsed.output, output=None, model=t)
+        parsed_inners.append(parsed)
+
+    if len(model.transformations) > 1:
+        parsed = parse_ngff_transf(input=parsed.output, output=output, model=model.transformations[-1])
+        parsed_inners.append(parsed)
+
+    return SequenceEdge(transformations=parsed_inners)
+
+
+def parse_by_dimension(
+    model: ozm06ct.ByDimension,
+    *,
+    input: vert.CoordSystem,
+    output: vert.CoordSystem | None,
+) -> ByDimensionEdge:
+    """Parse a `ByDimension` NGFF transformation model into a `ByDimensionEdge`."""
+    if output is None:
+        max_out_idx = max(ax_idx for t in model.transformations for ax_idx in t.outputAxes)
+        output = vert.CoordSystem.create_dummy(axes=max_out_idx + 1)
+
+    piecewise_transforms: list[BaseTransformationEdge] = []
+    for t in model.transformations:
+        inp_axes = [input.axes[i] for i in t.inputAxes]
+        partial_input = vert.CoordSystem.create_dummy(axes=inp_axes)
+
+        out_axes = [output.axes[i] for i in t.outputAxes]
+        partial_out = vert.CoordSystem.create_dummy(axes=out_axes)
+
+        parsed_t = parse_ngff_transf(model=t.transformation, input=partial_input, output=partial_out)
+        piecewise_transforms.append(parsed_t)
+
+    return ByDimensionEdge(
+        input=input,
+        output=output,
+        transformations=piecewise_transforms,
+    )
+
+
+def parse_ngff_transf(
+    input: vert.CoordSystem,
+    model: ozm06ct.AnyTransform,
+    output: vert.CoordSystem | None,
+) -> BaseTransformationEdge:
+    """Parse an NGFF coordinate transformation model into a `BaseTransfEdge`"""
+    if isinstance(model, ozm06ct.Identity):
+        return parse_identity(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.Translation):
+        return parse_translation(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.Scale):
+        return parse_scale(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.MapAxis):
+        return parse_map_axis(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.Affine):
+        return parse_affine(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.Rotation):
+        return parse_rotation(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.Sequence):
+        return parse_sequence(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.ByDimension):
+        return parse_by_dimension(model, input=input, output=output)
+    elif isinstance(model, ozm06ct.ProjectAxis):
+        return parse_project_axis(model, input=input, output=output)
+    else:
+        raise NotImplementedError(f"Unsupported transformation: {model.type}")
