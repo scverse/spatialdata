@@ -317,6 +317,10 @@ def _aggregate_image_by_labels(
         zones: ArrayLike = out["zone"].to_numpy()
         outs.append(out.drop(columns=["zone"]))  # remove the 0 (background)
     df = pd.concat(outs, axis=1)
+    if len(df) == 0:
+        raise ValueError(
+            "No labelled instances (non-zero label ids) found in `by`, so there is nothing to aggregate by."
+        )
 
     X = sparse.csr_matrix(df.values)
 
