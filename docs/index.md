@@ -8,7 +8,7 @@
 
 SpatialData is an open framework for working with uni- and multi-modal spatial omics datasets. It defines a common data model and storage format, supported by software libraries for accessing, manipulating and analyzing spatial omics data in languages including Python, R and JavaScript.
 
-This site documents how to install, use and extend the Python `spatialdata` library. For language-independent definitions of SpatialData datasets and their on-disk representation, see the [SpatialData specifications](https://scverse.org/spatialdata-spec/).
+This site documents how to install, use and extend the Python `spatialdata` library. For language-independent definitions of SpatialData datasets and their on-disk representation, see the [SpatialData specifications](https://spatialdata-spec.scverse.org/).
 
 See the links below to learn more about other packages in the SpatialData ecosystem.
 
