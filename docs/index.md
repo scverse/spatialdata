@@ -4,9 +4,9 @@
   :alt: SpatialData banner
 ```
 
-# An open framework for spatial omics data
+# An open and universal framework for processing spatial omics data.
 
-SpatialData is an open framework for working with uni- and multi-modal spatial omics datasets. It defines a common data model and storage format, supported by software libraries for accessing, manipulating and analyzing spatial omics data in languages including Python, R and JavaScript.
+SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets. It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
 
 This site documents how to install, use and extend the Python `spatialdata` library. For language-independent definitions of SpatialData datasets and their on-disk representation, see the [SpatialData specifications](https://spatialdata-spec.scverse.org/).
 
@@ -91,7 +91,7 @@ If you like scverse® and want to support our mission, please consider making a 
     :link: design_doc
     :link-type: doc
 
-    The original design approach behind ``spatialdata`` (historical; superseded by the specifications).
+    Learn about the design approach behind ``spatialdata``.
 
 .. card:: Contributing
     :link: contributing
@@ -102,21 +102,47 @@ If you like scverse® and want to support our mission, please consider making a 
 ```
 
 ```{toctree}
+:caption: Getting started
 :hidden: true
 :maxdepth: 1
 
-installation.md
-user_guide.md
-api.md
-tutorials/notebooks/notebooks.md
-tutorials/notebooks/datasets/README.md
-glossary.md
+installation
+quickstart
+```
+
+```{toctree}
+:caption: Guides
+:hidden: true
+:maxdepth: 1
+
+user_guide
+tutorials/notebooks/notebooks
+```
+
+```{toctree}
+:caption: Reference
+:hidden: true
+:maxdepth: 1
+
+api
+tutorials/notebooks/datasets/README
+glossary
 SpatialData specifications <https://spatialdata-spec.scverse.org/>
-design_doc.md
-interoperability.md
-contributing.md
-changelog.md
-references.md
+design_doc
+interoperability
+```
+
+```{toctree}
+:caption: Project
+:hidden: true
+:maxdepth: 1
+
+changelog
+contributing
+citation
+references
+GitHub <https://github.com/scverse/spatialdata>
+Discourse <https://discourse.scverse.org/c/help/spatialdata/44>
 ```
 
 <!-- Links -->
