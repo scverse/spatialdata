@@ -88,7 +88,7 @@ doc = [
   "ipykernel",
   "ipython>=8.6",
   "pandas",
-  "scverse-doc[full]>=0.3",
+  "scverse-doc[full]>=0.4",
   "scverse-misc[sphinx]>=0.1.2",
   "sphinx>=8.1",
   "sphinx-autobuild",
