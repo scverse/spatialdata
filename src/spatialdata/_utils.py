@@ -23,7 +23,7 @@ RT = TypeVar("RT")
 
 
 @contextmanager
-def disable_dask_tune_optimization() -> Generator[None, None, None]:
+def disable_dask_tune_optimization() -> Generator[None]:
     """Prevent dask graph optimization when performing operations on dask dataframes with npartition > 1."""
     old_setting = config.config["optimization"]["tune"]["active"]
     config.set({"optimization.tune.active": False})
@@ -188,7 +188,7 @@ def get_pyramid_levels(image: DataTree, attr: str | None = None, n: int | None =
 def iterate_pyramid_levels(
     data: DataTree,
     attr: str | None,
-) -> Generator[Any, None, None]:
+) -> Generator[Any]:
     """
     Iterate over the pyramid levels of a multiscale spatial image.
 
