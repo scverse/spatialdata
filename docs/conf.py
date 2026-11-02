@@ -7,6 +7,7 @@ from scverse_doc.config import DEFAULTS
 from scverse_doc.registry import intersphinx
 
 HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE / "extensions"))
 sys.path.insert(0, str(HERE / "tutorials" / "notebooks" / "extensions"))
 
 info = metadata("spatialdata")
@@ -29,6 +30,7 @@ extensions = [
     "sphinx_autodoc_typehints",
     "IPython.sphinxext.ipython_console_highlighting",
     "scverse_misc.sphinx_ext",
+    *[p.stem for p in (HERE / "extensions").glob("*.py")],
     *[p.stem for p in (HERE / "tutorials" / "notebooks" / "extensions").glob("*.py")],
 ]
 
