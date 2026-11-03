@@ -5,6 +5,7 @@ import re
 import warnings
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
+from copy import copy
 from itertools import islice
 from typing import Any, TypeVar
 
@@ -242,6 +243,14 @@ def _inplace_fix_subset_categorical_obs(subset_adata: AnnData | None, original_a
             c = obs[column].cat.set_categories(original_adata.obs[column].cat.categories)
             obs[column] = c
     subset_adata.obs = obs
+    # anndata drops the colors of unused categories together with the categories,
+    # restore them so that colors and categories are again matched by position
+    for column in obs.columns:
+        colors_key = f"{column}_colors"
+        if isinstance(obs[column].dtype, pd.CategoricalDtype) and colors_key in original_adata.uns:
+            original_colors = original_adata.uns[colors_key]
+            if len(original_colors) == len(obs[column].cat.categories):
+                subset_adata.uns[colors_key] = copy(original_colors)
 
 
 # TODO: change to paramspec as soon as we drop support for python 3.9, see https://stackoverflow.com/a/68290080
