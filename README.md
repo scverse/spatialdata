@@ -1,4 +1,4 @@
-![SpatialData banner](https://github.com/scverse/spatialdata/blob/main/docs/_static/img/spatialdata_horizontal.png?raw=true)
+![SpatialData banner](https://github.com/scverse/spatialdata/blob/main/docs/_static/img/spatialdata_horizontal.svg?raw=true)
 
 # SpatialData: an open and universal framework for processing spatial omics data.
 
