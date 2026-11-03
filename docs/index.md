@@ -102,20 +102,46 @@ If you like scverse® and want to support our mission, please consider making a 
 ```
 
 ```{toctree}
+:caption: Getting started
 :hidden: true
 :maxdepth: 1
 
-installation.md
-user_guide.md
-api.md
-tutorials/notebooks/notebooks.md
-tutorials/notebooks/datasets/README.md
-glossary.md
-design_doc.md
-interoperability.md
-contributing.md
-changelog.md
-references.md
+installation
+quickstart
+```
+
+```{toctree}
+:caption: Guides
+:hidden: true
+:maxdepth: 1
+
+user_guide
+tutorials/notebooks/notebooks
+```
+
+```{toctree}
+:caption: Reference
+:hidden: true
+:maxdepth: 1
+
+api
+tutorials/notebooks/datasets/README
+glossary
+design_doc
+interoperability
+```
+
+```{toctree}
+:caption: Project
+:hidden: true
+:maxdepth: 1
+
+changelog
+contributing
+citation
+references
+GitHub <https://github.com/scverse/spatialdata>
+Discourse <https://discourse.scverse.org/c/help/spatialdata/44>
 ```
 
 <!-- Links -->
