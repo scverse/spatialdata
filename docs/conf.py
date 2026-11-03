@@ -75,7 +75,10 @@ suppress_warnings = [
 
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
-html_logo = "_static/img/spatialdata_horizontal.png"
+
+html_title = project
+html_logo = "_static/img/spatialdata_horizontal.svg"
+
 html_theme_options = {"show_toc_level": 4}
 
 nitpick_ignore = [

@@ -1,5 +1,5 @@
 ```{eval-rst}
-.. image:: _static/img/spatialdata_horizontal.png
+.. image:: _static/img/spatialdata_horizontal.svg
   :class: dark-light p-2
   :alt: SpatialData banner
 ```
