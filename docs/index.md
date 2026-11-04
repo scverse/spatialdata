@@ -111,6 +111,7 @@ api.md
 tutorials/notebooks/notebooks.md
 tutorials/notebooks/datasets/README.md
 glossary.md
+SpatialData specifications <https://spatialdata-spec.scverse.org/>
 design_doc.md
 interoperability.md
 contributing.md
