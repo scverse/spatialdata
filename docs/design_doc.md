@@ -1,6 +1,4 @@
-(design-document-for-spatialdata)=
-
-# Design document (superseded)
+# Design document for `SpatialData`
 
 :::{warning}
 **Superseded by the [SpatialData specifications](https://spatialdata-spec.scverse.org/).** The SpatialData data model and storage format are now defined in the [data model](https://spatialdata-spec.scverse.org/data-model.html) and [storage format](https://spatialdata-spec.scverse.org/storage-format.html) specifications. This document is kept for historical purposes and is no longer maintained. Where it disagrees with the specifications, the specifications are authoritative.
