@@ -50,7 +50,7 @@ SpatialData is an approved de.NBI service, your feedback helps us improve it. We
 
 ![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
-- The SpatialData storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
+- The SpatialData data model and storage format are defined by the [SpatialData specifications](https://spatialdata-spec.scverse.org/); the storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
 
 ## Getting started
 

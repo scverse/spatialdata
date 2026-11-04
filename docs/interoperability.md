@@ -13,4 +13,4 @@ The on-disk representation of SpatialData can be read from other languages. Here
 
 ## File format
 
-The SpatialData on-disk format builds on [OME-NGFF](https://ngff.openmicroscopy.org/latest/). See the [design document](design_doc.md) for details of the current on-disk layout.
+The SpatialData storage format builds on [OME-NGFF](https://ngff.openmicroscopy.org/latest/). The [SpatialData specifications](https://spatialdata-spec.scverse.org/) define the data model and the on-disk layout, independently of this library; implementations in other languages should follow them.
