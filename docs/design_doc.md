@@ -1,3 +1,5 @@
+(design-document-for-spatialdata)=
+
 # Design document (superseded)
 
 :::{warning}
