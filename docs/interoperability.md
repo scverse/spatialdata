@@ -1,5 +1,9 @@
 # Interoperability
 
+:::{note}
+The list of software that reads and writes SpatialData is now maintained with the SpatialData specifications: see [storage format implementations](https://spatialdata-spec.scverse.org/storage-format-implementations.html) and [implementations of the data model](https://spatialdata-spec.scverse.org/implementations.html). This page may be out of date.
+:::
+
 The on-disk representation of SpatialData can be read from other languages. Here we list interfaces for working with SpatialData from your language of choice:
 
 ## R

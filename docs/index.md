@@ -91,7 +91,7 @@ If you like scverse® and want to support our mission, please consider making a 
     :link: design_doc
     :link-type: doc
 
-    Learn about the design approach behind ``spatialdata``.
+    The original design approach behind ``spatialdata`` (historical; superseded by the specifications).
 
 .. card:: Contributing
     :link: contributing

@@ -57,7 +57,7 @@ SpatialData is an approved de.NBI service, your feedback helps us improve it. We
 Please refer to the [documentation][link-docs]. In particular:
 
 - [API documentation][link-api].
-- [Design doc][link-design-doc] (includes the roadmap).
+- [Design doc][link-design-doc] (historical; superseded by the [SpatialData specifications](https://spatialdata-spec.scverse.org/)).
 - [Example notebooks][link-notebooks].
 
 Another useful resource to get started is the source code of the [`spatialdata-io`](https://github.com/scverse/spatialdata-io) package, which shows example of how to read data from common technologies.
