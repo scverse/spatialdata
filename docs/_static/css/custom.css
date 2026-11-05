@@ -15,3 +15,8 @@
 div.cell_output table.dataframe {
     font-size: 0.8em;
 }
+
+/* The design document is superseded by the SpatialData specifications: mute its sidebar entry. */
+nav.bd-links a.reference.internal[href$="design_doc.html"] {
+    color: var(--pst-color-text-muted);
+}
