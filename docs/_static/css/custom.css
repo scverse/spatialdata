@@ -16,7 +16,13 @@ div.cell_output table.dataframe {
     font-size: 0.8em;
 }
 
-/* The design document is superseded by the SpatialData specifications: mute its sidebar entry. */
-nav.bd-links a.reference.internal[href$="design_doc.html"] {
-    color: var(--pst-color-text-muted);
+/* The design document is superseded by the SpatialData specifications: dim its sidebar entry
+   (sidebar links already use the muted text color, so lower the opacity on top of it). */
+nav.bd-links li:not(.current) > a[href$="design_doc.html"] {
+    opacity: 0.65;
+}
+
+nav.bd-links li > a[href$="design_doc.html"]:hover,
+nav.bd-links li > a[href$="design_doc.html"]:focus-visible {
+    opacity: 1;
 }
