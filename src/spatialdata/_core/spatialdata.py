@@ -1960,7 +1960,7 @@ class SpatialData:
     @staticmethod
     def read(
         file_path: str | Path | UPath,
-        selection: tuple[str] | None = None,
+        selection: tuple[Literal["images", "labels", "points", "shapes", "tables"], ...] | None = None,
         reconsolidate_metadata: bool = False,
     ) -> SpatialData:
         """
@@ -1977,7 +1977,8 @@ class SpatialData:
             The path or URL to the Zarr storage. To read from an already-open :class:`zarr.Group`, use
             :func:`spatialdata.read_zarr` instead.
         selection
-            The elements to read (images, labels, points, shapes, table). If None, all elements are read.
+            Tuple of element types to read: ``"images"``, ``"labels"``, ``"points"``, ``"shapes"``, or ``"tables"``.
+            If None or empty, all element types are read. Invalid values raise a :class:`ValueError`.
         reconsolidate_metadata
             If `True`, rewrite the consolidated metadata of the store before reading it. Use this when the consolidated
             metadata is corrupted or out of date, which otherwise leads to errors when reading the data. This requires
