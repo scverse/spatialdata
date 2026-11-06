@@ -1,0 +1,384 @@
+# pyright: standard
+
+from __future__ import annotations
+
+from pathlib import PurePosixPath
+from typing import Iterator, assert_type
+
+import numpy as np
+import xarray as xr
+import ome_zarr as oz
+import ome_zarr_models.v06.coordinate_transforms as ozm06trans
+import ome_zarr_models.v06.multiscales as ozm06ms
+
+from spatialdata._io.io_raster import ElementKey, FutureSpatialData, try_parse_ngff06_multiscale, try_parse_ngff06_scene
+from spatialdata.transformations.graph.edge import IdentityEdge, ScaleEdge
+from spatialdata.transformations.graph.vert import NgffCsPath
+from tests.conftest import SEED
+
+
+def test_parse_multiscale():
+    full_shape = (256, 256)
+    rng = np.random.default_rng(seed=SEED)
+
+    data = rng.random(full_shape)
+    omz_img = oz.OMEZarrImage(data=data, axes="yx")
+
+    labels_name = "my_labels"
+    label_data = oz.OMEZarrImage(
+        data=rng.integers(0, 256, size=(256, 256), dtype=np.uint8), axes="yx", name=labels_name
+    )
+    omz_label = oz.OMEZarrLabels(
+        image=label_data,
+    )
+
+    scale_factors = (2, 4, 8, 16)
+    ms = oz.OMEZarrMultiscale(
+        image=omz_img,
+        scale_factors=scale_factors,
+        default_coordinate_system_name="intrinsic_cs",
+        coordinate_systems=[
+            ozm06trans.CoordinateSystem(
+                name="another_cs",
+                axes=(
+                    ozm06trans.Axis(name="i", type="space"),
+                    ozm06trans.Axis(name="j", type="space"),
+                ),
+            )
+        ],
+        coordinate_transformations=(
+            ozm06trans.Scale(
+                scale=(10.0, 20.0),
+                input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs"),
+                output=ozm06trans.CoordinateSystemIdentifier(name="another_cs"),
+            ),
+        ),
+        # default_coordinate_system_name="physical",
+        labels=[omz_label],
+    )
+
+    sdata = try_parse_ngff06_multiscale(group_path=PurePosixPath("."), multiscale=ms)
+
+    base_path = PurePosixPath(".")
+    intrinsic_cs = sdata.find_node(
+        ngff_path=NgffCsPath(group_path=base_path, name="intrinsic_cs")
+    )
+    another_cs = sdata.find_node(
+        ngff_path=NgffCsPath(group_path=base_path, name="another_cs")
+    )
+    transfs = list(sdata.edges().directed(fro=intrinsic_cs, to=another_cs))
+    assert len(transfs) == 1
+    scale = transfs.pop().data["transform"]
+    assert isinstance(scale, ScaleEdge)
+    assert scale.input == intrinsic_cs.coord_system
+    assert scale.output == another_cs.coord_system
+    np.testing.assert_equal(scale.scale, [10.0, 20.0])
+
+    _ = sdata.find_node(
+        ngff_path=NgffCsPath(group_path=base_path / "labels" / labels_name, name="physical")
+    )
+
+    # labels_data_tree = data_trees[base_path / "labels" / labels_name]
+    image_data_tree = sdata.get_image(ElementKey(namespace=base_path, name=omz_img.name))
+    assert image_data_tree is not None
+    for xr_scale_node, ngff_scale, ngff_meta in zip(
+        image_data_tree.children.values(), ms.images, ms.metadata.datasets, strict=True
+    ):
+        xr_scale = xr_scale_node["image"]
+        assert not isinstance(xr_scale, xr.DataTree)
+        assert xr_scale.shape == ngff_scale.data.shape
+
+        coords_x = xr_scale.coords["x"]
+        coords_y = xr_scale.coords["y"]
+
+        seq = ngff_meta.coordinateTransformations[0]
+        assert isinstance(seq, ozm06trans.Sequence)
+        scale = seq.transformations[0]
+        assert isinstance(scale, ozm06trans.Scale)
+        translate = seq.transformations[1]
+        assert isinstance(translate, ozm06trans.Translation)
+
+        start_indices = (0, 0)
+        start = (coords_x[0], coords_y[0])
+
+        end_indices = (xr_scale.shape[0] - 1, xr_scale.shape[1] - 1)
+        end = (coords_x[-1], coords_y[-1])
+
+        for indices, point in [(start_indices, start), (end_indices, end)]:
+            expected = np.asarray(scale.scale) * indices + translate.translation
+            assert np.allclose(expected, point)
+
+    sliced_data_tree = image_data_tree.sel(x=slice(0, 256), y=slice(0, 256), method="nearest")
+    assert sliced_data_tree.equals(image_data_tree)
+
+    quarter_tree = image_data_tree.sel(x=slice(0, 128), y=slice(0, 128), method="nearest")
+    for xr_scale_node, scale_factor in zip(quarter_tree.children.values(), [1, *scale_factors], strict=True):
+        xr_scale = xr_scale_node["image"]
+        expected_shape = np.asarray(full_shape) / 2 / scale_factor
+        np.testing.assert_equal(xr_scale.shape, expected_shape)
+
+def test_parse_scene():
+    full_shape = (256, 256)
+    rng = np.random.default_rng(seed=SEED)
+
+    labels_name = "my_labels"
+    omz_label = oz.OMEZarrLabels(
+        image=oz.OMEZarrImage(
+            data=rng.integers(0, 256, size=full_shape, dtype=np.uint8), axes="yx", name=labels_name
+        ),
+    )
+
+    omz_img1 = oz.OMEZarrImage(data=rng.random(full_shape), axes="yx")
+    multiscales1 = oz.OMEZarrMultiscale(
+        image=omz_img1,
+        scale_factors=(2, 4),
+        default_coordinate_system_name="intrinsic_cs1",
+        labels=[omz_label],
+    )
+
+    omz_img2 = oz.OMEZarrImage(data=rng.random((1, *full_shape)), axes="cyx")
+    multiscales2 = oz.OMEZarrMultiscale(
+        image=omz_img2,
+        scale_factors=[{"x": s, "y": s} for s in (2, 4)],
+        default_coordinate_system_name="intrinsic_cs2",
+        coordinate_systems=[
+            ozm06trans.CoordinateSystem(
+                name="cs_in_multiscales2",
+                axes=(
+                    ozm06trans.Axis(name="c", type="channel"),
+                    ozm06trans.Axis(name="i", type="space"),
+                    ozm06trans.Axis(name="j", type="space"),
+                ),
+            )
+        ],
+        coordinate_transformations=(
+            ozm06trans.Scale(
+                scale=(1.0, 10.0, 20.0),
+                input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs2"),
+                output=ozm06trans.CoordinateSystemIdentifier(name="cs_in_multiscales2"),
+            ),
+        ),
+    )
+
+    root_cs_2d = ozm06trans.CoordinateSystem(
+        name="root_cs_2d",
+        axes=(
+            ozm06trans.Axis(name="u", type="space"),
+            ozm06trans.Axis(name="v", type="space"),
+        ),
+    )
+    root_cs_3d = ozm06trans.CoordinateSystem(
+        name="root_cs_3d",
+        axes=(
+            ozm06trans.Axis(name="axis_0", type="channel"),
+            ozm06trans.Axis(name="axis_1", type="space"),
+            ozm06trans.Axis(name="axis_2", type="space"),
+        ),
+    )
+    scene = oz.OMEZarrScene(
+        coordinate_systems=[root_cs_2d, root_cs_3d],
+        coordinate_transformations=[
+            ozm06trans.Scale(
+                scale=(3.0, 4.0),
+                input=ozm06trans.CoordinateSystemIdentifier(name=root_cs_2d.name),
+                output=ozm06trans.CoordinateSystemIdentifier(path="multiscales1", name="intrinsic_cs1"),
+            ),
+            ozm06trans.Identity(
+                input=ozm06trans.CoordinateSystemIdentifier(name=root_cs_3d.name),
+                output=ozm06trans.CoordinateSystemIdentifier(path="multiscales2", name="cs_in_multiscales2"),
+            ),
+        ],
+        images={"multiscales1": multiscales1, "multiscales2": multiscales2},
+    )
+
+    base_path = PurePosixPath(".")
+    sdata = try_parse_ngff06_scene(group_path=base_path, scene=scene)
+
+    ms1_path = base_path / "multiscales1"
+    ms2_path = base_path / "multiscales2"
+
+    # scene-level coordinate systems
+    root_2d = sdata.find_node(ngff_path=NgffCsPath(group_path=base_path, name="root_cs_2d"))
+    root_3d = sdata.find_node(ngff_path=NgffCsPath(group_path=base_path, name="root_cs_3d"))
+
+    # multiscales-level coordinate systems are namespaced under their scene path
+    intrinsic_cs1 = sdata.find_node(ngff_path=NgffCsPath(group_path=ms1_path, name="intrinsic_cs1"))
+    intrinsic_cs2 = sdata.find_node(ngff_path=NgffCsPath(group_path=ms2_path, name="intrinsic_cs2"))
+    cs_in_ms2 = sdata.find_node(ngff_path=NgffCsPath(group_path=ms2_path, name="cs_in_multiscales2"))
+    label_cs = sdata.find_node(
+        ngff_path=NgffCsPath(group_path=ms1_path / "labels" / labels_name, name="physical")
+    )
+
+    # scene-level transforms point into the multiscales
+    root_to_ms1 = sdata.edges().directed(fro=root_2d, to=intrinsic_cs1).collect(list)
+    assert len(root_to_ms1) == 1
+    scale = root_to_ms1[0].data["transform"]
+    assert isinstance(scale, ScaleEdge)
+    np.testing.assert_equal(scale.scale, [3.0, 4.0])
+
+    root_to_ms2 = sdata.edges().directed(fro=root_3d, to=cs_in_ms2).collect(list)
+    assert len(root_to_ms2) == 1
+    assert isinstance(root_to_ms2[0].data["transform"], IdentityEdge)
+
+    # multiscales-level transforms survive being nested in a scene
+    ms2_transfs = list(sdata.edges().directed(fro=intrinsic_cs2, to=cs_in_ms2))
+    assert len(ms2_transfs) == 1
+    ms2_scale = ms2_transfs[0].data["transform"]
+    assert isinstance(ms2_scale, ScaleEdge)
+    np.testing.assert_equal(ms2_scale.scale, [1.0, 10.0, 20.0])
+
+    # images and labels are keyed by their scene path and attached to their intrinsic CSs
+    img1_key = ElementKey(namespace=ms1_path, name=omz_img1.name)
+    img2_key = ElementKey(namespace=ms2_path, name=omz_img2.name)
+    label_key = ElementKey(namespace=ms1_path / "labels" / labels_name, name=labels_name)
+    assert sdata.get_intrinsic(img1_key) == intrinsic_cs1
+    assert sdata.get_intrinsic(img2_key) == intrinsic_cs2
+    assert sdata.get_intrinsic(label_key) == label_cs
+
+    for key, ms in [(img1_key, multiscales1), (img2_key, multiscales2)]:
+        data_tree = sdata.get_image(key)
+        assert data_tree is not None
+        for xr_scale_node, ngff_scale in zip(data_tree.children.values(), ms.images, strict=True):
+            xr_scale = xr_scale_node["image"]
+            assert not isinstance(xr_scale, xr.DataTree)
+            assert xr_scale.shape == ngff_scale.data.shape
+
+    label_tree = sdata.get_label(label_key)
+    assert label_tree is not None
+    assert label_tree["scale0"]["image"].shape == full_shape
+
+
+def test_dumping_multiscales_to_ngff():
+    full_shape = (256, 256)
+    rng = np.random.default_rng(seed=SEED)
+
+    img_data1 = rng.random(full_shape)
+    omz_img1 = oz.OMEZarrImage(data=img_data1, axes="yx")
+
+    labels_name1 = "my_labels"
+    label_data1 = oz.OMEZarrImage(
+        data=rng.integers(0, 256, size=(256, 256), dtype=np.uint8), axes="yx", name=labels_name1
+    )
+    omz_label1 = oz.OMEZarrLabels(
+        image=label_data1,
+    )
+
+    scale_factors = (2, 4, 8, 16)
+    multiscales1 = oz.OMEZarrMultiscale(
+        image=omz_img1,
+        scale_factors=scale_factors,
+        default_coordinate_system_name="intrinsic_cs1",
+        coordinate_systems=[
+            ozm06trans.CoordinateSystem(
+                name="cs_in_multiscales1",
+                axes=(
+                    ozm06trans.Axis(name="i", type="space"),
+                    ozm06trans.Axis(name="j", type="space"),
+                ),
+            )
+        ],
+        coordinate_transformations=(
+            ozm06trans.Scale(
+                scale=(10.0, 20.0),
+                input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs1"),
+                output=ozm06trans.CoordinateSystemIdentifier(name="cs_in_multiscales1"),
+            ),
+        ),
+        # default_coordinate_system_name="physical",
+        labels=[omz_label1],
+    )
+
+
+    img_data2 = rng.random((1, 256, 256))
+    omz_img2 = oz.OMEZarrImage(data=img_data2, axes="cyx")
+    multiscales2 = oz.OMEZarrMultiscale(
+        image=omz_img2,
+        scale_factors=[
+            {"x": s, "y": s} for s in scale_factors
+        ],
+        default_coordinate_system_name="intrinsic_cs2",
+        coordinate_systems=[
+            ozm06trans.CoordinateSystem(
+                name="cs_in_multiscales2",
+                axes=(
+                    ozm06trans.Axis(name="c", type="channel"),
+                    ozm06trans.Axis(name="i", type="space"),
+                    ozm06trans.Axis(name="j", type="space"),
+                ),
+            )
+        ],
+        coordinate_transformations=(
+            ozm06trans.Scale(
+                scale=(10.0, 20.0, 1.0),
+                input=ozm06trans.CoordinateSystemIdentifier(name="intrinsic_cs2"),
+                output=ozm06trans.CoordinateSystemIdentifier(name="cs_in_multiscales2"),
+            ),
+        ),
+        labels=[omz_label1],
+    )
+
+    root_cs = ozm06trans.CoordinateSystem(
+        name="root_cs",
+        axes=(
+            ozm06trans.Axis(name="axis_0", type="space"),
+            ozm06trans.Axis(name="axis_1", type="space"),
+            ozm06trans.Axis(name="axis_2", type="channel"),
+        ),
+    )
+    ome_identity = ozm06trans.Identity(
+        input=ozm06trans.CoordinateSystemIdentifier(name=root_cs.name),
+        output=ozm06trans.CoordinateSystemIdentifier(path="multiscales2", name="cs_in_multiscales2"),
+    )
+    scene = oz.OMEZarrScene(
+        coordinate_systems=[root_cs],
+        coordinate_transformations=[ome_identity],
+        images={"multiscales1": multiscales1, "multiscales2": multiscales2},
+    )
+
+    sdata = try_parse_ngff06_scene(group_path=PurePosixPath("."), scene=scene)
+
+    dumped_scene = sdata.default_scene_dumper().dump()
+
+    assert(set(dumped_scene.coordinate_systems) == set(scene.coordinate_systems))
+
+    for ct in dumped_scene.coordinate_transformations:
+        assert ct in scene.coordinate_transformations
+    # assert set(dumped_scene.coordinate_transformations) == set(scene.coordinate_transformations)
+
+    assert dumped_scene.images.keys() == scene.images.keys()
+    for ms_path, original_ms in scene.images.items():
+        dumped_ms = dumped_scene.images[ms_path]
+        for dumped_img, original_img in zip(dumped_ms.images, original_ms.images, strict=True):
+            assert dumped_img.data.shape == original_img.data.shape
+
+        for (dumped_scale, dumped_translation), (original_scale, original_translation) in zip(
+            _get_scales_and_translations(dumped_ms.metadata),
+            _get_scales_and_translations(original_ms.metadata),
+            strict=True,
+        ):
+            np.testing.assert_allclose(dumped_scale.scale, original_scale.scale)
+            np.testing.assert_allclose(dumped_translation.translation, original_translation.translation)
+
+
+def _get_scales_and_translations(
+    multiscale: ozm06ms.Multiscale,
+) -> Iterator[tuple[ozm06trans.Scale, ozm06trans.Translation]]:
+    """Returns each dataset's scale and translation, defaulting to trivial ones if missing."""
+    scale_noop = ozm06trans.Scale(scale=(1.0,) * multiscale.ndim)
+    translation_noop = ozm06trans.Translation(translation=(0.0,) * multiscale.ndim)
+
+    for dataset in multiscale.datasets:
+        transform = dataset.coordinateTransformations[0]
+        if isinstance(transform, ozm06trans.Scale):
+            yield transform, translation_noop
+            continue
+        if isinstance(transform, ozm06trans.Identity):
+            yield scale_noop, translation_noop
+            continue
+        assert_type(transform, ozm06trans.Sequence)
+        scale, translate = transform.transformations
+        assert isinstance(scale, ozm06trans.Scale)
+        assert isinstance(translate, ozm06trans.Translation)
+        yield scale, translate
+
+

@@ -59,7 +59,6 @@ _LAZY_IMPORTS: dict[str, str] = {
     "polygon_query": "spatialdata._core.query.spatial_query",
     # _core.spatialdata
     "SpatialData": "spatialdata._core.spatialdata",
-    # _io._utils
     "get_dask_backing_files": "spatialdata._io._utils",
     # _io.format
     "SpatialDataFormatType": "spatialdata._io.format",
