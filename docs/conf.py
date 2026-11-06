@@ -147,6 +147,8 @@ html_logo = "_static/img/spatialdata_horizontal.png"
 html_theme_options = {
     "repository_url": repository_url,
     "use_repository_button": True,
+    "use_edit_page_button": True,
+    "use_issues_button": True,
     "path_to_docs": "docs/",
     "navigation_with_keys": False,
     "show_toc_level": 4,
