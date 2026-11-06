@@ -13,4 +13,5 @@ For developers, please consult the [contributing guide](https://github.com/scver
 
 ### Fixed
 
+- `relabel_sequential()` now works for unsigned integer arrays (e.g. `uint8`/`uint16`/`uint32` labels); with NumPy 2 it raised an `OverflowError`.
 - Querying a `SpatialData` object with multiple (batched) bounding boxes now raises an explicit `NotImplementedError` instead of failing with an opaque `AssertionError`. Batched queries are supported when querying a `SpatialElement` directly, but not when querying a `SpatialData` object, since that would require returning one `SpatialData` object per bounding box.

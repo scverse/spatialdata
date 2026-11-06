@@ -368,6 +368,14 @@ def test_relabel_sequential(sdata_blobs):
     assert np.array_equal(relabel_sequential(arr).compute(), np.array([3, 1, 2]))
 
 
+@pytest.mark.parametrize("dtype", [np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int32, np.int64])
+def test_relabel_sequential_dtypes(dtype):
+    arr = da.from_array(np.array([[0, 5, 9], [9, 5, 0]], dtype=dtype), chunks=(2, 3))
+    relabeled = relabel_sequential(arr)
+    assert relabeled.dtype == dtype
+    assert np.array_equal(relabeled.compute(), np.array([[0, 1, 2], [2, 1, 0]], dtype=dtype))
+
+
 def test_relabel_sequential_fails(sdata_blobs):
     with pytest.raises(
         ValueError, match=re.escape(f"Sequential relabeling is only supported for arrays of type {np.integer}.")
