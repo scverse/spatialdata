@@ -1051,6 +1051,30 @@ def test_query_points_bounding_box_is_lazy(rotated: bool, multiple_boxes: bool):
     assert _partitions_read_with(reads, "genes") == expected_partitions
 
 
+def test_query_points_bounding_box_with_table_is_lazy():
+    """Filtering a table that annotates the queried points does not read the non-coordinate columns of the points."""
+    rng = np.random.default_rng(0)
+    coordinates = rng.uniform(0, 100, size=(1000, 2))
+    df = pd.DataFrame(coordinates, columns=["x", "y"])
+    df["genes"] = pd.Categorical(rng.choice(["a", "b", "c"], size=len(df)))
+    points_element, reads = _make_lazily_read_points(df, n_partitions=4)
+    obs = pd.DataFrame({"region": pd.Categorical(["points"] * len(df)), "instance_id": df.index.to_numpy()})
+    table = TableModel.parse(AnnData(obs=obs), region="points", region_key="region", instance_key="instance_id")
+    sdata = SpatialData(points={"points": points_element}, tables={"table": table})
+
+    queried = sdata.query.bounding_box(
+        axes=("x", "y"), min_coordinate=[30, 20], max_coordinate=[70, 60], target_coordinate_system="global"
+    )
+
+    expected_mask = (
+        (coordinates[:, 0] > 30) & (coordinates[:, 0] < 70) & (coordinates[:, 1] > 20) & (coordinates[:, 1] < 60)
+    )
+    np.testing.assert_array_equal(
+        np.sort(queried["table"].obs["instance_id"].to_numpy()), np.flatnonzero(expected_mask)
+    )
+    assert _partitions_read_with(reads, "genes") == set()
+
+
 @pytest.mark.parametrize("transformation", ["scale_translation", "rotation", "shear"])
 @pytest.mark.parametrize("points_3d", [False, True])
 @pytest.mark.parametrize("bounding_box_3d", [False, True])
