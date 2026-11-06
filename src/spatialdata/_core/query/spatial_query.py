@@ -8,6 +8,7 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any, assert_type, cast
 
 import numpy as np
+import pandas as pd
 from dask.base import compute as dask_compute
 from dask.dataframe import DataFrame as DaskDataFrame
 from dask.dataframe import Series as DaskSeries
@@ -20,7 +21,7 @@ from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, g
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike, ListOrNDArrayFloating, Raster_T
-from spatialdata._utils import _parse_list_into_array
+from spatialdata._utils import _parse_list_into_array, disable_dask_tune_optimization
 from spatialdata.models import (
     PointsModel,
     ShapesModel,
@@ -438,6 +439,11 @@ def _bounding_box_mask_points(
     return in_bounding_box_masks
 
 
+def _count_true(mask: pd.Series) -> pd.Series:
+    """Count the true values of a partition of a boolean mask, as a series with a single value."""
+    return pd.Series([int(mask.sum())])
+
+
 def _transform_points_coordinates(points: DaskDataFrame, transformation: Affine) -> dict[str, DaskSeries]:
     """Lazily apply an affine transformation to the coordinates of a points element.
 
@@ -547,9 +553,14 @@ def bounding_box_query(
 
     Notes
     -----
-    Points elements are queried lazily: the query reads only their coordinate columns (to know which bounding boxes
-    contain no points, which are returned as `None`), and returns lazy points elements that are loaded only when
-    computed.
+    Points elements are queried lazily: the query only reads their coordinate columns, to find the bounding boxes
+    without points (returned as `None`) and the partitions that contain points, and returns lazy points elements made of
+    those partitions, which are loaded only when computed. Hence:
+
+    - the returned points still read from the files of the original element. To write them to the same location they
+      were read from, first load them in memory with :func:`spatialdata.deepcopy`.
+    - computing each returned points element reads its partitions again. When querying many bounding boxes and
+      computing all the results, loading the points in memory first (:func:`spatialdata.deepcopy`) can be faster.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -726,12 +737,6 @@ def _(
             target_coordinate_system=target_coordinate_system,
         )
     )
-    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(dim="corner")
-    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(dim="corner")
-
-    min_coordinate_intrinsic = min_coordinate_intrinsic.data
-    max_coordinate_intrinsic = max_coordinate_intrinsic.data
-
     # The masks below are lazy and only depend on the coordinate columns, so the query never loads the whole points
     # element (and its non-coordinate columns, e.g. the gene names) in memory.
     # If the transformation is a scale, translation or identity, querying the intrinsic coordinate system with the
@@ -749,11 +754,14 @@ def _(
         shear.to_affine_matrix(input_axes=intrinsic_axes, output_axes=intrinsic_axes), np.eye(len(intrinsic_axes) + 1)
     )
     if no_rotation and no_shear:
+        # Without rotation and shear, each intrinsic axis is mapped to the query axis with the same name, so the
+        # intrinsic axes that are not query axes (e.g. `z` when querying 3D points with a 2D bounding box) are not
+        # constrained, and their columns don't need to be read.
         in_bounding_box = _bounding_box_mask_points(
-            coordinates={ax: points[ax] for ax in intrinsic_axes},
+            coordinates={ax: points[ax] for ax in intrinsic_axes if ax in axes},
             axes=intrinsic_axes,
-            min_coordinate=min_coordinate_intrinsic,
-            max_coordinate=max_coordinate_intrinsic,
+            min_coordinate=intrinsic_bounding_box_corners.min(dim="corner").data,
+            max_coordinate=intrinsic_bounding_box_corners.max(dim="corner").data,
         )
     else:
         in_bounding_box = _bounding_box_mask_points(
@@ -762,29 +770,40 @@ def _(
             min_coordinate=min_coordinate,
             max_coordinate=max_coordinate,
         )
-    if not (len_masks := len(in_bounding_box)) == (len_bb := len(min_coordinate)):
-        raise ValueError(
-            f"Length of list of masks `{len_masks}` is not equal to the number of bounding boxes axes `{len_bb}`."
-        )
 
-    # Empty results are returned as None, so we need to count the points in each bounding box. This is computed in a
-    # single pass that only reads the coordinate columns, partition by partition.
-    counts = dask_compute(*(mask.sum() for mask in in_bounding_box))
+    # Count the points of each bounding box in each partition, in a single pass that only reads the coordinate columns:
+    # bounding boxes without points are returned as None, and the partitions without points are left out of the
+    # result, so that computing it does not read them again. The tune optimization is disabled because, when only some
+    # columns are read, it combines the partitions of the element, and the counts would not match its partitions.
+    with disable_dask_tune_optimization():
+        counts_per_partition = dask_compute(
+            *(mask.map_partitions(_count_true, meta=pd.Series(dtype="int64")) for mask in in_bounding_box)
+        )
 
     old_transformations = get_transformation(points, get_all=True)
     assert not isinstance(old_transformations, BaseTransformation)
     assert_type(old_transformations, dict[str, BaseTransformation])
     output: list[DaskDataFrame | None] = []
-    for mask, count in zip(in_bounding_box, counts, strict=True):
-        if count == 0:
+    for mask, counts in zip(in_bounding_box, counts_per_partition, strict=True):
+        if len(counts) != points.npartitions:
+            raise RuntimeError(
+                f"Got the number of points in {len(counts)} partitions, but the points element has {points.npartitions} "
+                "partitions. Please report this bug."
+            )
+        partitions = np.flatnonzero(counts.to_numpy()).tolist()
+        if len(partitions) == 0:
             output.append(None)
             continue
-        # the returned points are in the intrinsic coordinate system, like the original element
-        queried = points[mask]
+        # The returned points are in the intrinsic coordinate system, like the original element. Note: the partitions
+        # are selected after filtering, because filtering the selected partitions with the selected partitions of the
+        # mask (`points.partitions[...][mask.partitions[...]]`) silently misaligns the rows.
+        queried = points[mask].partitions[partitions]
         if ATTRS_KEY in points.attrs:
             queried.attrs[ATTRS_KEY] = deepcopy(points.attrs[ATTRS_KEY])
         set_transformation(queried, old_transformations.copy(), set_all=True)
         output.append(queried)
+    if len(output) == 0:
+        return None
     if len(output) == 1:
         return output[0]
     return output

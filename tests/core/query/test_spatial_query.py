@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import FrozenInstanceError
 
 import dask.dataframe as dd
@@ -943,42 +944,62 @@ def test_query_points_3d_bounding_box_axes_order_independent(scales):
     # warnings.warn(f"Figure saved to {filename}")
 
 
+def _make_lazily_read_points(
+    df: pd.DataFrame, n_partitions: int
+) -> tuple[DaskDataFrame, list[tuple[int, tuple[str, ...]]]]:
+    """Make a points element read lazily from `df` (with a "genes" column), recording the columns read by partition.
+
+    The element is built like `read_zarr()` does: with a lazy reader, and with the attrs set directly. Like
+    `dask.dataframe.read_parquet()`, the reader takes a `columns` argument, so that dask only requests the columns that
+    are needed (column projection).
+    """
+    partition_size = len(df) // n_partitions
+    partitions = [df.iloc[i * partition_size : (i + 1) * partition_size] for i in range(n_partitions)]
+    reads: list[tuple[int, tuple[str, ...]]] = []
+
+    def read_partition(partition_index: int, element_id: str, columns: list[str] | None = None) -> pd.DataFrame:
+        columns = list(df.columns) if columns is None else list(columns)
+        reads.append((partition_index, tuple(columns)))
+        return partitions[partition_index][columns]
+
+    # `element_id` makes the element unique: otherwise dask reuses the expression, and so the reader (with its `reads`),
+    # of an identical element made earlier
+    points_element = dd.from_map(read_partition, range(n_partitions), args=[uuid.uuid4().hex], meta=df.iloc[:0])
+    set_transformation(points_element, {"global": Identity()}, set_all=True)
+    points_element.attrs[ATTRS_KEY] = {PointsModel.FEATURE_KEY: "genes"}
+    PointsModel.validate(points_element)
+    return points_element, reads
+
+
+def _partitions_read_with(reads: list[tuple[int, tuple[str, ...]]], column: str) -> set[int]:
+    return {partition_index for partition_index, columns in reads if column in columns}
+
+
 @pytest.mark.parametrize("rotated", [False, True])
 @pytest.mark.parametrize("multiple_boxes", [False, True])
 def test_query_points_bounding_box_is_lazy(rotated: bool, multiple_boxes: bool):
     """The bounding box query of points only reads the coordinates and returns a lazy points element.
 
     Regression test: the query used to call `.compute()` on the whole points element, loading all of its columns in
-    memory. Here reading the non-coordinate columns raises an error, so the query fails if it loads them.
+    memory. The returned element is also made only of the partitions that contain points in the bounding box.
     """
     from spatialdata.transformations import Affine
 
     n_partitions = 4
     rng = np.random.default_rng(0)
+    # sorted by x, so that each partition covers a range of x, and some partitions have no points in the bounding box
     coordinates = rng.uniform(0, 100, size=(1000, 2))
+    coordinates = coordinates[np.argsort(coordinates[:, 0])]
     df = pd.DataFrame(coordinates, columns=["x", "y"])
     df["genes"] = pd.Categorical(rng.choice(["a", "b", "c"], size=len(df)))
-    partition_size = len(df) // n_partitions
-    partitions = [df.iloc[i * partition_size : (i + 1) * partition_size] for i in range(n_partitions)]
-
-    def read_partition(partition_index: int, columns: list[str] | None = None) -> pd.DataFrame:
-        # like `dask.dataframe.read_parquet()`, dask only requests the columns that are needed (column projection)
-        columns = list(df.columns) if columns is None else list(columns)
-        partition = partitions[partition_index]
-        if set(columns) - {"x", "y"} and len(partition) > 0:
-            raise RuntimeError("The non-coordinate columns were materialized.")
-        return partition[columns]
-
-    # build the element like `read_zarr()` does: a lazy reader, and the attrs set directly
-    points_element = dd.from_map(read_partition, range(n_partitions), meta=df.iloc[:0])
-    set_transformation(points_element, {"global": Identity()}, set_all=True)
-    points_element.attrs[ATTRS_KEY] = {PointsModel.FEATURE_KEY: "genes"}
-    PointsModel.validate(points_element)
+    points_element, reads = _make_lazily_read_points(df, n_partitions)
 
     # the points with intrinsic coordinates x in (30, 70) and y in (20, 60)
     expected_mask = (
         (coordinates[:, 0] > 30) & (coordinates[:, 0] < 70) & (coordinates[:, 1] > 20) & (coordinates[:, 1] < 60)
     )
+    expected_partitions = {i for i, mask in enumerate(np.split(expected_mask, n_partitions)) if mask.any()}
+    assert 0 < len(expected_partitions) < n_partitions
     if rotated:
         # rotation by 90 degrees, (x, y) -> (-y, x)
         set_transformation(
@@ -1006,23 +1027,117 @@ def test_query_points_bounding_box_is_lazy(rotated: bool, multiple_boxes: bool):
         max_coordinate=max_coordinate,
         target_coordinate_system=target_coordinate_system,
     )
+    # the query only reads the coordinates
+    assert _partitions_read_with(reads, "genes") == set()
     if multiple_boxes:
-        assert isinstance(result, list)
+        assert result is not None and not isinstance(result, DaskDataFrame)
         # an empty result is still returned as None
         assert result[1] is None
         result = result[0]
-    assert isinstance(result, DaskDataFrame)
-
-    # the result is still partitioned like the original element, i.e. it has not been loaded in memory
-    assert result.npartitions == n_partitions
+    assert result is not None and not isinstance(result, list)
     PointsModel.validate(result)
+
+    # computing the coordinates of the result only reads the coordinates of the partitions with points
+    reads.clear()
     queried_coordinates = result[["x", "y"]].compute()
     np.testing.assert_array_equal(queried_coordinates.index, np.flatnonzero(expected_mask))
     np.testing.assert_allclose(queried_coordinates.to_numpy(), coordinates[expected_mask])
+    assert _partitions_read_with(reads, "genes") == set()
+    assert _partitions_read_with(reads, "x") == expected_partitions
 
-    # sanity check: the non-coordinate column is still lazy, and would raise if computed
-    with pytest.raises(RuntimeError, match="materialized"):
-        result.compute()
+    # computing the whole result reads all the columns, but only of the partitions with points
+    reads.clear()
+    pd.testing.assert_frame_equal(result.compute(), df[expected_mask])
+    assert _partitions_read_with(reads, "genes") == expected_partitions
+
+
+@pytest.mark.parametrize("transformation", ["scale_translation", "rotation", "shear"])
+@pytest.mark.parametrize("points_3d", [False, True])
+@pytest.mark.parametrize("bounding_box_3d", [False, True])
+def test_query_points_bounding_box_transformed(transformation: str, points_3d: bool, bounding_box_3d: bool):
+    """The query returns the points whose coordinates in the query coordinate system are inside the bounding box."""
+    from spatialdata.transformations import Affine
+
+    rng = np.random.default_rng(0)
+    coordinates = rng.uniform(-50, 50, size=(2000, 3 if points_3d else 2))
+    points_element = PointsModel.parse(coordinates, npartitions=3)
+    matrix = {
+        "scale_translation": np.array([[2.0, 0, 5], [0, -0.5, -3], [0, 0, 1]]),
+        "rotation": np.array([[np.cos(0.3), -np.sin(0.3), 5], [np.sin(0.3), np.cos(0.3), -3], [0, 0, 1]]),
+        "shear": np.array([[1, 0.7, 0], [0, 1, 0], [0, 0, 1]]),
+    }[transformation]
+    set_transformation(
+        points_element,
+        transformation=Affine(matrix, input_axes=("x", "y"), output_axes=("x", "y")),
+        to_coordinate_system="aligned",
+    )
+    if bounding_box_3d:
+        axes, min_coordinate, max_coordinate = ("x", "y", "z"), np.array([-10, -20, -5]), np.array([25, 15, 30])
+    else:
+        axes, min_coordinate, max_coordinate = ("x", "y"), np.array([-10, -20]), np.array([25, 15])
+
+    result = bounding_box_query(
+        points_element,
+        axes=axes,
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        target_coordinate_system="aligned",
+    )
+
+    # the transformation acts on x and y; z is constrained only when both the points and the bounding box are 3D
+    xy = coordinates[:, :2] @ matrix[:2, :2].T + matrix[:2, 2]
+    expected_mask = np.all((xy > min_coordinate[:2]) & (xy < max_coordinate[:2]), axis=1)
+    if points_3d and bounding_box_3d:
+        expected_mask &= (coordinates[:, 2] > min_coordinate[2]) & (coordinates[:, 2] < max_coordinate[2])
+    assert expected_mask.any()
+    assert result is not None and not isinstance(result, list)
+    np.testing.assert_array_equal(np.sort(result.index.compute().to_numpy()), np.flatnonzero(expected_mask))
+
+
+def test_query_points_bounding_box_many_partitions_from_disk(tmp_path):
+    """Regression test: when only some columns are read, dask can combine the partitions of points read from parquet.
+
+    This must not change which partitions are considered to contain points in the bounding box.
+    """
+    from spatialdata import read_zarr
+
+    rng = np.random.default_rng(0)
+    # sorted by x, so that only some partitions have points in the bounding box
+    coordinates = rng.uniform(0, 100, size=(20_000, 2))
+    coordinates = coordinates[np.argsort(coordinates[:, 0])]
+    df = pd.DataFrame(coordinates, columns=["x", "y"])
+    df["genes"] = pd.Categorical(rng.choice(["a", "b", "c"], size=len(df)))
+    df["extra"] = rng.uniform(size=len(df))
+    SpatialData(points={"points": PointsModel.parse(df, feature_key="genes", npartitions=40)}).write(
+        tmp_path / "data.zarr"
+    )
+    points_element = read_zarr(tmp_path / "data.zarr")["points"]
+
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=[30, 20],
+        max_coordinate=[45, 60],
+        target_coordinate_system="global",
+    )
+
+    expected_mask = (
+        (coordinates[:, 0] > 30) & (coordinates[:, 0] < 45) & (coordinates[:, 1] > 20) & (coordinates[:, 1] < 60)
+    )
+    assert result is not None and not isinstance(result, list)
+    np.testing.assert_array_equal(np.sort(result.index.compute().to_numpy()), np.flatnonzero(expected_mask))
+
+
+def test_query_points_zero_bounding_boxes():
+    points_element = _make_points(np.array([[10, 10], [20, 20], [20, 30]]))
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=np.zeros((0, 2)),
+        max_coordinate=np.zeros((0, 2)),
+        target_coordinate_system="global",
+    )
+    assert result is None
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
