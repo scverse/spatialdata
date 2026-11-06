@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, assert_type, cast
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
+from dask.base import compute as dask_compute
 from dask.dataframe import DataFrame as DaskDataFrame
+from dask.dataframe import Series as DaskSeries
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
@@ -19,12 +21,11 @@ from spatialdata._core.query._utils import _get_filtered_or_unfiltered_tables, g
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._docs import docstring_parameter
 from spatialdata._types import ArrayLike, ListOrNDArrayFloating, Raster_T
-from spatialdata._utils import _parse_list_into_array
+from spatialdata._utils import _parse_list_into_array, disable_dask_tune_optimization
 from spatialdata.models import (
     PointsModel,
     ShapesModel,
     SpatialElement,
-    get_axes_names,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
 )
@@ -392,35 +393,31 @@ class BoundingBoxRequest(BaseSpatialRequest):
 
 @docstring_parameter(min_coordinate_docs=MIN_COORDINATE_DOCS, max_coordinate_docs=MAX_COORDINATE_DOCS)
 def _bounding_box_mask_points(
-    points_df: pd.DataFrame,
+    coordinates: Mapping[str, DaskSeries],
     axes: tuple[str, ...],
     min_coordinate: ListOrNDArrayFloating,
     max_coordinate: ListOrNDArrayFloating,
-) -> list[np.ndarray]:
-    """Compute a mask that is true for the points inside axis-aligned bounding boxes.
+) -> list[DaskSeries]:
+    """Compute lazy masks that are true for the points inside axis-aligned bounding boxes.
 
     Parameters
     ----------
-    points_df
-        A pre-computed pandas dataframe representing the points element to perform the query on.
+    coordinates
+        The coordinates of the points, as a mapping from the axis name to the (lazy) column holding that coordinate.
+        All the columns must derive from the same dataframe, so that the masks can be used to index it. Axes of the
+        bounding boxes that are not in `coordinates` are ignored (e.g. the `z` axis when querying 2D points with a 3D
+        bounding box).
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-        PLACEHOLDER
-        The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
     {min_coordinate_docs}
     max_coordinate
-        The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
     {max_coordinate_docs}
-
 
     Returns
     -------
-    The masks for the points inside the bounding boxes.
+    One lazy boolean mask per bounding box, true for the points inside that bounding box.
     """
-    element_axes = get_axes_names(points_df)
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
     min_coordinate = min_coordinate[np.newaxis, :] if min_coordinate.ndim == 1 else min_coordinate
@@ -429,17 +426,48 @@ def _bounding_box_mask_points(
     n_boxes = min_coordinate.shape[0]
     in_bounding_box_masks = []
     for box in range(n_boxes):
-        box_masks = []
+        bounding_box_mask: DaskSeries | None = None
         for axis_index, axis_name in enumerate(axes):
-            if axis_name not in element_axes:
+            if axis_name not in coordinates:
                 continue
-            min_value = min_coordinate[box, axis_index]
-            max_value = max_coordinate[box, axis_index]
-            col = points_df[axis_name].values
-            box_masks.append((col > min_value) & (col < max_value))
-        bounding_box_mask = np.stack(box_masks, axis=-1)
-        in_bounding_box_masks.append(np.all(bounding_box_mask, axis=1))
+            col = coordinates[axis_name]
+            axis_mask = (col > min_coordinate[box, axis_index]) & (col < max_coordinate[box, axis_index])
+            bounding_box_mask = axis_mask if bounding_box_mask is None else bounding_box_mask & axis_mask
+        if bounding_box_mask is None:
+            raise ValueError(f"None of the bounding box axes {axes} are axes of the points ({tuple(coordinates)}).")
+        in_bounding_box_masks.append(bounding_box_mask)
     return in_bounding_box_masks
+
+
+def _count_true(mask: pd.Series) -> pd.Series:
+    """Count the true values of a partition of a boolean mask, as a series with a single value."""
+    return pd.Series([int(mask.sum())])
+
+
+def _transform_points_coordinates(points: DaskDataFrame, transformation: Affine) -> dict[str, DaskSeries]:
+    """Lazily apply an affine transformation to the coordinates of a points element.
+
+    Parameters
+    ----------
+    points
+        The points element whose coordinates are transformed.
+    transformation
+        An affine transformation whose input axes are axes of `points`.
+
+    Returns
+    -------
+    The transformed coordinates, as a mapping from each output axis of `transformation` to a lazy column. The columns
+    are aligned with `points`, so masks computed from them can be used to index `points`.
+    """
+    input_axes = transformation.input_axes
+    matrix = transformation.to_affine_matrix(input_axes=input_axes, output_axes=transformation.output_axes)
+    transformed: dict[str, DaskSeries] = {}
+    for row, output_axis in enumerate(transformation.output_axes):
+        coordinate = points[input_axes[0]] * matrix[row, 0]
+        for col in range(1, len(input_axes)):
+            coordinate = coordinate + points[input_axes[col]] * matrix[row, col]
+        transformed[output_axis] = coordinate + matrix[row, -1]
+    return transformed
 
 
 def _dict_query_dispatcher(
@@ -525,8 +553,14 @@ def bounding_box_query(
 
     Notes
     -----
-    If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
-    consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
+    Points elements are queried lazily: the query only reads their coordinate columns, to find the bounding boxes
+    without points (returned as `None`) and the partitions that contain points, and returns lazy points elements made of
+    those partitions, which are loaded only when computed. Hence:
+
+    - the returned points still read from the files of the original element. To write them to the same location they
+      were read from, first load them in memory with :func:`spatialdata.deepcopy`.
+    - computing each returned points element reads its partitions again. When querying many bounding boxes and
+      computing all the results, loading the points in memory first (:func:`spatialdata.deepcopy`) can be faster.
     """
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
@@ -676,7 +710,6 @@ def _(
     max_coordinate: ListOrNDArrayFloating,
     target_coordinate_system: str,
 ) -> DaskDataFrame | list[DaskDataFrame | None] | None:
-    from spatialdata import transform
     from spatialdata.transformations import get_transformation
 
     min_coordinate = _parse_list_into_array(min_coordinate)
@@ -704,48 +737,12 @@ def _(
             target_coordinate_system=target_coordinate_system,
         )
     )
-    min_coordinate_intrinsic = intrinsic_bounding_box_corners.min(dim="corner")
-    max_coordinate_intrinsic = intrinsic_bounding_box_corners.max(dim="corner")
-
-    min_coordinate_intrinsic = min_coordinate_intrinsic.data
-    max_coordinate_intrinsic = max_coordinate_intrinsic.data
-
-    points_pd = points.compute()
-
-    # get the points in the intrinsic coordinate bounding box
-    in_intrinsic_bounding_box = _bounding_box_mask_points(
-        points_df=points_pd,
-        axes=intrinsic_axes,
-        min_coordinate=min_coordinate_intrinsic,
-        max_coordinate=max_coordinate_intrinsic,
-    )
-
-    if not (len_df := len(in_intrinsic_bounding_box)) == (len_bb := len(min_coordinate)):
-        raise ValueError(
-            f"Length of list of masks `{len_df}` is not equal to the number of bounding boxes axes `{len_bb}`."
-        )
-    points_in_intrinsic_bounding_box: list[DaskDataFrame | None] = []
-    output: list[DaskDataFrame | None] = []
-
-    for mask_np in in_intrinsic_bounding_box:
-        if mask_np.sum() == 0:
-            points_in_intrinsic_bounding_box.append(None)
-        else:
-            filtered_pd = points_pd[mask_np]
-            old_transformations = get_transformation(points, get_all=True)
-            assert isinstance(old_transformations, dict)
-            feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
-            points_in_intrinsic_bounding_box.append(
-                PointsModel.parse(
-                    dd.from_pandas(filtered_pd, npartitions=1),
-                    transformations=old_transformations.copy(),
-                    feature_key=feature_key,
-                )
-            )
-    if len(points_in_intrinsic_bounding_box) == 0:
-        return None
-    # if the transformation was a scale, translation or identity, we can return the points already since querying from
-    # the intrinsic system using the inverse-transformed bounding box is equivalent in querying in the target system
+    # The masks below are lazy and only depend on the coordinate columns, so the query never loads the whole points
+    # element (and its non-coordinate columns, e.g. the gene names) in memory.
+    # If the transformation is a scale, translation or identity, querying the intrinsic coordinate system with the
+    # inverse-transformed bounding box is equivalent to querying the target coordinate system. Otherwise (rotation or
+    # shear), the inverse-transformed bounding box is not axis-aligned, so the mask is computed on the coordinates
+    # transformed to the target coordinate system.
     rotation, shear, reflection, scale, translation = _decompose_transformation_full(
         spatial_transform_bb_axes, input_axes=intrinsic_axes
     )
@@ -757,50 +754,54 @@ def _(
         shear.to_affine_matrix(input_axes=intrinsic_axes, output_axes=intrinsic_axes), np.eye(len(intrinsic_axes) + 1)
     )
     if no_rotation and no_shear:
-        output = points_in_intrinsic_bounding_box
+        # Without rotation and shear, each intrinsic axis is mapped to the query axis with the same name, so the
+        # intrinsic axes that are not query axes (e.g. `z` when querying 3D points with a 2D bounding box) are not
+        # constrained, and their columns don't need to be read.
+        in_bounding_box = _bounding_box_mask_points(
+            coordinates={ax: points[ax] for ax in intrinsic_axes if ax in axes},
+            axes=intrinsic_axes,
+            min_coordinate=intrinsic_bounding_box_corners.min(dim="corner").data,
+            max_coordinate=intrinsic_bounding_box_corners.max(dim="corner").data,
+        )
     else:
-        # assert that the number of queried points is correct
-        assert len(points_in_intrinsic_bounding_box) == len(min_coordinate)
+        in_bounding_box = _bounding_box_mask_points(
+            coordinates=_transform_points_coordinates(points, spatial_transform_bb_axes),
+            axes=axes,
+            min_coordinate=min_coordinate,
+            max_coordinate=max_coordinate,
+        )
 
-        # transform the element to the query coordinate system
-        for p, min_c, max_c in zip(points_in_intrinsic_bounding_box, min_coordinate, max_coordinate, strict=True):
-            if p is None:
-                output.append(None)
-            else:
-                points_query_coordinate_system = transform(
-                    p, to_coordinate_system=target_coordinate_system, maintain_positioning=False
-                ).compute()
+    # Count the points of each bounding box in each partition, in a single pass that only reads the coordinate columns:
+    # bounding boxes without points are returned as None, and the partitions without points are left out of the
+    # result, so that computing it does not read them again. The tune optimization is disabled because, when only some
+    # columns are read, it combines the partitions of the element, and the counts would not match its partitions.
+    with disable_dask_tune_optimization():
+        counts_per_partition = dask_compute(
+            *(mask.map_partitions(_count_true, meta=pd.Series(dtype="int64")) for mask in in_bounding_box)
+        )
 
-                # get a mask for the points in the bounding box
-                bounding_box_mask = _bounding_box_mask_points(
-                    points_df=points_query_coordinate_system,
-                    axes=axes,
-                    min_coordinate=min_c,  # type: ignore[arg-type]
-                    max_coordinate=max_c,  # type: ignore[arg-type]
-                )
-                if len(bounding_box_mask) != 1:
-                    raise ValueError(
-                        f"Expected a single mask, got {len(bounding_box_mask)} masks. Please report this bug."
-                    )
-                bounding_box_indices = np.where(bounding_box_mask[0])[0]
-
-                if len(bounding_box_indices) == 0:
-                    output.append(None)
-                else:
-                    # The exact mask is computed in the query coordinate system, but the returned points are in the
-                    # intrinsic coordinate system
-                    points_df = p.compute().iloc[bounding_box_indices]
-                    old_transformations = get_transformation(p, get_all=True)
-                    assert isinstance(old_transformations, dict)
-                    feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
-
-                    output.append(
-                        PointsModel.parse(
-                            dd.from_pandas(points_df, npartitions=1),
-                            transformations=old_transformations.copy(),
-                            feature_key=feature_key,
-                        )
-                    )
+    old_transformations = get_transformation(points, get_all=True)
+    assert not isinstance(old_transformations, BaseTransformation)
+    assert_type(old_transformations, dict[str, BaseTransformation])
+    output: list[DaskDataFrame | None] = []
+    for mask, counts in zip(in_bounding_box, counts_per_partition, strict=True):
+        if len(counts) != points.npartitions:
+            raise RuntimeError(
+                f"Got the number of points in {len(counts)} partitions, but the points element has {points.npartitions} "
+                "partitions. Please report this bug."
+            )
+        partitions = np.flatnonzero(counts.to_numpy()).tolist()
+        if len(partitions) == 0:
+            output.append(None)
+            continue
+        # The returned points are in the intrinsic coordinate system, like the original element. Note: the partitions
+        # are selected after filtering, because filtering the selected partitions with the selected partitions of the
+        # mask (`points.partitions[...][mask.partitions[...]]`) silently misaligns the rows.
+        queried = points[mask].partitions[partitions]
+        if ATTRS_KEY in points.attrs:
+            queried.attrs[ATTRS_KEY] = deepcopy(points.attrs[ATTRS_KEY])
+        set_transformation(queried, old_transformations.copy(), set_all=True)
+        output.append(queried)
     if len(output) == 0:
         return None
     if len(output) == 1:
@@ -1001,10 +1002,15 @@ def _(
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
     feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+    instance_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.INSTANCE_KEY)
     if "z" in ddf.columns:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key)
+        ddf = PointsModel.parse(
+            ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key, instance_key=instance_key
+        )
     else:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key)
+        ddf = PointsModel.parse(
+            ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key, instance_key=instance_key
+        )
     set_transformation(ddf, transformation, target_coordinate_system)
     t = get_transformation(ddf, get_all=True)
     assert isinstance(t, dict)
