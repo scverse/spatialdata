@@ -50,14 +50,14 @@ SpatialData is an approved de.NBI service, your feedback helps us improve it. We
 
 ![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
-- The SpatialData storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
+- The SpatialData data model and storage format are defined by the [SpatialData specifications](https://spatialdata-spec.scverse.org/); the storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
 
 ## Getting started
 
 Please refer to the [documentation][link-docs]. In particular:
 
 - [API documentation][link-api].
-- [Design doc][link-design-doc] (includes the roadmap).
+- [Design doc][link-design-doc] (historical; superseded by the [SpatialData specifications](https://spatialdata-spec.scverse.org/)).
 - [Example notebooks][link-notebooks].
 
 Another useful resource to get started is the source code of the [`spatialdata-io`](https://github.com/scverse/spatialdata-io) package, which shows example of how to read data from common technologies.
@@ -105,4 +105,4 @@ Marconato, L., Palla, G., Yamauchi, K.A. et al. SpatialData: an open and univers
 [link-notebooks]: https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
-[denbi-survey]: https://de.surveymonkey.com/r/denbi-service?sc=X&tool=Y
+[denbi-survey]: https://www.surveymonkey.de/r/denbi-service?sc=hd-hub&tool=spatialdata
