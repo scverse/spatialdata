@@ -735,11 +735,13 @@ def _(
             old_transformations = get_transformation(points, get_all=True)
             assert isinstance(old_transformations, dict)
             feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+            instance_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.INSTANCE_KEY)
             points_in_intrinsic_bounding_box.append(
                 PointsModel.parse(
                     dd.from_pandas(filtered_pd, npartitions=1),
                     transformations=old_transformations.copy(),
                     feature_key=feature_key,
+                    instance_key=instance_key,
                 )
             )
     if len(points_in_intrinsic_bounding_box) == 0:
@@ -793,12 +795,14 @@ def _(
                     old_transformations = get_transformation(p, get_all=True)
                     assert isinstance(old_transformations, dict)
                     feature_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+                    instance_key = p.attrs.get(ATTRS_KEY, {}).get(PointsModel.INSTANCE_KEY)
 
                     output.append(
                         PointsModel.parse(
                             dd.from_pandas(points_df, npartitions=1),
                             transformations=old_transformations.copy(),
                             feature_key=feature_key,
+                            instance_key=instance_key,
                         )
                     )
     if len(output) == 0:
@@ -1001,10 +1005,15 @@ def _(
     ddf = points_geopandas_to_dask_dataframe(queried_points, suppress_z_warning=True)
     transformation = get_transformation(points, target_coordinate_system)
     feature_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.FEATURE_KEY)
+    instance_key = points.attrs.get(ATTRS_KEY, {}).get(PointsModel.INSTANCE_KEY)
     if "z" in ddf.columns:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key)
+        ddf = PointsModel.parse(
+            ddf, coordinates={"x": "x", "y": "y", "z": "z"}, feature_key=feature_key, instance_key=instance_key
+        )
     else:
-        ddf = PointsModel.parse(ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key)
+        ddf = PointsModel.parse(
+            ddf, coordinates={"x": "x", "y": "y"}, feature_key=feature_key, instance_key=instance_key
+        )
     set_transformation(ddf, transformation, target_coordinate_system)
     t = get_transformation(ddf, get_all=True)
     assert isinstance(t, dict)

@@ -999,6 +999,11 @@ def test_attributes_are_copied(full_sdata, with_polygon_query: bool, name: str):
     assert original_element.attrs is not queried_element.attrs
     assert original_element.attrs["transform"] is not queried_element.attrs["transform"]
 
+    # check that the metadata of points (e.g. the feature_key and instance_key) is preserved, but not shared
+    if isinstance(original_element, DaskDataFrame):
+        assert queried_element.attrs[ATTRS_KEY] == original_element.attrs[ATTRS_KEY]
+        assert queried_element.attrs[ATTRS_KEY] is not original_element.attrs[ATTRS_KEY]
+
 
 @pytest.mark.parametrize(
     "name",
