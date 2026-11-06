@@ -2242,7 +2242,7 @@ class SpatialData:
                     descr += f"\n    ▸ {_element_path_to_element_name_with_type(element_path)}"
         return descr
 
-    def _gen_spatial_element_values(self) -> Generator[SpatialElement, None, None]:
+    def _gen_spatial_element_values(self) -> Generator[SpatialElement]:
         """
         Generate spatial element objects contained in the SpatialData instance.
 
@@ -2255,7 +2255,7 @@ class SpatialData:
         for _, _, element in self._gen_spatial_elements():
             yield element
 
-    def _gen_spatial_elements(self) -> Generator[tuple[str, str, SpatialElement], None, None]:
+    def _gen_spatial_elements(self) -> Generator[tuple[str, str, SpatialElement]]:
         """
         Generate the images, labels, points and shapes contained in the SpatialData instance.
 
@@ -2272,9 +2272,7 @@ class SpatialData:
             for name, element in elements.items():
                 yield element_type, name, element
 
-    def _gen_elements(
-        self, include_tables: bool = False
-    ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
+    def _gen_elements(self, include_tables: bool = False) -> Generator[tuple[str, str, SpatialElement | AnnData]]:
         """
         Generate elements contained in the SpatialData instance.
 
@@ -2295,7 +2293,7 @@ class SpatialData:
 
     def gen_spatial_elements(
         self,
-    ) -> Generator[tuple[str, str, SpatialElement], None, None]:
+    ) -> Generator[tuple[str, str, SpatialElement]]:
         """
         Generate spatial elements within the SpatialData object.
 
@@ -2310,7 +2308,7 @@ class SpatialData:
 
     def gen_elements(
         self,
-    ) -> Generator[tuple[str, str, SpatialElement | AnnData], None, None]:
+    ) -> Generator[tuple[str, str, SpatialElement | AnnData]]:
         """
         Generate elements within the SpatialData object.
 
