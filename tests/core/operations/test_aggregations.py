@@ -359,6 +359,13 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
     assert len(out) == 3
 
 
+def test_aggregate_image_by_background_only_labels() -> None:
+    image = Image2DModel.parse(RNG.normal(size=(2, 16, 16)))
+    labels = Labels2DModel.parse(np.zeros((16, 16), dtype=np.int32))
+    with pytest.raises(ValueError, match="No labelled instances"):
+        aggregate(values=image, by=labels, agg_func="mean")
+
+
 @pytest.mark.parametrize("values", ["blobs_image", "blobs_points", "blobs_circles", "blobs_polygons"])
 @pytest.mark.parametrize("by", ["blobs_labels", "blobs_circles", "blobs_polygons"])
 def test_aggregate_requiring_alignment(sdata_blobs: SpatialData, values, by) -> None:
