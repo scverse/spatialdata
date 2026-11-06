@@ -943,6 +943,88 @@ def test_query_points_3d_bounding_box_axes_order_independent(scales):
     # warnings.warn(f"Figure saved to {filename}")
 
 
+@pytest.mark.parametrize("rotated", [False, True])
+@pytest.mark.parametrize("multiple_boxes", [False, True])
+def test_query_points_bounding_box_is_lazy(rotated: bool, multiple_boxes: bool):
+    """The bounding box query of points only reads the coordinates and returns a lazy points element.
+
+    Regression test: the query used to call `.compute()` on the whole points element, loading all of its columns in
+    memory. Here reading the non-coordinate columns raises an error, so the query fails if it loads them.
+    """
+    from spatialdata.transformations import Affine
+
+    n_partitions = 4
+    rng = np.random.default_rng(0)
+    coordinates = rng.uniform(0, 100, size=(1000, 2))
+    df = pd.DataFrame(coordinates, columns=["x", "y"])
+    df["genes"] = pd.Categorical(rng.choice(["a", "b", "c"], size=len(df)))
+    partition_size = len(df) // n_partitions
+    partitions = [df.iloc[i * partition_size : (i + 1) * partition_size] for i in range(n_partitions)]
+
+    def read_partition(partition_index: int, columns: list[str] | None = None) -> pd.DataFrame:
+        # like `dask.dataframe.read_parquet()`, dask only requests the columns that are needed (column projection)
+        columns = list(df.columns) if columns is None else list(columns)
+        partition = partitions[partition_index]
+        if set(columns) - {"x", "y"} and len(partition) > 0:
+            raise RuntimeError("The non-coordinate columns were materialized.")
+        return partition[columns]
+
+    # build the element like `read_zarr()` does: a lazy reader, and the attrs set directly
+    points_element = dd.from_map(read_partition, range(n_partitions), meta=df.iloc[:0])
+    set_transformation(points_element, {"global": Identity()}, set_all=True)
+    points_element.attrs[ATTRS_KEY] = {PointsModel.FEATURE_KEY: "genes"}
+    PointsModel.validate(points_element)
+
+    # the points with intrinsic coordinates x in (30, 70) and y in (20, 60)
+    expected_mask = (
+        (coordinates[:, 0] > 30) & (coordinates[:, 0] < 70) & (coordinates[:, 1] > 20) & (coordinates[:, 1] < 60)
+    )
+    if rotated:
+        # rotation by 90 degrees, (x, y) -> (-y, x)
+        set_transformation(
+            points_element,
+            transformation=Affine(
+                np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]]), input_axes=("x", "y"), output_axes=("x", "y")
+            ),
+            to_coordinate_system="rotated",
+        )
+        target_coordinate_system = "rotated"
+        min_coordinate = np.array([[-60, 30], [1000, 1000]])
+        max_coordinate = np.array([[-20, 70], [1010, 1010]])
+    else:
+        target_coordinate_system = "global"
+        min_coordinate = np.array([[30, 20], [1000, 1000]])
+        max_coordinate = np.array([[70, 60], [1010, 1010]])
+    if not multiple_boxes:
+        min_coordinate = min_coordinate[0]
+        max_coordinate = max_coordinate[0]
+
+    result = bounding_box_query(
+        points_element,
+        axes=("x", "y"),
+        min_coordinate=min_coordinate,
+        max_coordinate=max_coordinate,
+        target_coordinate_system=target_coordinate_system,
+    )
+    if multiple_boxes:
+        assert isinstance(result, list)
+        # an empty result is still returned as None
+        assert result[1] is None
+        result = result[0]
+    assert isinstance(result, DaskDataFrame)
+
+    # the result is still partitioned like the original element, i.e. it has not been loaded in memory
+    assert result.npartitions == n_partitions
+    PointsModel.validate(result)
+    queried_coordinates = result[["x", "y"]].compute()
+    np.testing.assert_array_equal(queried_coordinates.index, np.flatnonzero(expected_mask))
+    np.testing.assert_allclose(queried_coordinates.to_numpy(), coordinates[expected_mask])
+
+    # sanity check: the non-coordinate column is still lazy, and would raise if computed
+    with pytest.raises(RuntimeError, match="materialized"):
+        result.compute()
+
+
 @pytest.mark.parametrize("with_polygon_query", [True, False])
 @pytest.mark.parametrize(
     "name",
