@@ -1,0 +1,22 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
+    "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+    "formatter": { "useEditorconfig": true },
+    "overrides": [
+        {
+            "includes": ["./.vscode/*.json", "**/*.jsonc"],
+            "json": {
+                "formatter": { "trailingCommas": "all" },
+                "parser": {
+                    "allowComments": true,
+                    "allowTrailingCommas": true,
+                },
+            },
+        },
+        {
+            // asv reads its config with a JSON parser that understands `//` comments but not trailing commas.
+            "includes": ["./asv.conf.json"],
+            "json": { "parser": { "allowComments": true } },
+        },
+    ],
+}

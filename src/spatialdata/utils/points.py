@@ -8,7 +8,7 @@ from spatialdata.models import PointsModel
 
 
 def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
-    """Helper function to make a Points element."""  # noqa: D401
+    """Helper function to make a Points element."""
     k0 = int(len(coordinates) / 3)
     k1 = len(coordinates) - k0
     genes = np.hstack((np.repeat("a", k0), np.repeat("b", k1)))

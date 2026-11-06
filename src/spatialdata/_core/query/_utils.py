@@ -112,9 +112,11 @@ def _create_slices_and_translation(
 def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
     d = {}
     for k, data_tree in query_result.items():
-        v = data_tree.values()
+        assert isinstance(data_tree, DataTree)
+        v = list(data_tree.values())
         assert len(v) == 1
-        xdata = v.__iter__().__next__()
+        xdata = v[0]
+        assert isinstance(xdata, DataArray)
         if 0 in xdata.shape:
             if k == "scale0":
                 return None
@@ -133,8 +135,8 @@ def _process_data_tree_query_result(query_result: DataTree) -> DataTree | None:
     if len(scales_to_keep) == 0:
         return None
 
-    d = {k: Dataset({"image": d[k]}) for k in scales_to_keep}
-    result = DataTree.from_dict(d)
+    datasets = {k: Dataset({"image": d[k]}) for k in scales_to_keep}
+    result = DataTree.from_dict(datasets)
 
     from dask.array.core import _check_regular_chunks
 
@@ -168,9 +170,10 @@ def _process_query_result(
         if not _check_regular_chunks(result.data.chunks):
             result.data = result.data.rechunk(result.data.chunksize)
     elif isinstance(result, DataTree):
-        result = _process_data_tree_query_result(result)
-        if result is None:
+        processed_tree = _process_data_tree_query_result(result)
+        if processed_tree is None:
             return None
+        result = processed_tree
 
     result = compute_coordinates(result)
 

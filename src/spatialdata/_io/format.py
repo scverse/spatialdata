@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 import ome_zarr.format
@@ -45,6 +45,8 @@ def _parse_version(group: zarr.Group, expect_attrs_key: bool) -> str | None:
     if expect_attrs_key and ATTRS_KEY not in group.attrs:
         return None
     attrs_key_group = group.attrs[ATTRS_KEY] if expect_attrs_key else group.attrs
+    if not isinstance(attrs_key_group, Mapping):
+        raise TypeError(f"Expected a mapping of attributes, got {type(attrs_key_group)!r}.")
     version_found = "version" in attrs_key_group
     if not version_found:
         return None

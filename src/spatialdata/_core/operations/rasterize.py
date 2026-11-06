@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple, assert_never, assert_type, cast
 
 import numpy as np
 from dask.array import Array as DaskArray
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from numpy.typing import DTypeLike
 from shapely import Point
 from xarray import DataArray, DataTree
 
@@ -17,7 +18,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.operations.vectorize import to_polygons
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata._types import ListOrNDArrayFloating
+from spatialdata._types import ListOrNDArrayFloating, Raster_T
 from spatialdata._utils import _parse_list_into_array
 from spatialdata.models import (
     Image2DModel,
@@ -46,6 +47,12 @@ from spatialdata.transformations.transformations import (
 VALUES_COLUMN = "__values_column"
 
 
+class TargetDimensions(NamedTuple):
+    target_width: float
+    target_height: float
+    target_depth: float | None
+
+
 def _compute_target_dimensions(
     spatial_axes: tuple[str, ...],
     min_coordinate: ListOrNDArrayFloating,
@@ -54,7 +61,7 @@ def _compute_target_dimensions(
     target_width: float | None,
     target_height: float | None,
     target_depth: float | None,
-) -> tuple[float, float, float | None]:
+) -> TargetDimensions:
     """
     Compute the pixel sizes (width, height, depth) of the image that will be produced by the rasterization.
 
@@ -103,8 +110,6 @@ def _compute_target_dimensions(
         == 1
     ), "you must specify only one of: target_unit_to_pixels, target_width, target_height, target_depth"
     assert set(spatial_axes) == {"x", "y"} or set(spatial_axes) == {"x", "y", "z"}
-    if "z" not in spatial_axes:
-        assert target_depth is None, "you cannot specify a target depth for 2D data"
 
     x_index = spatial_axes.index("x")
     y_index = spatial_axes.index("y")
@@ -112,7 +117,7 @@ def _compute_target_dimensions(
     h_bb = max_coordinate[y_index] - min_coordinate[y_index]
     assert w_bb > 0, "all max_coordinate values must be greater than all min_coordinate values"
     assert h_bb > 0, "all max_coordinate values must be greater than all min_coordinate values"
-    w_to_h_bb = w_bb / h_bb
+    w_to_h_bb = float(w_bb / h_bb)
 
     d_bb = None
     d_to_h_bb = None
@@ -120,7 +125,7 @@ def _compute_target_dimensions(
         z_index = spatial_axes.index("z")
         d_bb = max_coordinate[z_index] - min_coordinate[z_index]
         assert d_bb > 0, "all max_coordinate values must be greater than all min_coordinate values"
-        d_to_h_bb = d_bb / h_bb
+        d_to_h_bb = float(d_bb / h_bb)
 
     if target_unit_to_pixels is not None:
         target_width = w_bb * target_unit_to_pixels
@@ -140,15 +145,18 @@ def _compute_target_dimensions(
             target_depth = target_height * d_to_h_bb
     elif target_depth is not None:
         assert d_to_h_bb is not None
+        assert "z" in spatial_axes, "you cannot specify a target depth for 2D data"
         target_height = target_depth / d_to_h_bb
         target_width = target_height * w_to_h_bb
     else:
         raise RuntimeError("Should not reach here")
-    assert target_width is not None
     assert isinstance(target_width, float)
-    assert target_height is not None
     assert isinstance(target_height, float)
-    return np.round(target_width), np.round(target_height), np.round(target_depth) if target_depth is not None else None
+    return TargetDimensions(
+        target_width=np.round(target_width),
+        target_height=np.round(target_height),
+        target_depth=np.round(target_depth) if target_depth is not None else None,
+    )
 
 
 def rasterize(
@@ -285,8 +293,8 @@ def rasterize(
             raise ValueError("When data is a SpatialData object, table_name must be None.")
         if agg_func is not None:
             raise ValueError("When data is a SpatialData object, agg_func must be None.")
-        new_images = {}
-        new_labels = {}
+        new_images: dict[str, Raster_T] = {}
+        new_labels: dict[str, Raster_T] = {}
         for element_type in ["points", "images", "labels", "shapes"]:
             elements = getattr(data, element_type)
             for name in elements:
@@ -305,6 +313,8 @@ def rasterize(
                     return_single_channel=return_single_channel if element_type in ("points", "shapes") else None,
                 )
                 new_name = f"{name}_rasterized_{element_type}"
+                assert not isinstance(rasterized, SpatialData)
+                assert_type(rasterized, DataArray)
                 model = get_model(rasterized)
                 if model in (Image2DModel, Image3DModel):
                     new_images[new_name] = rasterized
@@ -321,6 +331,7 @@ def rasterize(
             raise ValueError("agg_func must be None when data is an image or labels.")
         if return_single_channel is not None:
             raise ValueError("return_single_channel must be None when data is an image or labels.")
+        assert isinstance(parsed_data, DataArray | DataTree)
         rasterized = rasterize_images_labels(
             data=parsed_data,
             axes=axes,
@@ -333,7 +344,8 @@ def rasterize(
             target_depth=target_depth,
         )
         transformations = get_transformation(rasterized, get_all=True)
-        assert isinstance(transformations, dict)
+        assert not isinstance(transformations, BaseTransformation)
+        assert_type(transformations, dict[str, BaseTransformation])
         # adjust the return type
         if model in (Labels2DModel, Labels3DModel) and not return_regions_as_labels:
             model = Image2DModel if model == Labels2DModel else Image3DModel
@@ -344,13 +356,14 @@ def rasterize(
             kwargs = {"sdata": sdata, "element_name": element_name} if element_name is not None else {"element": data}
             values = get_values(value_key, table_name=table_name, **kwargs).iloc[:, 0]  # type: ignore[arg-type, union-attr]
             max_index: int = np.max(values.index)
-            assigner = np.zeros(max_index + 1, dtype=values.dtype)
+            dtype = cast(DTypeLike, values.dtype)  # FIXME: try to assert instead
+            assigner = np.zeros(max_index + 1, dtype=dtype)
             assigner[values.index] = values
-            # call-arg is ignored because model is never TableModel (the error is that the transformation param is not
-            # accepted by TableModel.parse)
-            rasterized = model.parse(assigner[rasterized], transformations=transformations)  # type: ignore[call-arg]
+            rasterized = model.parse(assigner[rasterized], transformations=transformations)
         return rasterized
     if model in (PointsModel, ShapesModel):
+        assert not isinstance(parsed_data, DataArray | DataTree)
+        assert_type(parsed_data, GeoDataFrame | DaskDataFrame)
         return rasterize_shapes_points(
             data=parsed_data,
             axes=axes,
@@ -411,11 +424,16 @@ def _get_xarray_data_to_rasterize(
         latest_scale: str | None = None
         for scale in reversed(list(data.keys())):
             data_tree = data[scale]
+            assert not isinstance(data_tree, DataArray)
+            assert_type(data_tree, DataTree)
             latest_scale = scale
-            v = data_tree.values()
+            v = list(data_tree.values())
             assert len(v) == 1
-            xdata = next(iter(v))
-            assert set(get_spatial_axes(tuple(xdata.sizes.keys()))) == set(axes)
+            scale_variable = v[0]
+            assert not isinstance(scale_variable, DataTree)
+            assert_type(scale_variable, DataArray)
+            xdata = scale_variable
+            assert set(get_spatial_axes(tuple(str(dim) for dim in xdata.sizes))) == set(axes)
 
             corrected_affine, _ = _get_corrected_affine_matrix(
                 data=xdata,
@@ -450,14 +468,20 @@ def _get_xarray_data_to_rasterize(
                 # when this code is reached, latest_scale is selected
                 break
         assert latest_scale is not None
-        xdata = next(iter(data[latest_scale].values()))
+        latest_scale_tree = data[latest_scale]
+        assert not isinstance(latest_scale_tree, DataArray)
+        assert_type(latest_scale_tree, DataTree)
+        latest_variable = next(iter(latest_scale_tree.values()))
+        assert not isinstance(latest_variable, DataTree)
+        assert_type(latest_variable, DataArray)
+        xdata = latest_variable
         if latest_scale != "scale0":
             transformations = xdata.attrs["transform"]
             pyramid_scale = _get_scale(transformations)
         else:
             pyramid_scale = None
     else:
-        raise RuntimeError("Should not reach here")
+        assert_never(data)
     return xdata, pyramid_scale
 
 
@@ -481,7 +505,8 @@ def _get_corrected_affine_matrix(
 
     """
     transformation = get_transformation(data, target_coordinate_system)
-    assert isinstance(transformation, BaseTransformation)
+    assert not isinstance(transformation, dict)
+    assert_type(transformation, BaseTransformation)
     affine = _get_affine_for_element(data, transformation)
     target_axes_unordered = affine.output_axes
     assert set(target_axes_unordered) in [{"x", "y", "z"}, {"x", "y"}, {"c", "x", "y", "z"}, {"c", "x", "y"}]
@@ -500,7 +525,7 @@ def _get_corrected_affine_matrix(
 # TODO: rename this function to an internatl function and invoke this function from a function that has arguments
 #  values, values_sdata
 def rasterize_images_labels(
-    data: SpatialElement,
+    data: DataArray | DataTree,
     axes: tuple[str, ...],
     min_coordinate: ListOrNDArrayFloating,
     max_coordinate: ListOrNDArrayFloating,
@@ -538,6 +563,8 @@ def rasterize_images_labels(
     offset = [min_coordinate[axes.index(ax)] for ax in axes]
     translation = Translation(offset, axes=axes)
 
+    assert not isinstance(data, GeoDataFrame | DaskDataFrame)
+    assert_type(data, DataArray | DataTree)
     xdata, pyramid_scale = _get_xarray_data_to_rasterize(
         data=data,
         axes=axes,
@@ -600,7 +627,8 @@ def rasterize_images_labels(
     )
     assert isinstance(transformed_dask, DaskArray)
     channels = xdata.coords["c"].values if schema in (Image2DModel, Image3DModel) else None
-    transformed_data = schema.parse(transformed_dask, dims=xdata.dims, c_coords=channels)  # type: ignore[call-arg]
+    transformed_dims = tuple(str(dim) for dim in xdata.dims)
+    transformed_data = schema.parse(transformed_dask, dims=transformed_dims, c_coords=channels)  # type: ignore[call-arg]
 
     if target_coordinate_system != "global":
         remove_transformation(transformed_data, "global")
@@ -608,9 +636,11 @@ def rasterize_images_labels(
     sequence = Sequence([half_pixel_offset.inverse(), scale, translation, half_pixel_offset])
     set_transformation(transformed_data, sequence, target_coordinate_system)
 
-    transformed_data = compute_coordinates(transformed_data)
-    schema.validate(transformed_data)
-    return transformed_data
+    computed = compute_coordinates(transformed_data)
+    assert not isinstance(computed, DataTree)
+    assert_type(computed, DataArray)
+    schema.validate(computed)
+    return computed
 
 
 def rasterize_shapes_points(
@@ -632,6 +662,8 @@ def rasterize_shapes_points(
     return_single_channel: bool | None = None,
 ) -> DataArray:
     import datashader as ds
+    from datashader.reductions import count_cat as datashader_count_cat
+    from datashader.reductions import first as datashader_first
 
     min_coordinate = _parse_list_into_array(min_coordinate)
     max_coordinate = _parse_list_into_array(max_coordinate)
@@ -709,14 +741,14 @@ def rasterize_shapes_points(
     else:
         agg = cnv.points(data, x="x", y="y", agg=agg_func)
 
-    if label_index_to_category is not None and isinstance(agg_func, ds.first):
+    if label_index_to_category is not None and isinstance(agg_func, datashader_first):
         agg.attrs["label_index_to_category"] = label_index_to_category
 
     scale = Scale([(y_range[1] - y_range[0]) / plot_height, (x_range[1] - x_range[0]) / plot_width], axes=("y", "x"))
     translation = Translation([y_range[0], x_range[0]], axes=("y", "x"))
     transformations: dict[str, BaseTransformation] = {target_coordinate_system: Sequence([scale, translation])}
 
-    if isinstance(agg_func, ds.count_cat):
+    if isinstance(agg_func, datashader_count_cat):
         if return_single_channel:
             raise ValueError("Cannot return single channel when using count_cat aggregation")
         if return_regions_as_labels:
@@ -746,16 +778,17 @@ def rasterize_shapes_points(
 def _default_agg_func(
     data: DaskDataFrame | GeoDataFrame, value_key: str | None, return_single_channel: bool
 ) -> ds.reductions.Reduction:
-    import datashader as ds
+    from datashader.reductions import count, count_cat, first
+    from datashader.reductions import sum as ds_sum
 
     if value_key is None:
-        return ds.count()
+        return count()
 
     if data[VALUES_COLUMN].dtype != "category":
-        return ds.sum(VALUES_COLUMN)
+        return ds_sum(VALUES_COLUMN)
 
     if return_single_channel:
         data[VALUES_COLUMN] = data[VALUES_COLUMN].cat.codes + 1
-        return ds.first(VALUES_COLUMN)
+        return first(VALUES_COLUMN)
 
-    return ds.count_cat(VALUES_COLUMN)
+    return count_cat(VALUES_COLUMN)

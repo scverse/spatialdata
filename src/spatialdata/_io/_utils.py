@@ -23,6 +23,7 @@ from geopandas import GeoDataFrame
 from upath import UPath
 from upath.implementations.local import PosixUPath, WindowsUPath
 from xarray import DataArray, DataTree
+from zarr.abc.store import Store
 from zarr.storage import FsspecStore, LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
@@ -121,14 +122,20 @@ def overwrite_coordinate_transformations_raster(
         )
     coordinate_transformations = [t.to_dict() for t in ngff_transformations]
     # replace the metadata storage
-    if group.metadata.zarr_format == 3 and len(multiscales := group.metadata.attributes["ome"]["multiscales"]) != 1:
-        len_scales = len(multiscales)
-        raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
-    if group.metadata.zarr_format == 2:
+    if group.metadata.zarr_format == 3:
+        ome_attrs = group.metadata.attributes["ome"]
+        if not isinstance(ome_attrs, Mapping):
+            raise TypeError(f"Expected the `ome` attributes to be a JSON object, got {type(ome_attrs).__name__}.")
+        multiscales = ome_attrs["multiscales"]
+    else:
         multiscales = group.attrs["multiscales"]
-        if (len_scales := len(multiscales)) != 1:
-            raise ValueError(f"The length of multiscales metadata should be 1, found length of {len_scales}")
+    if not isinstance(multiscales, list):
+        raise TypeError(f"Expected `multiscales` to be a JSON array, got {type(multiscales).__name__}.")
+    if (len_scales := len(multiscales)) != 1:
+        raise ValueError(f"The length of multiscales metadata should be 1, found the length to be {len_scales}")
     multiscale = multiscales[0]
+    if not isinstance(multiscale, dict):
+        raise TypeError(f"Expected the multiscale entry to be a JSON object, got {type(multiscale).__name__}.")
 
     # Previously, there was CoordinateTransformations key present at the level of multiscale and datasets in multiscale.
     # This is not the case anymore so we are creating a new key here and keeping the one in datasets intact.
@@ -138,7 +145,10 @@ def overwrite_coordinate_transformations_raster(
             multiscale["version"] = raster_format.version
             group.attrs["multiscales"] = multiscales
         elif isinstance(raster_format, RasterFormatV03):
-            ome = group.metadata.attributes["ome"]
+            stored_ome = group.metadata.attributes["ome"]
+            if not isinstance(stored_ome, Mapping):
+                raise TypeError(f"Expected the `ome` attributes to be a JSON object, got {type(stored_ome).__name__}.")
+            ome = dict(stored_ome)
             ome["version"] = raster_format.version
             ome["multiscales"] = multiscales
             group.attrs["ome"] = ome
@@ -151,13 +161,20 @@ def overwrite_channel_names(group: zarr.Group, element: DataArray | DataTree) ->
     if isinstance(element, DataArray):
         channel_names = element.coords["c"].data.tolist()
     else:
-        channel_names = element["scale0"]["image"].coords["c"].data.tolist()
+        scale0 = element["scale0"]
+        assert isinstance(scale0, DataTree)
+        image = scale0["image"]
+        assert isinstance(image, DataArray)
+        channel_names = image.coords["c"].data.tolist()
 
     channel_metadata = [{"label": name} for name in channel_names]
     # We don't use the ome-zarr load node API, and ome-zarr-py >= 0.18 emits no `omero` block, so default to empty.
-    omero_meta = group.attrs.get("omero") or group.attrs.get("ome", {}).get("omero") or {}
+    stored_ome = group.attrs.get("ome")
+    ome_meta = dict(stored_ome) if isinstance(stored_ome, Mapping) else None
+    stored_omero = group.attrs.get("omero") or (ome_meta or {}).get("omero")
+    omero_meta = dict(stored_omero) if isinstance(stored_omero, Mapping) else {}
     omero_meta["channels"] = channel_metadata
-    if ome_meta := group.attrs.get("ome", None):
+    if ome_meta:
         ome_meta["omero"] = omero_meta
         group.attrs["ome"] = ome_meta
     else:
@@ -285,6 +302,7 @@ def _(element: DataArray) -> list[str]:
 @get_dask_backing_files.register(DataTree)
 def _(element: DataTree) -> list[str]:
     dask_data_scale0 = get_pyramid_levels(element, attr="data", n=0)
+    assert isinstance(dask_data_scale0, DaskArray)
     return _get_backing_files(dask_data_scale0)
 
 
@@ -341,7 +359,9 @@ def _search_for_backing_files_recursively(subgraph: Any, files: list[str]) -> No
             if name is not None:
                 if name.startswith("original-from-zarr"):
                     # LocalStore.store does not have an attribute path, but we keep it like this for backward compat.
-                    path = getattr(v.store, "path", None) if getattr(v.store, "path", None) else v.store.root
+                    path = getattr(v.store, "path", None) or getattr(v.store, "root", None)
+                    if path is None:
+                        raise TypeError(f"Cannot determine the path backing a store of type {type(v.store).__name__}.")
                     files.append(str(UPath(path).resolve()))
                 elif name.startswith("read-parquet") or name.startswith("read_parquet"):
                     # Here v is a read_parquet task with arguments and the only value is a dictionary.
@@ -457,9 +477,7 @@ def _is_element_self_contained(
     return all(_backed_elements_contained_in_path(path=element_path, object=element))
 
 
-def _resolve_zarr_store(
-    path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any
-) -> zarr.storage.StoreLike:
+def _resolve_zarr_store(path: str | Path | UPath | zarr.storage.StoreLike | zarr.Group, **kwargs: Any) -> Store:
     """
     Normalize different Zarr store inputs into a usable store instance.
 
@@ -506,17 +524,13 @@ def _resolve_zarr_store(
         if isinstance(path.store, FsspecStore):
             # if the store within the zarr.Group is an FSStore, return it
             # but extend the path of the store with that of the zarr.Group
-            return FsspecStore(path.store.path + "/" + path.path, fs=path.store.fs, **kwargs)
-        if isinstance(path.store, zarr.storage.ConsolidatedMetadataStore):
-            # if the store is a ConsolidatedMetadataStore, just return the underlying FSSpec store
-            return path.store.store
+            return FsspecStore(path.store.path + "/" + path.path, **{**kwargs, "fs": path.store.fs})
         raise ValueError(f"Unsupported store type or zarr.Group: {type(path.store)}")
-    if isinstance(path, zarr.storage.StoreLike):
-        # if the input already a store, wrap it in an FSStore
-        return FsspecStore(path, **kwargs)
+    if isinstance(path, Store):
+        return path
     if isinstance(path, UPath):
         # if input is a remote UPath, map it to an FSStore
-        return FsspecStore(path.path, fs=path.fs, **kwargs)
+        return FsspecStore(path.path, **{**kwargs, "fs": path.fs})
     raise TypeError(f"Unsupported type: {type(path)}")
 
 

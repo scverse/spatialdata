@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from functools import singledispatchmethod
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import dask.dataframe as dd
 import numpy as np
@@ -19,6 +19,7 @@ from geopandas import GeoDataFrame, GeoSeries
 from multiscale_spatial_image import to_multiscale as to_multiscale_msi
 from multiscale_spatial_image.to_multiscale.to_multiscale import Methods
 from pandas import CategoricalDtype
+from shapely import get_coordinate_dimension
 from shapely._geometry import GeometryType
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.geometry.collection import GeometryCollection
@@ -49,6 +50,9 @@ from spatialdata.transformations._utils import (
     compute_coordinates,
 )
 from spatialdata.transformations.transformations import Identity
+
+if TYPE_CHECKING:
+    from pandas._typing import DtypeObj
 
 __all__ = ["Chunks_t", "ScaleFactors_t"]
 
@@ -84,6 +88,35 @@ class RasterSchema:
     # TODO add DataTree validation, validate has scale0... etc and each scale contains 1 image in .variables.
     ATTRS_KEY = ATTRS_KEY
     dims: tuple[str, ...]
+
+    @overload
+    @classmethod
+    def parse(
+        cls,
+        data: ArrayLike | DataArray | DaskArray,
+        dims: Sequence[str] | None = ...,
+        c_coords: str | list[str] | None = ...,
+        transformations: MappingToCoordinateSystem_t | None = ...,
+        scale_factors: None = ...,
+        method: Methods | None = ...,
+        chunks: Chunks_t | None = ...,
+        **kwargs: Any,
+    ) -> DataArray: ...
+
+    @overload
+    @classmethod
+    def parse(
+        cls,
+        data: ArrayLike | DataArray | DaskArray,
+        dims: Sequence[str] | None = ...,
+        c_coords: str | list[str] | None = ...,
+        transformations: MappingToCoordinateSystem_t | None = ...,
+        *,
+        scale_factors: ScaleFactors_t,
+        method: Methods | None = ...,
+        chunks: Chunks_t | None = ...,
+        **kwargs: Any,
+    ) -> DataTree: ...
 
     @classmethod
     def parse(
@@ -174,43 +207,48 @@ class RasterSchema:
             transformations = transformations.copy()
         if "name" in kwargs:
             raise ValueError("The `name` argument is not (yet) supported for raster data.")
+        if c_coords is not None and C not in cls.dims:
+            raise ValueError("`c_coords` is not supported for labels")
         # if dims is specified inside the data, get the value of dims from the data
+        array: DataArray | DaskArray
+        parsed_dims: tuple[str, ...]
         if isinstance(data, DataArray):
             if not isinstance(data.data, DaskArray):  # numpy -> dask
                 data.data = from_array(data.data)
+            data_dims = tuple(str(dim) for dim in data.dims)
             if dims is not None:
-                if set(dims).symmetric_difference(data.dims):
+                if set(dims).symmetric_difference(data_dims):
                     raise ValueError(
-                        f"`dims`: {dims} does not match `data.dims`: {data.dims}, please specify the dims only once."
+                        f"`dims`: {dims} does not match `data.dims`: {data_dims}, please specify the dims only once."
                     )
+                parsed_dims = tuple(dims)
             else:
-                dims = data.dims
+                parsed_dims = data_dims
             # but if dims don't match the model's dims, throw error
-            if set(dims).symmetric_difference(cls.dims):
-                raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims}.")
+            if set(parsed_dims).symmetric_difference(cls.dims):
+                raise ValueError(f"Wrong `dims`: {parsed_dims}. Expected {cls.dims}.")
             _reindex = lambda d: d
+            array = data
         # if there are no dims in the data, use the model's dims or provided dims
         elif isinstance(data, np.ndarray | DaskArray):
-            if not isinstance(data, DaskArray):  # numpy -> dask
-                data = from_array(data)
+            array = data if isinstance(data, DaskArray) else from_array(data)  # numpy -> dask
             if dims is None:
-                dims = cls.dims
+                parsed_dims = cls.dims
             else:
-                if len(set(dims).symmetric_difference(cls.dims)) > 0:
-                    raise ValueError(f"Wrong `dims`: {dims}. Expected {cls.dims}.")
-            _reindex = lambda d: dims.index(d)
+                parsed_dims = tuple(dims)
+                if len(set(parsed_dims).symmetric_difference(cls.dims)) > 0:
+                    raise ValueError(f"Wrong `dims`: {parsed_dims}. Expected {cls.dims}.")
+            _reindex = lambda d: parsed_dims.index(d)
         else:
             raise ValueError(f"Unsupported data type: {type(data)}.")
 
         # transpose if possible
-        if tuple(dims) != cls.dims:
+        if parsed_dims != cls.dims:
             try:
-                if isinstance(data, DataArray):
-                    data = data.transpose(*list(cls.dims))
-                elif isinstance(data, DaskArray):
-                    data = data.transpose(*[_reindex(d) for d in cls.dims])
+                if isinstance(array, DataArray):
+                    array = array.transpose(*list(cls.dims))
                 else:
-                    raise ValueError(f"Unsupported data type: {type(data)}.")
+                    array = array.transpose(*[_reindex(d) for d in cls.dims])
             except ValueError as e:
                 raise ValueError(
                     f"Cannot transpose arrays to match `dims`: {dims}.",
@@ -219,59 +257,61 @@ class RasterSchema:
 
         # finally convert to spatial image
         if c_coords is not None:
-            c_coords = _check_match_length_channels_c_dim(data, c_coords, cls.dims)
+            c_coords = _check_match_length_channels_c_dim(array, c_coords, cls.dims)
 
-        if c_coords is not None and len(c_coords) != data.shape[cls.dims.index("c")]:
+        if c_coords is not None and len(c_coords) != array.shape[cls.dims.index("c")]:
             raise ValueError(
                 f"The number of channel names `{len(c_coords)}` does not match the length of dimension 'c'"
-                f" with length {data.shape[cls.dims.index('c')]}."
+                f" with length {array.shape[cls.dims.index('c')]}."
             )
 
-        data = to_spatial_image(array_like=data, dims=cls.dims, c_coords=c_coords, **kwargs)
+        image: DataArray = to_spatial_image(array_like=array, dims=cls.dims, c_coords=c_coords, **kwargs)
         # parse transformations
-        _parse_transformations(data, transformations)
+        _parse_transformations(image, transformations)
         # convert to multiscale if needed
+        parsed: DataArray | DataTree
         if scale_factors is not None:
-            parsed_transform = _get_transformations(data)
+            parsed_transform = _get_transformations(image)
             # delete transforms
-            del data.attrs["transform"]
+            del image.attrs["transform"]
             if isinstance(chunks, tuple):
-                chunks = {dim: chunks[index] for index, dim in enumerate(data.dims)}
+                chunks = {dim: chunks[index] for index, dim in enumerate(image.dims)}
             if isinstance(chunks, float):
-                chunks = {dim: chunks for index, dim in data.dims}
+                chunks = {dim: chunks for index, dim in image.dims}
             if method is not None:
-                data = to_multiscale_msi(
-                    data,
+                parsed = to_multiscale_msi(
+                    image,
                     scale_factors=scale_factors,
                     method=method,
                     chunks=chunks,
                 )
             elif C in cls.dims:
                 # Images: multiscale-spatial-image is faster (see https://github.com/scverse/spatialdata/issues/1079)
-                data = to_multiscale_msi(
-                    data,
+                parsed = to_multiscale_msi(
+                    image,
                     scale_factors=scale_factors,
                     method=Methods.XARRAY_COARSEN,
                     chunks=chunks,
                 )
             else:
                 # Labels: ome-zarr-py based implementation uses less memory
-                data = to_multiscale_ozp(
-                    data,
+                parsed = to_multiscale_ozp(
+                    image,
                     scale_factors=scale_factors,
                     chunks=chunks,
                 )
-            _parse_transformations(data, parsed_transform)
+            _parse_transformations(parsed, parsed_transform)
         else:
             # Chunk single scale images
             if chunks is not None:
                 if isinstance(chunks, tuple):
-                    chunks = dict(zip(data.dims, chunks, strict=True))
-                data = data.chunk(chunks=chunks)
+                    chunks = dict(zip(image.dims, chunks, strict=True))
+                image = image.chunk(chunks=chunks)
+            parsed = image
         # recompute coordinates for (multiscale) spatial image
-        data = compute_coordinates(data)
-        cls.validate(data)
-        return data
+        parsed = compute_coordinates(parsed)
+        cls.validate(parsed)
+        return parsed
 
     @classmethod
     def validate(cls, data: Any) -> None:
@@ -310,7 +350,10 @@ class RasterSchema:
             raise ValueError(f"Expected exactly one data variable for the datatree: found `{name}`.")
         name = list(name)[0]
         for d in data:
-            cls._validate_dataarray(data[d][name])
+            scale = data[d][name]
+            if not isinstance(scale, DataArray):
+                raise TypeError(f"Expected scale `{d}` to hold a DataArray, got {type(scale).__name__}.")
+            cls._validate_dataarray(scale)
 
     @classmethod
     def _validate_dataarray(cls, data: DataArray) -> None:
@@ -398,6 +441,7 @@ class RasterSchema:
             for d in data:
                 cls._check_chunk_size_not_too_large(data[d][name])
 
+    @staticmethod
     def _validate_labels_dtype(data: DataArray | DataTree) -> None:
         dtype = data.dtype if isinstance(data, DataArray) else data["scale0"]["image"].dtype
         if not (np.issubdtype(dtype, np.integer) or np.issubdtype(dtype, np.bool_)):
@@ -410,16 +454,6 @@ class Labels2DModel(RasterSchema):
     dims = (Y, X)
 
     @classmethod
-    def parse(  # noqa: D102
-        self,
-        *args: Any,
-        **kwargs: Any,
-    ) -> DataArray | DataTree:
-        if kwargs.get("c_coords") is not None:
-            raise ValueError("`c_coords` is not supported for labels")
-        return super().parse(*args, **kwargs)
-
-    @classmethod
     def validate(cls, data: Any) -> None:
         super().validate(data)
         cls._validate_labels_dtype(data)
@@ -427,12 +461,6 @@ class Labels2DModel(RasterSchema):
 
 class Labels3DModel(RasterSchema):
     dims = (Z, Y, X)
-
-    @classmethod
-    def parse(self, *args: Any, **kwargs: Any) -> DataArray | DataTree:  # noqa: D102
-        if kwargs.get("c_coords") is not None:
-            raise ValueError("`c_coords` is not supported for labels")
-        return super().parse(*args, **kwargs)
 
     @classmethod
     def validate(cls, data: Any) -> None:
@@ -487,7 +515,7 @@ class ShapesModel:
         if isinstance(geom_, Point):
             if cls.RADIUS_KEY not in data.columns:
                 raise ValueError(f"Column `{cls.RADIUS_KEY}` not found." + SUGGESTION)
-            radii = data[cls.RADIUS_KEY].values
+            radii = data[cls.RADIUS_KEY].to_numpy()
             if np.any(radii <= 0):
                 raise ValueError("Radii of circles must be positive.")
             if np.any(np.isnan(radii)) or np.any(np.isinf(radii)):
@@ -507,7 +535,7 @@ class ShapesModel:
                 f"At least one transformation is required." + SUGGESTION
             )
         if len(data) > 0:
-            n = data.geometry.iloc[0]._ndim
+            n = get_coordinate_dimension(data.geometry.iloc[0])
             if n != 2:
                 warnings.warn(
                     f"The geometry column of the GeoDataFrame has {n} dimensions, while 2 is expected. Please consider "
@@ -608,10 +636,10 @@ class ShapesModel:
         index: ArrayLike | None = None,
         transformations: MappingToCoordinateSystem_t | None = None,
     ) -> GeoDataFrame:
-        geometry = GeometryType(geometry)
-        data = from_ragged_array(geometry_type=geometry, coords=data, offsets=offsets)
-        geo_df = GeoDataFrame({"geometry": data})
-        if GeometryType(geometry).name == "POINT":
+        geometry_type = GeometryType(geometry)
+        geometries = from_ragged_array(geometry_type=geometry_type, coords=data, offsets=offsets)
+        geo_df = GeoDataFrame({"geometry": geometries})
+        if geometry_type.name == "POINT":
             if radius is None:
                 raise ValueError("If `geometry` is `Circles`, `radius` must be provided.")
             geo_df[cls.RADIUS_KEY] = radius
@@ -780,8 +808,7 @@ class PointsModel:
         ndim = data.shape[1]
         axes = [X, Y, Z][:ndim]
         index = annotation.index if annotation is not None else None
-        df_dict = {ax: data[:, i] for i, ax in enumerate(axes)}
-        df_kwargs = {"data": df_dict, "index": index}
+        df_dict: dict[str, Any] = {ax: data[:, i] for i, ax in enumerate(axes)}
 
         if annotation is not None:
             if feature_key is not None:
@@ -795,7 +822,7 @@ class PointsModel:
                 if c not in handled_columns:
                     df_dict[c] = annotation[c]
 
-        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(**df_kwargs), **kwargs)
+        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data=df_dict, index=index), **kwargs)
         return cls._add_metadata_and_validate(
             table,
             feature_key=feature_key,
@@ -1094,7 +1121,7 @@ class TableModel:
 
         _INT_TYPES = [int, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64]
 
-        def _is_int_or_str_dtype(d: np.dtype) -> bool:
+        def _is_int_or_str_dtype(d: DtypeObj) -> bool:
             return d in _INT_TYPES or isinstance(d, pd.StringDtype)
 
         # First, check the top-level dtype (covers plain int and StringDtype cases)
@@ -1175,7 +1202,7 @@ class TableModel:
                     f"Instance key `{instance_key}` not in `adata.obs`. Please create the column and parse"
                     f" using TableModel.parse(adata)."
                 )
-            if data.obs[instance_key].isnull().values.any():
+            if bool(data.obs[instance_key].isnull().to_numpy().any()):
                 raise ValueError("`table.obs[instance_key]` must not contain null values, but it does.")
 
         cls._validate_table_annotation_metadata(data)
@@ -1253,7 +1280,10 @@ class TableModel:
 
         # note! this is an expensive check and therefore we skip it during validation
         # https://github.com/scverse/spatialdata/issues/715
-        grouped = adata.obs.groupby(region_key, observed=True)
+        obs = adata.obs
+        if not isinstance(obs, pd.DataFrame):
+            raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+        grouped = obs.groupby(region_key, observed=True)
         grouped_size = grouped.size()
         grouped_nunique = grouped.nunique()
         not_unique = grouped_size[grouped_size != grouped_nunique[instance_key]].index.tolist()
@@ -1285,7 +1315,7 @@ type Schema_t = (
 
 
 def get_model(
-    e: SpatialElement,
+    e: SpatialElement | AnnData,
     validate: bool = True,
 ) -> Schema_t:
     """
@@ -1302,30 +1332,28 @@ def get_model(
     -------
     The SpatialData model.
     """
-
-    def _validate_and_return(
-        schema: Schema_t,
-        e: SpatialElement,
-    ) -> Schema_t:
-        if validate:
-            schema.validate(e)
-        return schema
-
     if isinstance(e, DataArray | DataTree):
         axes = get_axes_names(e)
+        raster_schema: type[Image2DModel] | type[Image3DModel] | type[Labels2DModel] | type[Labels3DModel]
         if "c" in axes:
-            if "z" in axes:
-                return _validate_and_return(Image3DModel, e)
-            return _validate_and_return(Image2DModel, e)
-        if "z" in axes:
-            return _validate_and_return(Labels3DModel, e)
-        return _validate_and_return(Labels2DModel, e)
+            raster_schema = Image3DModel if "z" in axes else Image2DModel
+        else:
+            raster_schema = Labels3DModel if "z" in axes else Labels2DModel
+        if validate:
+            raster_schema.validate(e)
+        return raster_schema
     if isinstance(e, GeoDataFrame):
-        return _validate_and_return(ShapesModel, e)
+        if validate:
+            ShapesModel.validate(e)
+        return ShapesModel
     if isinstance(e, DaskDataFrame):
-        return _validate_and_return(PointsModel, e)
+        if validate:
+            PointsModel.validate(e)
+        return PointsModel
     if isinstance(e, AnnData):
-        return _validate_and_return(TableModel, e)
+        if validate:
+            TableModel.validate(e)
+        return TableModel
     raise TypeError(f"Unsupported type {type(e)}")
 
 

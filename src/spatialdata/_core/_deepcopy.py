@@ -12,7 +12,15 @@ from xarray import DataArray, DataTree
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import Image2DModel, Image3DModel, Labels2DModel, Labels3DModel, PointsModel, get_model
+from spatialdata.models.models import (
+    Image2DModel,
+    Image3DModel,
+    Labels2DModel,
+    Labels3DModel,
+    PointsModel,
+    RasterSchema,
+    get_model,
+)
 
 
 @singledispatch
@@ -44,9 +52,11 @@ def deepcopy(element: SpatialData | SpatialElement | AnnData) -> SpatialData | S
 # This leads to double copying the data, but since we expect the data to be small, this is acceptable.
 @deepcopy.register(SpatialData)
 def _(sdata: SpatialData) -> SpatialData:
-    elements_dict = {}
+    elements_dict: dict[str, SpatialElement | AnnData] = {}
     for _, element_name, element in sdata.gen_elements():
-        elements_dict[element_name] = deepcopy(element)
+        copied = deepcopy(element)
+        assert not isinstance(copied, SpatialData)
+        elements_dict[element_name] = copied
     deepcopied_attrs = _deepcopy(sdata.attrs)
     return SpatialData.init_from_elements(elements_dict, attrs=deepcopied_attrs)
 
@@ -56,8 +66,9 @@ def _(element: DataArray) -> DataArray:
     model = get_model(element)
     if isinstance(element.data, DaskArray):
         element = element.compute()
+    assert issubclass(model, RasterSchema)
     if model in [Image2DModel, Image3DModel]:
-        return model.parse(element.copy(deep=True), c_coords=element["c"])  # type: ignore[call-arg]
+        return model.parse(element.copy(deep=True), c_coords=list(element["c"].to_numpy()))
     assert model in [Labels2DModel, Labels3DModel]
     return model.parse(element.copy(deep=True))
 
@@ -69,17 +80,22 @@ def _(element: DataTree) -> DataTree:
     # to understand the original motivation.
     model = get_model(element)
     for key in element:
-        ds = element[key].ds
+        node = element[key]
+        assert isinstance(node, DataTree)
+        ds = node.ds
         assert len(ds) == 1
-        variable = ds.__iter__().__next__()
-        if isinstance(element[key][variable].data, DaskArray):
-            element[key][variable] = element[key][variable].compute()
+        variable = str(next(iter(ds)))
+        if isinstance(node[variable].data, DaskArray):
+            node[variable] = node[variable].compute()
     msi = element.copy(deep=True)
     for key in msi:
-        ds = msi[key].ds
-        variable = ds.__iter__().__next__()
-        msi[key][variable].data = from_array(msi[key][variable].data)
-        element[key][variable].data = from_array(element[key][variable].data)
+        copied_node = msi[key]
+        assert isinstance(copied_node, DataTree)
+        original_node = element[key]
+        assert isinstance(original_node, DataTree)
+        variable = str(next(iter(copied_node.ds)))
+        copied_node[variable].data = from_array(copied_node[variable].data)
+        original_node[variable].data = from_array(original_node[variable].data)
     assert model in [Image2DModel, Image3DModel, Labels2DModel, Labels3DModel]
     model.validate(msi)
     return msi

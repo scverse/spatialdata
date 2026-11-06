@@ -15,7 +15,7 @@ If you want to read more about the framework, please have a look at our publicat
 pip install spatialdata
 ```
 
-This command installs barebone SpatialData.  
+This command installs barebone SpatialData.
 For a more detailed description on the installation process including all bells and whistles, see [here](https://spatialdata.scverse.org/en/stable/installation.html).
 
 </details>
@@ -119,7 +119,7 @@ For more details, including information on how to add annotations for these regi
 
 <summary> <h3> I have cells in my dataset, how do I annotate them? (usage of AnnData)</summary>
 
-One of the most obvious things to do for spatial omics data is to annotate cells using the [AnnData](https://anndata.readthedocs.io/en/stable/) format (called tables in SpatialData). These tables can contain count/intensity data, all types of annotations, and make it possible to make use of [scanpy](https://scanpy.readthedocs.io/en/stable/) functionality (normalization/clustering/DE calculation).  
+One of the most obvious things to do for spatial omics data is to annotate cells using the [AnnData](https://anndata.readthedocs.io/en/stable/) format (called tables in SpatialData). These tables can contain count/intensity data, all types of annotations, and make it possible to make use of [scanpy](https://scanpy.readthedocs.io/en/stable/) functionality (normalization/clustering/DE calculation).
 If you want more technical details on how to create a table from scratch to annotate your shapes/labels/points, you can have a look [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables).
 
 </details>

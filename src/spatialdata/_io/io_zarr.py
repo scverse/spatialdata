@@ -5,7 +5,7 @@ import warnings
 from collections.abc import Callable
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import zarr.storage
 from anndata import AnnData
@@ -15,6 +15,7 @@ from ome_zarr.format import Format
 from pyarrow import ArrowInvalid
 from upath import UPath
 from zarr.errors import ArrayNotFoundError
+from zarr.storage import LocalStore
 
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._io._utils import (
@@ -27,12 +28,12 @@ from spatialdata._io.io_raster import _read_multiscale
 from spatialdata._io.io_shapes import _read_shapes
 from spatialdata._io.io_table import _read_table
 from spatialdata._logging import logger
-from spatialdata._types import Raster_T
+from spatialdata._types import JSONValue, Raster_T
 
 
 def _read_zarr_group_spatialdata_element(
     root_group: zarr.Group,
-    root_store_path: str,
+    root_store_path: Path,
     sdata_version: Literal["0.1", "0.2"],
     selector: set[str],
     read_func: Callable[..., Any],
@@ -48,12 +49,20 @@ def _read_zarr_group_spatialdata_element(
     ):
         if group_name in selector and group_name in root_group:
             group = root_group[group_name]
+            if not isinstance(group, zarr.Group):
+                raise TypeError(
+                    f"Expected a zarr group holding the {group_name!r} elements, got {type(group).__name__}."
+                )
             count = 0
             for subgroup_name in group:
                 if Path(subgroup_name).name.startswith("."):
                     # skip hidden files like .zgroup or .zmetadata
                     continue
                 elem_group = group[subgroup_name]
+                if not isinstance(elem_group, zarr.Group):
+                    raise TypeError(
+                        f"Expected a zarr group holding the element {subgroup_name!r}, got {type(elem_group).__name__}."
+                    )
                 elem_group_path = os.path.join(root_store_path, elem_group.path)
                 with handle_read_errors(
                     on_bad_files,
@@ -130,6 +139,11 @@ def read_zarr(
     """
     Read a SpatialData dataset from a zarr store (on-disk or remote).
 
+    This is the underlying reader used by :meth:`spatialdata.SpatialData.read`. Compared to that method, it also
+    accepts an already-open :class:`zarr.Group` and lets you skip corrupted or invalid elements instead of failing
+    (see ``on_bad_files``). It cannot repair the consolidated metadata of the store; for that, read from a path with
+    :meth:`spatialdata.SpatialData.read` and ``reconsolidate_metadata=True``.
+
     Parameters
     ----------
     store
@@ -152,6 +166,10 @@ def read_zarr(
     Returns
     -------
     A SpatialData object.
+
+    See Also
+    --------
+    spatialdata.SpatialData.read : Convenience wrapper that reads from a path and can reconsolidate the metadata.
     """
     from spatialdata._io._utils import _resolve_zarr_store
 
@@ -170,7 +188,10 @@ def read_zarr(
             UserWarning,
             stacklevel=2,
         )
-    root_store_path = root_group.store.root
+    root_store = root_group.store
+    if not isinstance(root_store, LocalStore):
+        raise TypeError(f"Reading a SpatialData object requires a local zarr store, got {type(root_store).__name__}.")
+    root_store_path = root_store.root
 
     images: dict[str, Raster_T] = {}
     labels: dict[str, Raster_T] = {}
@@ -215,11 +236,15 @@ def read_zarr(
         )
 
     # read attrs metadata
-    attrs = root_group.attrs.asdict()
-    if "spatialdata_attrs" in attrs:
+    root_attrs = root_group.attrs.asdict()
+    attrs: dict[str, JSONValue] | None
+    if "spatialdata_attrs" in root_attrs:
         # when refactoring the read_zarr function into reading componenets separately (and according to the version),
         # we can move the code below (.pop()) into attrs_from_dict()
-        attrs.pop("spatialdata_attrs")
+        root_attrs.pop("spatialdata_attrs")
+        # what we read back from the Zarr store is JSON, so it satisfies `JSONValue`; the cast is needed because zarr
+        # types its attributes with a slightly laxer `JSON` alias
+        attrs = cast("dict[str, JSONValue]", root_attrs)
     else:
         attrs = None
 
@@ -231,6 +256,10 @@ def read_zarr(
         tables=tables,
         attrs=attrs,
     )
+    if not isinstance(resolved_store, LocalStore):
+        raise TypeError(
+            f"Reading a SpatialData object requires a local zarr store, got {type(resolved_store).__name__}."
+        )
     sdata.path = resolved_store.root
     return sdata
 
@@ -314,7 +343,15 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
         "shapes",
         "tables",
     ]
-    exists = element_type in root and element_name in root[element_type]
+    if element_type in root:
+        elements_group = root[element_type]
+        if not isinstance(elements_group, zarr.Group):
+            raise TypeError(
+                f"Expected a zarr group holding the {element_type!r} elements, got {type(elements_group).__name__}."
+            )
+        exists = element_name in elements_group
+    else:
+        exists = False
     store.close()
     return exists
 

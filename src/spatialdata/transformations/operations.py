@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -193,10 +193,10 @@ def remove_transformation(
             write_to_sdata.write_transformations(element_name=element_name)
 
 
-def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
+def _build_transformations_graph(sdata: SpatialData) -> nx.DiGraph[Any]:
     import networkx as nx
 
-    g = nx.DiGraph()
+    g: nx.DiGraph[Any] = nx.DiGraph()
     gen = sdata._gen_spatial_element_values()
     for cs in sdata.coordinate_systems:
         g.add_node(cs)
@@ -313,9 +313,10 @@ def get_transformation_between_coordinate_systems(
                 f"coordinate system. Available paths are:{s}"
             )
     else:
+        intermediate: Any = intermediate_coordinate_systems
         if has_type_spatial_element(intermediate_coordinate_systems):
-            intermediate_coordinate_systems = id(intermediate_coordinate_systems)
-        paths = [p for p in paths if intermediate_coordinate_systems in p]
+            intermediate = id(intermediate_coordinate_systems)
+        paths = [p for p in paths if intermediate in p]
         if len(paths) == 0:
             # error 3
             raise RuntimeError("No path found between the two coordinate systems passing through the intermediate")
@@ -390,8 +391,9 @@ def get_transformation_between_landmarks(
         references_xy = np.stack([references_coords.geometry.x, references_coords.geometry.y], axis=1)
         moving_xy = np.stack([moving_coords.geometry.x, moving_coords.geometry.y], axis=1)
     elif isinstance(references_coords, DaskDataFrame):
-        references_xy = references_coords[["x", "y"]].to_dask_array().compute()
-        moving_xy = moving_coords[["x", "y"]].to_dask_array().compute()
+        assert isinstance(moving_coords, DaskDataFrame)
+        references_xy = np.asarray(references_coords[["x", "y"]].compute())
+        moving_xy = np.asarray(moving_coords[["x", "y"]].compute())
     else:
         raise TypeError("references_coords must be either an GeoDataFrame or a DaskDataFrame")
 
