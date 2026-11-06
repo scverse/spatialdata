@@ -33,6 +33,7 @@ from spatialdata._io.format import (
 from spatialdata._utils import get_pyramid_levels
 from spatialdata.models.models import ATTRS_KEY
 from spatialdata.models.pyramids_utils import dask_arrays_to_datatree
+from spatialdata.transformations import Identity
 from spatialdata.transformations._utils import (
     _get_transformations,
     _get_transformations_xarray,
@@ -161,6 +162,24 @@ def _prepare_storage_options(
     return prepared_options
 
 
+def _drop_singleton_time_and_depth(arrays: list[Any], axes: list[str]) -> tuple[list[Any], list[str]]:
+    """Reduce five-axis (t, c, z, y, x) OME-NGFF arrays to the axes spatialdata images have.
+
+    spatialdata images are (c, y, x) or (c, z, y, x). There is no time axis: a t of size 1 is dropped
+    and no longer raises an error; a longer t still does. z is supported: a stack keeps its z axis and
+    loads as a 3D image; only a size-1 z is dropped, so a single-plane image loads as the 2D image
+    spatialdata_io's readers produce for it. Arrays without a t axis are returned unchanged.
+    """
+    if "t" not in axes:
+        return arrays, axes
+    sizes = dict(zip(axes, arrays[0].shape, strict=True))
+    if sizes["t"] != 1:
+        raise ValueError(f"time axis of size {sizes['t']}: spatialdata images have no time axis")
+    drop = {"t"} | ({"z"} if sizes.get("z") == 1 else set())
+    index = tuple(0 if a in drop else slice(None) for a in axes)
+    return [a[index] for a in arrays], [a for a in axes if a not in drop]
+
+
 def _read_multiscale(
     store: str | Path, raster_type: Literal["image", "labels"], reader_format: Format
 ) -> DataArray | DataTree:
@@ -206,12 +225,14 @@ def _read_multiscale(
     # TODO: check if below is still valid
     legacy_channels_metadata = loaded_node.zarr.root_attrs.get("channels_metadata", None)  # legacy v0.1
     assert len(multiscales) == 1
-    # checking for multiscales[0]["coordinateTransformations"] would make fail
-    # something that doesn't have coordinateTransformations in top level
-    # which is true for the current version of the spec
-    # and for instance in the xenium example
-    encoded_ngff_transformations = multiscales[0]["coordinateTransformations"]
-    transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
+    # The multiscale-level "coordinateTransformations" key is optional in OME-NGFF 0.4 and 0.5
+    # (the Xenium example omits it). An image without it is placed in the "global" coordinate
+    # system with the identity instead of failing on the missing key.
+    encoded_ngff_transformations = multiscales[0].get("coordinateTransformations")
+    if encoded_ngff_transformations:
+        transformations = _get_transformations_from_ngff_dict(encoded_ngff_transformations)
+    else:
+        transformations = {"global": Identity()}
     # if image, read channels metadata
     channels: list[Any] | None = None
     if raster_type == "image":
@@ -222,11 +243,13 @@ def _read_multiscale(
     axes = [i["name"] for i in node.metadata["axes"]]
     if len(datasets) > 1:
         arrays = [loaded_node.array(resolution=d) for d in datasets]
+        arrays, axes = _drop_singleton_time_and_depth(arrays, axes)
         msi = dask_arrays_to_datatree(arrays, dims=axes, channels=channels)
         _set_transformations(msi, transformations)
         return compute_coordinates(msi)
 
     data = loaded_node.array(resolution=datasets[0])
+    (data,), axes = _drop_singleton_time_and_depth([data], axes)
     si = DataArray(
         data,
         name="image",
