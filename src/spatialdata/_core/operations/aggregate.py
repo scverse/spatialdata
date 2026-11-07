@@ -59,18 +59,21 @@ def aggregate(
         The regions to aggregate by: if `by_sdata` is None, must be a SpatialElement, otherwise must be a string
         specifying the name of the SpatialElement in `by_sdata`
     value_key
-        Name (or list of names) of the columns containing the values to aggregate; can refer both to numerical or
-        categorical values. If the values are categorical, `value_key` can't be a list.
+        Name (or list of names) of the columns or image channels containing the values to aggregate; can refer both
+        to numerical or categorical values. If the values are categorical, `value_key` can't be a list.
 
         The key can be:
 
              - the name of a column(s) in the dataframe (Dask `DataFrame` for points or `GeoDataFrame` for shapes);
              - the name of obs column(s) in the associated `AnnData` table (for points, shapes and labels);
              - the name of a var(s), referring to the column(s) of the X matrix in the table (for points, shapes and
-               labels).
+               labels);
+             - the name of a channel(s) in the `c` coordinate of an image.
 
-        If nothing is passed here, it defaults to the equivalent of a column of ones.
-        Defaults to `FEATURE_KEY` for points (if present).
+        For images, `None` selects all channels; otherwise, channels are selected in the requested order. Empty lists,
+        duplicate requests, unknown channels, and non-unique image channel names raise `ValueError` when selecting
+        channels. For points and shapes, it defaults to the equivalent of a column of ones, or to `FEATURE_KEY` for
+        points (if present).
     agg_func
         Aggregation function to apply over point values, e.g. `"mean"`, `"sum"`, `"count"`.
         Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
@@ -200,7 +203,7 @@ def aggregate(
             raise NotImplementedError("fractions = True is not yet supported for raster aggregation")
         assert isinstance(values_, DataArray | DataTree)
         assert isinstance(by_, DataArray | DataTree)
-        adata = _aggregate_image_by_labels(values=values_, by=by_, agg_func=agg_func, **kwargs)
+        adata = _aggregate_image_by_labels(values=values_, by=by_, agg_func=agg_func, value_key=value_key, **kwargs)
 
     if adata is None:
         raise NotImplementedError(f"Cannot aggregate {values_type} by {by_type}")
@@ -260,6 +263,7 @@ def _aggregate_image_by_labels(
     values: DataArray | DataTree,
     by: DataArray | DataTree,
     agg_func: str | list[str] = "mean",
+    value_key: str | list[str] | None = None,
     **kwargs: Any,
 ) -> ad.AnnData:
     """
@@ -274,6 +278,8 @@ def _aggregate_image_by_labels(
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count"
         from :func:`xrspatial.zonal_stats`.
+    value_key
+        Image channel name(s) to aggregate, in the requested order. If `None`, aggregate all channels.
     kwargs
         Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
 
@@ -298,6 +304,20 @@ def _aggregate_image_by_labels(
         values_variable = next(iter(values_scale0.values()))
         assert isinstance(values_variable, DataArray)
         values = values_variable
+
+    if value_key is not None:
+        channels = [value_key] if isinstance(value_key, str) else value_key
+        if not channels:
+            raise ValueError("`value_key` must not be empty when selecting image channels.")
+        if len(channels) != len(set(channels)):
+            raise ValueError("`value_key` must not contain duplicate image channels.")
+        available_channels = values.get_index("c")
+        if not available_channels.is_unique:
+            raise ValueError("Image channel names must be unique when selecting with `value_key`.")
+        missing = [channel for channel in channels if channel not in available_channels]
+        if missing:
+            raise ValueError(f"Image channels {missing} specified by `value_key` were not found.")
+        values = values.sel(c=channels)
 
     agg_func = [agg_func] if isinstance(agg_func, str) else agg_func
     outs = []
