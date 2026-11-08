@@ -313,6 +313,14 @@ def _(data: DataTree) -> list[Any]:
     return list(next(iter(channels)))
 
 
+def _polygon_to_2d(polygon: Polygon) -> Polygon:
+    """Drop the z coordinate of a polygon, keeping its interior rings (holes)."""
+    return Polygon(
+        np.array(polygon.exterior.coords.xy).T,
+        [np.array(interior.coords.xy).T for interior in polygon.interiors],
+    )
+
+
 def force_2d(gdf: GeoDataFrame) -> None:
     """
     Force the geometries of a shapes object GeoDataFrame to be 2D by modifying the geometries in place.
@@ -339,9 +347,9 @@ def force_2d(gdf: GeoDataFrame) -> None:
             if isinstance(shape, Point):
                 new_shape = Point(shape.x, shape.y)
             elif isinstance(shape, Polygon):
-                new_shape = Polygon(np.array(shape.exterior.coords.xy).T)
+                new_shape = _polygon_to_2d(shape)
             elif isinstance(shape, MultiPolygon):
-                new_shape = MultiPolygon([Polygon(np.array(p.exterior.coords.xy).T) for p in shape.geoms])
+                new_shape = MultiPolygon([_polygon_to_2d(p) for p in shape.geoms])
             else:
                 raise ValueError(f"Unsupported geometry type: {type(shape)}")
             new_shapes.append(new_shape)
