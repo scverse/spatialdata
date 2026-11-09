@@ -36,7 +36,7 @@ A spatial query subsets the data based on the location of the spatial elements. 
 
 ## SpatialData Zarr format
 
-An extension of the OME-Zarr format used to represent SpatialData objects on disk. Our aim is to converge the SpatialData Zarr format with the OME-Zarr format, by adapting to future versions of the NGFF specification and by contributing to the development of new features in NGFF. The OME-Zarr format was developed for bioimaging data and therefore and extension of the OME-Zarr format is necessary to accommodate spatial omics data.
+An extension of the OME-Zarr format used to represent SpatialData objects on disk, defined by the [SpatialData storage format specification](https://spatialdata-spec.scverse.org/storage-format.html). Our aim is to converge the SpatialData Zarr format with the OME-Zarr format, by adapting to future versions of the NGFF specification and by contributing to the development of new features in NGFF. The OME-Zarr format was developed for bioimaging data and therefore and extension of the OME-Zarr format is necessary to accommodate spatial omics data.
 
 ## SpatialElements
 
