@@ -108,4 +108,21 @@ html_theme_options = {"show_toc_level": 4}
 nitpick_ignore = [
     # Add an entry here when a missing link is outside our control.
     ("py:class", "igraph.Graph"),
+    # upstream packages without an intersphinx inventory
+    ("py:class", "multiscale_spatial_image.to_multiscale.to_multiscale.Methods"),
+    # not in datashader's API docs (only the concrete reductions are)
+    ("py:class", "datashader.reductions.Reduction"),
+    # private classes that appear in public signatures and base classes, but are not part of the API docs
+    ("py:class", "spatialdata._core._elements.Images"),
+    ("py:class", "spatialdata._core._elements.Labels"),
+    ("py:class", "spatialdata._core._elements.Points"),
+    ("py:class", "spatialdata._core._elements.Shapes"),
+    ("py:class", "spatialdata._core._elements.Tables"),
+    ("py:class", "spatialdata._core.spatialdata.QueryManager"),
+    ("py:class", "spatialdata._io.format.CoordinateMixinV01"),
+    ("py:class", "spatialdata._io.format.PointsAttrsMixinV01"),
+    ("py:attr", "spatialdata._io._utils.BadFileHandleMethod.ERROR"),
+    ("py:attr", "spatialdata._io._utils.BadFileHandleMethod.WARN"),
+    ("py:class", "spatialdata.models.models.RasterSchema"),
+    ("py:type", "spatialdata._types.JSONValue"),
 ]
