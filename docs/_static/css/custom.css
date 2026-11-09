@@ -15,3 +15,17 @@
 div.cell_output table.dataframe {
     font-size: 0.8em;
 }
+
+/* Pages superseded by the SpatialData specifications (design document, interoperability): dim their
+   sidebar entries (sidebar links already use the muted text color, so lower the opacity on top of it). */
+nav.bd-links li:not(.current) > a[href$="design_doc.html"],
+nav.bd-links li:not(.current) > a[href$="interoperability.html"] {
+    opacity: 0.65;
+}
+
+nav.bd-links li > a[href$="design_doc.html"]:hover,
+nav.bd-links li > a[href$="design_doc.html"]:focus-visible,
+nav.bd-links li > a[href$="interoperability.html"]:hover,
+nav.bd-links li > a[href$="interoperability.html"]:focus-visible {
+    opacity: 1;
+}
