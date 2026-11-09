@@ -87,20 +87,14 @@ benchmark = [
 doc = [
   "ipykernel",
   "ipython>=8.6",
-  "myst-nb>=1.1",
   "pandas",
-  "scanpydoc",
+  "scverse-doc[full]>=0.4",
   "scverse-misc[sphinx]>=0.1.2",
   "sphinx>=8.1",
   "sphinx-autobuild",
   "sphinx-autodoc-typehints",
-  "sphinx-book-theme>=1",
-  "sphinx-copybutton",
-  "sphinx-design",
   "sphinx-pytest",
   "sphinxcontrib-bibtex>=1",
-  "sphinxcontrib-katex",
-  "sphinxext-opengraph",
 ]
 typecheck = [
   "mypy",
