@@ -67,7 +67,6 @@ exclude_patterns = [
     "tutorials/notebooks/notebooks/examples/stereoseq_data/*",
 ]
 
-nitpicky = False  # TODO: solve upstream, then set back to True to warn about broken links.
 # no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
 
 ogp_image = "_static/img/spatialdata_horizontal.png"
