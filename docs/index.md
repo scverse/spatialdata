@@ -4,11 +4,13 @@
   :alt: SpatialData banner
 ```
 
-# An open and universal framework for processing spatial omics data.
+# An open framework for spatial omics data
 
-SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets. It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
+SpatialData is an open framework for working with uni- and multi-modal spatial omics datasets. It defines a common data model and storage format, supported by software libraries for accessing, manipulating and analyzing spatial omics data in languages including Python, R and JavaScript.
 
-This page provides documentation on how to install, use, and extend the core `spatialdata` library. See the links below to learn more about other packages in the SpatialData ecosystem.
+This site documents how to install, use and extend the Python `spatialdata` library. For language-independent definitions of SpatialData datasets and their on-disk representation, see the [SpatialData specifications](https://spatialdata-spec.scverse.org/).
+
+See the links below to learn more about other packages in the SpatialData ecosystem.
 
 - `spatialdata-io`: load data from common spatial omics technologies into `spatialdata` ([repository][spatialdata-io-repo], [documentation][spatialdata-io-docs]).
 - `spatialdata-plot`: Static plotting library for `spatialdata` ([repository][spatialdata-plot-repo], [documentation][spatialdata-plot-docs]).
@@ -89,7 +91,7 @@ If you like scverse® and want to support our mission, please consider making a 
     :link: design_doc
     :link-type: doc
 
-    Learn about the design approach behind ``spatialdata``.
+    The original design approach behind ``spatialdata`` (historical; superseded by the specifications).
 
 .. card:: Contributing
     :link: contributing
@@ -109,6 +111,7 @@ api.md
 tutorials/notebooks/notebooks.md
 tutorials/notebooks/datasets/README.md
 glossary.md
+SpatialData specifications <https://spatialdata-spec.scverse.org/>
 design_doc.md
 interoperability.md
 contributing.md
@@ -123,6 +126,6 @@ references.md
 [spatialdata-plot-repo]: https://github.com/scverse/spatialdata-plot
 [napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/stable/notebooks/spatialdata.html
 [spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/stable/
-[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/api.html
+[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/
 [spatialdata-r-repo]: https://github.com/HelenaLC/spatialdataR
 [spatialdata-js-repo]: https://github.com/Taylor-CCB-Group/SpatialData.js
