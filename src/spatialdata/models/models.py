@@ -151,7 +151,7 @@ class RasterSchema:
             the value is the transformation to apply. By default, a single `Identity` transformation mapping to the
             `"global"` coordinate system is applied.
         scale_factors
-            Scale factors to apply to construct a multiscale image (:class:`datatree.DataTree`).
+            Scale factors to apply to construct a multiscale image (:class:`xarray.DataTree`).
             If `None`, a :class:`xarray.DataArray` is returned instead.
             Importantly, each scale factor is relative to the previous scale factor. For example, if the scale factors
             are `[2, 2, 2]`, the returned multiscale image will have 4 scales. The original image and then the 2x, 4x
@@ -178,13 +178,13 @@ class RasterSchema:
         chunks
             Chunks to use for dask array.
         kwargs
-            Additional arguments for :func:`to_spatial_image`. In particular the `c_coords` kwargs argument (an
-            iterable) can be used to set the channel coordinates for image data. `c_coords` is not available for labels
-            data as labels do not have channels.
+            Additional arguments for ``spatial_image.to_spatial_image()``. In particular the `c_coords` kwargs argument
+            (an iterable) can be used to set the channel coordinates for image data. `c_coords` is not available for
+            labels data as labels do not have channels.
 
         Returns
         -------
-        :class:`xarray.DataArray` or :class:`datatree.DataTree`
+        :class:`xarray.DataArray` or :class:`xarray.DataTree`
 
         Notes
         -----
@@ -194,8 +194,8 @@ class RasterSchema:
         the `c_coords` argument to specify the channel coordinates as `["r", "g", "b"]` or `["r", "g", "b", "a"]`.
 
         You can also pass the `rgb` argument to `kwargs` to automatically set the `c_coords` to `["r", "g", "b"]`.
-        Please refer to :func:`to_spatial_image` for more information. Note: if you set `rgb=None` in `kwargs`, 3-4
-        channel images will be interpreted automatically as RGB(A) images.
+        Please refer to ``spatial_image.to_spatial_image()`` for more information. Note: if you set `rgb=None` in
+        `kwargs`, 3-4 channel images will be interpreted automatically as RGB(A) images.
 
         **Setting axes / dims** In case of the data being a numpy or dask array, there are no named axes yet. In this
         case, we first try to use the dimensions specified by the user in the `dims` argument of `.parse`. These
@@ -707,7 +707,7 @@ class PointsModel:
         Parameters
         ----------
         data
-            :class:`dask.dataframe.core.DataFrame` to validate.
+            :class:`dask.dataframe.DataFrame` to validate.
 
         Returns
         -------
@@ -782,7 +782,7 @@ class PointsModel:
 
         Returns
         -------
-        :class:`dask.dataframe.core.DataFrame`
+        :class:`dask.dataframe.DataFrame`
 
         Notes
         -----

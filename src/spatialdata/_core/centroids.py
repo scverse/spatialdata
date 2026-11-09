@@ -49,8 +49,8 @@ def get_centroids(
 
     Notes
     -----
-    For :class:`~shapely.Multipolygon`s, the centroids are the average of the centroids of the polygons that constitute
-    each :class:`~shapely.Multipolygon`.
+    For :class:`~shapely.MultiPolygon` geometries, the centroids are the average of the centroids of the polygons that
+    constitute each :class:`~shapely.MultiPolygon`.
     """
     raise ValueError(f"The object type {type(e)} is not supported.")
 

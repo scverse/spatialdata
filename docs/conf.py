@@ -47,10 +47,32 @@ always_use_bars_union = True  # use `|` instead of `Union` in types even when bu
 intersphinx_mapping = intersphinx() | {
     "annsel": ("https://annsel.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
-    "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
+    "datashader": ("https://datashader.org/", None),
     "geopandas": ("https://geopandas.org/en/stable/", None),
+    "ome_zarr": ("https://ome-zarr.readthedocs.io/en/stable/", None),
+    "pooch": ("https://www.fatiando.org/pooch/latest/", None),
     "shapely": ("https://shapely.readthedocs.io/en/stable", None),
+    "torch": ("https://docs.pytorch.org/docs/stable/", None),
+    "upath": ("https://universal-pathlib.readthedocs.io/en/latest/", None),
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
+    "xrspatial": ("https://xarray-spatial.readthedocs.io/en/stable/", None),
+    "zarr": ("https://zarr.readthedocs.io/en/stable/", None),
+}
+
+xref_overrides = {
+    # private paths of public objects, as they appear in type annotations
+    "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
+    "zarr.storage._fsspec.FsspecStore": "zarr.storage.FsspecStore",
+    "zarr.storage._local.LocalStore": "zarr.storage.LocalStore",
+    # wrong names in the tutorials notebooks (scverse/spatialdata-tutorials); remove once fixed there
+    "spatialdata.ops.get_transformation_between_coordinate_systems": (
+        "py:func",
+        "spatialdata.transformations.get_transformation_between_coordinate_systems",
+    ),
+    "spatialdata.transformations.Transformation.to_affine_matrix": (
+        "py:meth",
+        "spatialdata.transformations.BaseTransformation.to_affine_matrix",
+    ),
 }
 
 exclude_patterns = [

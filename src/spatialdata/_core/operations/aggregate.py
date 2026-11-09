@@ -73,7 +73,7 @@ def aggregate(
         Defaults to `FEATURE_KEY` for points (if present).
     agg_func
         Aggregation function to apply over point values, e.g. `"mean"`, `"sum"`, `"count"`.
-        Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
+        Passed to :meth:`pandas.api.typing.DataFrameGroupBy.agg` or to :func:`xrspatial.zonal.stats`
         according to the type of `values`.
     target_coordinate_system
         Coordinate system to transform to before aggregating.
@@ -108,7 +108,7 @@ def aggregate(
         Resolution parameter to pass to the of the .buffer() method to convert circles to polygons. A higher value
         results in a more accurate representation of the circle, but also in a more complex polygon and computation.
     kwargs
-        Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
+        Additional keyword arguments to pass to :func:`xrspatial.zonal.stats`.
 
     Returns
     -------
@@ -273,9 +273,9 @@ def _aggregate_image_by_labels(
         Regions to aggregate by.
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count"
-        from :func:`xrspatial.zonal_stats`.
+        from :func:`xrspatial.zonal.stats`.
     kwargs
-        Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
+        Additional keyword arguments to pass to :func:`xrspatial.zonal.stats`.
 
     Returns
     -------
