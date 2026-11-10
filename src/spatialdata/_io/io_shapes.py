@@ -104,7 +104,7 @@ def write_shapes(
         The format of the shapes element used to store it.
     geometry_encoding
         Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
-        details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+        details. If None, uses the value from ``spatialdata.settings.shapes_geometry_encoding``.
     """
     if element_format.zarr_format == 2:
         warnings.warn(
