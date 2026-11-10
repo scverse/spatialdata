@@ -8,13 +8,7 @@
 
 SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets. It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
 
-The Python `spatialdata` library lets you:
-
-- hold images, segmentation masks (labels), points (e.g. transcript locations), shapes (e.g. cell boundaries or Visium spots) and annotation tables (e.g. gene expression per cell) together in one {class}`~spatialdata.SpatialData` object;
-- align elements and whole datasets through coordinate transformations and shared coordinate systems;
-- query and crop data spatially, and aggregate measurements across elements, e.g. transcript counts or image intensities per cell;
-- read and write the SpatialData Zarr format, with lazy access to large data through dask;
-- exchange data with AnnData, scanpy, squidpy, GeoPandas, xarray and other tools ({doc}`interoperability`).
+The Python `spatialdata` library holds images, segmentation masks, points, shapes and annotation tables together in one {class}`~spatialdata.SpatialData` object, aligned through shared coordinate systems. It lets you query, crop and aggregate across these elements, read and write the SpatialData Zarr format with lazy access to large data, and exchange data with AnnData, scanpy, squidpy and other tools ({doc}`interoperability`).
 
 This site documents how to install, use and extend it. See the links below to learn more about the specifications and other packages in the SpatialData ecosystem.
 
