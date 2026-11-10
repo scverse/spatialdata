@@ -21,44 +21,44 @@ The goals define _what_ SpatialData will be able to do (as opposed to _how_). Go
 **1. Load data from modern spatial multiomics experiments**
 
 - P0. Data can be loaded from the OME-NGFF and saved to OME-NGFF.
-    - [x] multiscale images and labels, 2d and 3d
+  - [x] multiscale images and labels, 2d and 3d
     - [x] point clouds
     - [x] polygon-shaped regions of interest
     - [x] circle-shaped regions of interest
     - [x] tables
     - [x] graphs
 - P0. Data can be loaded lazily.
-    - [x] Images
+  - [x] Images
     - [x] Points
     - [ ] (P1) Shapes https://github.com/scverse/spatialdata/issues/359
 - P1.
-    - [x] Loaded data can be iterated over to generate tiles for multiprocessing and deep learning.
+  - [x] Loaded data can be iterated over to generate tiles for multiprocessing and deep learning.
 
 **2. Align different datasets via affine transformations**
 
 - [x] P0. Transformations can be loaded from and written to OME-NGFF.
 - [x] P0. Identity transformation
 - [x] P0. Affine transformations.
-    - [x] scale
+  - [x] scale
     - [x] translation
     - [x] rotation
 - [x] P0. Support definition of common coordinate systems across datasets (i.e., extrinsic coordinate systems).
 - [x] P0. Sequence of transformation.
 - Utils
-    - [x] P0 permute axis
+  - [x] P0 permute axis
 - [ ] P2. non-linear
-    - [ ] coordinates and displacements
+  - [ ] coordinates and displacements
 
 **3. Performant spatial query of multimodal spatial datasets**
 
 - [x] P0. Support querying a multimodal dataset for all data in a specified region (at the cost of creating spatial index every time).
-    - [x] Arbitrary bounding boxes
+  - [x] Arbitrary bounding boxes
     - [x] Polygons or regions of interest (ball, shape)
 
 **4. Aggregate observations by regions of interest**
 
 - [x] P0. Support aggregation functions with standard summary statistics
-    - [x] mean
+  - [x] mean
     - [x] sum
     - [x] count
 - [x] P1. User-defined aggregation function
@@ -77,7 +77,7 @@ We strongly encourage collaborations and community supports in all of these proj
 - [x] P0. _Raw data IO_: we are implementing readers for raw data of common spatial omics technologies @ [spatialdata-io][].
 - [x] P1. _Static plotting_: a static plotting library for _SpatialData_ @ [spatialdata-plot][].
 - [ ] P2. _Image analysis_: Library to perform image analysis, wrapping common analysis library in python such as skimage.
-      Once ready, we will deprecate such functionalities in [squidpy][].
+  Once ready, we will deprecate such functionalities in [squidpy][].
 - [ ] P2. _Spatial and graph analysis_: [squidpy][] will be refactor to accept SpatialData objects as input.
 - [ ] P2. _Database_: Some form of update on released datasets with updated specs as development progresses. A temporary sandbox where we store downloader and converter scripts for representative datasets is available @ [spatialdata-sandbox][].
 
@@ -113,7 +113,7 @@ We model a spatial dataset as a composition of distinct elements, of any type. T
 
 - Pixel-based _Images_, 2D or 3D
 - Regions of interest
-    - _Shapes_ (circles, polygons, multipolygons), 2D
+  - _Shapes_ (circles, polygons, multipolygons), 2D
     - Pixel masks (such as segmentation masks), aka _Labels_, 2D, or 3D
 - Points (such as transcript locations, point clouds, ...), 2D or 3D
 - _Tables_ of annotations
@@ -236,7 +236,7 @@ Current implementation represent points as a Parquet file and a [`dask.dataframe
 The requirements are the following:
 
 - The dataframe MUST contains axis name to represent the axes.
-    - If it's 2D, the axes should be `["x","y"]`.
+  - If it's 2D, the axes should be `["x","y"]`.
     - If it's 3D, the axes should be `["x","y","z"]`.
 - It MUST also contain coordinate transformations in `dask.dataframe.DataFrame().attrs["transform"]`. This information will be saved on-disk in JSON under a `"coordinateTransformations"` key in a `.zattrs` file (Zarr v2), or `zarr.json` file (Zarr v3), in a Zarr Group containing the Element. The specific way this information is stored in disk is described by the NGFF specification (the implementaiton of the latest version of the specs is ongoing). Precisely, the NGFF specification dscribes coordinate transformations for images, but we will reuse it also for Points and Shapes.
 
@@ -244,7 +244,7 @@ Additional information is stored in `dask.dataframe.DataFrame().attrs["spatialda
 
 - It MAY also contains `"feature_key"`, that is, the column name of the dataframe that refers to the features. This `Series` MAY be of type `pandas.Categorical`.
 - It MAY contains additional information in `dask.dataframe.DataFrame().attrs["spatialdata_attrs"]`, specifically:
-    - `"instance_key"`: the column name of the dataframe where unique instance ids that this point refers to are stored, if available.
+  - `"instance_key"`: the column name of the dataframe where unique instance ids that this point refers to are stored, if available.
 
 #### Table (table of annotations for regions)
 
@@ -273,7 +273,7 @@ In `spatialdata-io` we use a consistent naming scheme for the `region_key` and `
 
 - Image `type: Image`
 - Regions `type: Labels | Shapes`
-    - Labels `type: Labels`
+  - Labels `type: Labels`
     - Shapes `type: Shapes`
 - Points `type: Points`
 - Tables `type: Table`
@@ -364,9 +364,9 @@ This section describes a more detailed timeline of future developments, includin
 #### 2024
 
 - [x] Simplify data models
-    - [x] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
+  - [x] Use `xarray.DataArray` instead of the subclass `SpatialImage` and `xarray.DataTree` instad of the subclass `MultiscaleSpatialImage`
 - [x] More performant disk storage
-    - [x] Use `geoparquet` for shapes and points
+  - [x] Use `geoparquet` for shapes and points
 - [x] Start working on multiple tables
 - [x] Start working on the transformations refactoring
 - [x] Finalize multiple tables support
