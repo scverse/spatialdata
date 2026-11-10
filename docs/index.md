@@ -27,8 +27,8 @@ Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for cit
 ```
 
 :::{note}
-When reading Parquet, dask fuses partitions as part of its "tune" optimization, which can change `npartitions` and break user code that operates on multi-partition `Points` dataframes ([#1064](https://github.com/scverse/spatialdata/issues/1064), [dask#12193](https://github.com/dask/dask/issues/12193)).
-Upstream, dask made this optimization optional ([dask#12194](https://github.com/dask/dask/pull/12194)) rather than changing it. `spatialdata` disables it internally; for your own operations, use `spatialdata.disable_dask_tune_optimization`:
+With dask's partition fusion enabled (the default), user code that operates on multi-partition `Points` dataframes can fail as described in [#1064](https://github.com/scverse/spatialdata/issues/1064) and [dask#12193](https://github.com/dask/dask/issues/12193).
+`spatialdata` avoids this internally; for your own operations, wrap them in `spatialdata.disable_dask_tune_optimization`:
 
 ```python
 import contextlib
