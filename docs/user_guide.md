@@ -32,17 +32,15 @@ See [reading SpatialData Zarr data](https://spatialdata.scverse.org/en/stable/tu
 
 :::
 
-:::::{dropdown} How do I create a SpatialData object?
+::::{dropdown} How do I create a SpatialData object?
 
-
-::::{tab-set}
-:::{tab-item} If you have an existing Squidpy object.
+:::{dropdown} If you have an existing Squidpy object.
 
 Please have a look at the tutorial on [creating a SpatialData object from scratch](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks%2Fexamples%2Fsdata_from_scratch.ipynb).
 
 :::
 
-:::{tab-item} If you want to start from raw files
+:::{dropdown} If you want to start from raw files
 
 If you don’t have a SpatialData object or corresponding zarr file, you will have to create a SpatialData object to make use of the SpatialData framework.
 You can create a SpatialData object directly from your raw files (e.g. CSVs, cell-gene matrix/cell-proteins matrix, images etc.) by using the [spatialdata-io](https://github.com/scverse/spatialdata-io) library that has reader functions for most spatial omics techniques. See the [technologies supported by spatialdata-io](https://spatialdata.scverse.org/projects/io/en/latest/).
@@ -62,15 +60,13 @@ If there is no reader implemented for your data type, see [constructing a Spatia
 
 :::
 
-::::
-
-:::::
-
 :::{dropdown} If you want to play around with existing data.
 
 Browse our [demo datasets](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) (already available as .zarr), generated with different spatial omics technologies.
 
 :::
+
+::::
 
 
 ## Preparing your data
@@ -88,13 +84,12 @@ Yes → Check out our [Transformation/coordinate system tutorial](https://spatia
 
 :::
 
-:::{dropdown} How do I annotate my data?
+::::{dropdown} How do I annotate my data?
 
 Annotation can have a lot of meanings. You might want to annotate specific regions in your tissue as tumor, add more details about your cell shapes, group together specific transcripts, include celltype annotations or cell sizes for your cells etc.
 
-:::
-
 :::{dropdown} How can I interactively annotate regions in my data?
+:name: annotate-regions-interactively
 
 This is possible within the SpatialData framework, making use of napari, as explained in the [napari ROI annotation tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html).
 
@@ -120,17 +115,17 @@ For more technical details on how to create a table from scratch to annotate you
 
 :::
 
+::::
 
-:::{dropdown} How do I analyze a spatial subset of my data?
-
+::::{dropdown} How do I analyze a spatial subset of my data?
 
 Eventually, you might want to know which cells are present in which region (e.g. 'Are immune cells infiltrating the tumor core?').
 Therefore, subsampling your data based on spatial coordinates can be helpful. Other examples would be for instance if you want to target your analysis to a specific subregion of the tissue (e.g. tumor core), if you have multiple tissues on one slide, if you want to start small, or if you want to only focus on regions with good tissue quality.
-:::
 
 :::{dropdown} I want to annotate a specific region myself.
 
-Please see the previous section ('How do I annotate my data?') and then specifically the section about interactively annotating regions. This will guide you through the process of extracting coordinates, which will be used for spatially subsetting the data. Next, see below.
+See {ref}`interactively annotating regions <annotate-regions-interactively>` under 'How do I annotate my data?' above. This will guide you through the process of extracting coordinates, which will be used for spatially subsetting the data. Next, see 'I know the coordinates of the region I want to subsample.' below.
+
 :::
 
 :::{dropdown} I know the coordinates of the region I want to subsample.
@@ -138,6 +133,8 @@ Please see the previous section ('How do I annotate my data?') and then specific
 You will need to perform a spatial query, which filters the data based on spatial coordinates. See the [spatial query tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/spatial_query.html).
 
 :::
+
+::::
 
 :::{dropdown} How do I summarize/aggregate my data?
 
