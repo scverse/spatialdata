@@ -1,7 +1,7 @@
 # Quickstart
 
 A {class}`~spatialdata.SpatialData` object holds the images, labels, points, shapes and tables of a dataset, aligned through shared coordinate systems.
-The example below builds one from scratch out of an image, a segmentation mask and a gene expression table, then crops it, measures image intensity per cell, and writes it to and reads it back from Zarr.
+The example below builds one from scratch out of an image, a segmentation mask and a gene expression table, then crops it to a region of interest (ROI), measures image intensity per cell in the ROI, and writes the ROI to and reads it back from Zarr.
 
 ```python
 import anndata as ad
@@ -35,8 +35,8 @@ sdata = sd.SpatialData(
     tables={"table": TableModel.parse(expression, region="cells", region_key="region", instance_key="cell_id")},
 )
 
-# Crop all elements to a region; the table keeps only the cells inside it.
-crop = sd.bounding_box_query(
+# Crop all elements to a region of interest; the table keeps only the cells inside it.
+sdata_ROI = sd.bounding_box_query(
     sdata,
     axes=("x", "y"),
     min_coordinate=[0, 0],
@@ -44,11 +44,11 @@ crop = sd.bounding_box_query(
     target_coordinate_system="global",
 )
 
-# Mean intensity of each image channel per cell.
-intensities = sd.aggregate(values=sdata["image"], by=sdata["cells"], agg_func="mean")
+# Mean intensity of each image channel per cell in the ROI.
+intensities = sd.aggregate(values=sdata_ROI["image"], by=sdata_ROI["cells"], agg_func="mean")
 
-sdata.write("my_dataset.zarr")
-sdata = sd.read_zarr("my_dataset.zarr")
+sdata_ROI.write("my_roi.zarr")
+sdata_ROI = sd.read_zarr("my_roi.zarr")
 ```
 
 To load data from a specific technology, see [spatialdata-io](https://spatialdata.scverse.org/projects/io/en/stable/), and to plot it, [spatialdata-plot](https://spatialdata.scverse.org/projects/plot/en/stable/).
