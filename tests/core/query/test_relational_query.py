@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from geopandas import GeoDataFrame
+from shapely.geometry import Point
 
 from spatialdata import SpatialData, get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
@@ -18,7 +20,7 @@ from spatialdata._core.query.relational_query import (
     get_element_annotators,
     join_spatialelement_table,
 )
-from spatialdata.models.models import TableModel
+from spatialdata.models import PointsModel, ShapesModel, TableModel
 from spatialdata.testing import assert_anndata_equal, assert_geodataframe_equal
 
 
@@ -1468,3 +1470,35 @@ def test_filter_by_table_query_complex_combination(complex_sdata):
         assert ("circles", idx) in table_instance_ids
     for idx in result["poly"].index:
         assert ("poly", idx) in table_instance_ids
+
+
+@pytest.mark.parametrize("element_type", ["shapes", "points"])
+@pytest.mark.parametrize("how", ["left", "left_exclusive", "inner", "right", "right_exclusive"])
+@pytest.mark.parametrize("match_rows", ["no", "left", "right"])
+def test_join_element_and_table_without_shared_instances(element_type: str, how: str, match_rows: str) -> None:
+    # The element has instances 0 and 1, the table annotates instances 10 and 11 of it: nothing matches.
+    if element_type == "shapes":
+        element = ShapesModel.parse(
+            GeoDataFrame({"geometry": [Point(0, 0), Point(1, 1)], "radius": [1.0, 1.0]}, index=[0, 1])
+        )
+    else:
+        element = PointsModel.parse(pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 1.0]}))
+    obs = pd.DataFrame({"region": pd.Categorical(["element"] * 2), "instance_id": [10, 11]})
+    table = TableModel.parse(
+        AnnData(X=np.zeros((2, 1)), obs=obs), region="element", region_key="region", instance_key="instance_id"
+    )
+    sdata = SpatialData(**{element_type: {"element": element}}, tables={"table": table})
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # match_rows not supported for some joins
+        elements, joined = join_spatialelement_table(
+            sdata=sdata, spatial_element_names="element", table_name="table", how=how, match_rows=match_rows
+        )
+    n_element_rows = None if elements["element"] is None else len(elements["element"])
+
+    expected_element_rows = {"left": 2, "left_exclusive": 2, "inner": 0, "right": 0, "right_exclusive": None}[how]
+    expected_table_rows = {"left": 0, "left_exclusive": None, "inner": 0, "right": 2, "right_exclusive": 2}[how]
+    assert n_element_rows == expected_element_rows
+    assert (None if joined is None else joined.n_obs) == expected_table_rows
+    if joined is not None:
+        TableModel.validate(joined)
