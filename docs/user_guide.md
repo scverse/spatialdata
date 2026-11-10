@@ -19,7 +19,7 @@ pip install spatialdata
 ```
 
 This command installs barebone SpatialData.
-For a more detailed description of the installation process including all bells and whistles, see [here](https://spatialdata.scverse.org/en/stable/installation.html).
+For a more detailed description of the installation process including all bells and whistles, see the [installation guide](https://spatialdata.scverse.org/en/stable/installation.html).
 
 :::
 
@@ -28,7 +28,7 @@ For a more detailed description of the installation process including all bells 
 sdata = sd.read_zarr("your-dataset.zarr")
 ```
 
-Please see [this section](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reading-spatialdata-zarr-data) that gives more context about how to read in a new zarr file. For a more detailed tutorial that also explains how to explore the different element types within the SpatialData object, see [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/intro.html).
+See [reading SpatialData Zarr data](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reading-spatialdata-zarr-data) for more context about how to read in a new zarr file. The [introduction to the SpatialData object](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/intro.html) also explains how to explore the different element types within the SpatialData object.
 
 :::
 
@@ -38,14 +38,14 @@ Please see [this section](https://spatialdata.scverse.org/en/stable/tutorials/no
 ::::{tab-set}
 :::{tab-item} If you have an existing Squidpy object.
 
-Please have a look at [this tutorial](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks%2Fexamples%2Fsdata_from_scratch.ipynb).
+Please have a look at the tutorial on [creating a SpatialData object from scratch](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks%2Fexamples%2Fsdata_from_scratch.ipynb).
 
 :::
 
 :::{tab-item} If you want to start from raw files
 
 If you don’t have a SpatialData object or corresponding zarr file, you will have to create a SpatialData object to make use of the SpatialData framework.
-You can create a SpatialData object directly from your raw files (e.g. CSVs, cell-gene matrix/cell-proteins matrix, images etc.) by using the [spatialdata-io](https://github.com/scverse/spatialdata-io) library that has reader functions for most spatial omics techniques. See [here](https://spatialdata.scverse.org/projects/io/en/latest/) for a list of currently supported technologies.
+You can create a SpatialData object directly from your raw files (e.g. CSVs, cell-gene matrix/cell-proteins matrix, images etc.) by using the [spatialdata-io](https://github.com/scverse/spatialdata-io) library that has reader functions for most spatial omics techniques. See the [technologies supported by spatialdata-io](https://spatialdata.scverse.org/projects/io/en/latest/).
 
 For example, if you have data coming from a MERSCOPE®, just use:
 
@@ -55,9 +55,9 @@ sdata = spatialdata_io.merscope(
     )
 ```
 
-Please also see [this section](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reader-functions-from-spatialdata-io) for a more technical tutorial with more details on how to create a SpatialData object from raw data using io-readers.
+For more technical details on creating a SpatialData object from raw data, see [reader functions from spatialdata-io](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reader-functions-from-spatialdata-io).
 
-If there is no reader implemented for your data type, please refer to [this section](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#construct-a-spatialdata-object-from-scratch) to learn about building SpatialData objects from scratch.
+If there is no reader implemented for your data type, see [constructing a SpatialData object from scratch](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#construct-a-spatialdata-object-from-scratch).
 
 
 :::
@@ -68,7 +68,7 @@ If there is no reader implemented for your data type, please refer to [this sect
 
 :::{dropdown} If you want to play around with existing data.
 
-Please see [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) for a repository of demo datasets (already available as .zarr) generated with different spatial omics technologies.
+Browse our [demo datasets](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) (already available as .zarr), generated with different spatial omics technologies.
 
 :::
 
@@ -96,7 +96,7 @@ Annotation can have a lot of meanings. You might want to annotate specific regio
 
 :::{dropdown} How can I interactively annotate regions in my data?
 
-This is possible within the SpatialData framework, making use of napari, like explained [in this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html).
+This is possible within the SpatialData framework, making use of napari, as explained in the [napari ROI annotation tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html).
 
 :::
 
@@ -109,14 +109,14 @@ from spatialdata.models import ShapesModel
 sdata['very_interesting_regions']=ShapesModel.parse('path_to_geojson')
 ```
 
-For more details, including information on how to add annotations for these regions, please have a look at [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html).
+For more details, including information on how to add annotations for these regions, see the [tables tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html).
 
 :::
 
 :::{dropdown} I have cells in my dataset, how do I annotate them? (usage of AnnData)
 
 One of the most obvious things to do for spatial omics data is to annotate cells using the [AnnData](https://anndata.readthedocs.io/en/stable/) format (called tables in SpatialData). These tables can contain count/intensity data, all types of annotations, and make it possible to make use of [scanpy](https://scanpy.readthedocs.io/en/stable/) functionality (normalization/clustering/DE calculation).
-If you want more technical details on how to create a table from scratch to annotate your shapes/labels/points, you can have a look [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables).
+For more technical details on how to create a table from scratch to annotate your shapes/labels/points, see [tables in the SpatialData models tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables).
 
 :::
 
@@ -135,7 +135,7 @@ Please see the previous section ('How do I annotate my data?') and then specific
 
 :::{dropdown} I know the coordinates of the region I want to subsample.
 
-You will need to perform a spatial query, which filters the data based on spatial coordinates. Please see [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/spatial_query.html).
+You will need to perform a spatial query, which filters the data based on spatial coordinates. See the [spatial query tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/spatial_query.html).
 
 :::
 
@@ -177,15 +177,15 @@ You can also chain different plots. For example, if you want to plot regions of 
 
 For more details and examples on visualizing technology-specific datasets, explore our [technology-specific tutorials](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#technology-specific), which includes examples for various technologies (e.g., Visium-HD, Xenium, etc.). Keep in mind that the visualization methods demonstrated in these tutorials are broadly applicable and not limited to a specific technology.
 
-If you run into scalability issues with your plotting, or everything feels very slow, [this tutorial](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/speed_up_illustration.html) might help you out!
+If you run into scalability issues with your plotting, or everything feels very slow, see [speeding up plotting](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/speed_up_illustration.html).
 
 :::
 
 :::{dropdown} How can I use SpatialData to analyze my data?
 
-SpatialData is **not** intended to analyze data itself, but to provide data infrastructure to efficiently manipulate spatial omics data. If you want to learn more about analyzing spatial omics data, please browse [these other tutorials](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#external-tutorials) for a demo of how various analysis packages work with SpatialData.
+SpatialData is **not** intended to analyze data itself, but to provide data infrastructure to efficiently manipulate spatial omics data. If you want to learn more about analyzing spatial omics data, please browse the [external tutorials](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#external-tutorials) for a demo of how various analysis packages work with SpatialData.
 
-If you want to see how SpatialData and Squidpy can interact, please have a look [here](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/squidpy_integration.html).
+To see how SpatialData and Squidpy interact, see the [Squidpy integration tutorial](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/squidpy_integration.html).
 
 :::
 
@@ -197,9 +197,9 @@ If you want to see how SpatialData and Squidpy can interact, please have a look 
 
 Sure, no problem! There is much more to learn about SpatialData.
 
-You want to learn how to combine SpatialData and deep learning? We got you covered [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/densenet.html).
+You want to learn how to combine SpatialData and deep learning? See the [deep learning tutorial (DenseNet)](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/densenet.html).
 
-If you want to create a labels layer from your shapes (rasterize), a shapes layer from your labels (vectorize), or convert your spot-based data to a labels layer, [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/labels_shapes_interchangeability.html) might help you out. This is mainly useful to unlock specific functionalities, or speed up calculations.
+If you want to create a labels layer from your shapes (rasterize), a shapes layer from your labels (vectorize), or convert your spot-based data to a labels layer, see the [labels/shapes interchangeability tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/labels_shapes_interchangeability.html). This is mainly useful to unlock specific functionalities, or speed up calculations.
 
 Finally, here is a more [advanced technical tutorial on transformations](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/transformations_advanced.html#other-technical-topics).
 
@@ -209,7 +209,7 @@ Finally, here is a more [advanced technical tutorial on transformations](https:/
 :open:
 
 
-Thank you for your interest in contributing to SpatialData! [Here](https://spatialdata.scverse.org/en/stable/contributing.html) is a guide that explains how to contribute to SpatialData as a developer. If you would like to contribute to satellite projects, such as `spatialdata-io`, `spatialdata-plot` etc, please consult the contribution guides also in those repositories.
-For larger contributions, and especially regarding new APIs or new design choices, please before writing any code get in touch with us! We are happy to talk via GitHub, via chat or with a call. [In the README](https://github.com/scverse/spatialdata/#contact) you can find multiple ways of reaching out.
+Thank you for your interest in contributing to SpatialData! The [contributing guide](https://spatialdata.scverse.org/en/stable/contributing.html) explains how to contribute to SpatialData as a developer. If you would like to contribute to satellite projects, such as `spatialdata-io`, `spatialdata-plot` etc, please consult the contribution guides also in those repositories.
+For larger contributions, and especially regarding new APIs or new design choices, please before writing any code get in touch with us! We are happy to talk via GitHub, via chat or with a call. The [contact section of the README](https://github.com/scverse/spatialdata/#contact) lists multiple ways of reaching out.
 
 :::
