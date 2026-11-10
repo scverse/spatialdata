@@ -13,7 +13,6 @@ If you want to read more about the framework, please have a look at our publicat
 ## Getting started
 
 :::{dropdown} How can I install SpatialData?
-:open:
 ```
 pip install spatialdata
 ```
@@ -73,7 +72,6 @@ Yes! Browse our [collection of demo datasets](https://spatialdata.scverse.org/en
 ## Preparing your data
 
 :::{dropdown} How do I align my images?
-:open:
 
 Sometimes, you have multiple images containing information, but they have different pixels size/are rotated/are moved. For instance, you may have a multi-omics dataset with two images, each representing a different modality, but you need to align them within a single object while preserving their respective molecular signals. Here, we explain how you can spatially align(=register) these images. NOTE: SpatialData only allows for affine(=linear) transformations to map images onto each other.
 
@@ -148,7 +146,6 @@ The method of aggregation depends on the type of elements in your SpatialData ob
 ## Visualization and Analysis
 
 :::{dropdown} How do I visualize my data?
-:open:
 
 To make data visualization easier for each layer in your SpatialData object, we offer [spatialdata-plot](https://github.com/scverse/spatialdata-plot), a package that enhances SpatialData’s functionality for intuitive and detailed plotting.
 
@@ -191,7 +188,6 @@ To see how SpatialData and Squidpy interact, see the [Squidpy integration tutori
 ## Going further
 
 :::{dropdown} SpatialData looks amazing, I want to learn more. Give me all the technical details!
-:open:
 
 Sure, no problem! There is much more to learn about SpatialData.
 
@@ -204,8 +200,6 @@ Finally, here is a more [advanced technical tutorial on transformations](https:/
 :::
 
 :::{dropdown} I am sold, how can I get in touch and contribute to SpatialData?
-:open:
-
 
 Thank you for your interest in contributing to SpatialData! The [contributing guide](https://spatialdata.scverse.org/en/stable/contributing.html) explains how to contribute to SpatialData as a developer. If you would like to contribute to satellite projects, such as `spatialdata-io`, `spatialdata-plot` etc, please consult the contribution guides also in those repositories.
 For larger contributions, and especially regarding new APIs or new design choices, please before writing any code get in touch with us! We are happy to talk via GitHub, via chat or with a call. The [contact section of the README](https://github.com/scverse/spatialdata/#contact) lists multiple ways of reaching out.
