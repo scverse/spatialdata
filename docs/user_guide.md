@@ -115,7 +115,7 @@ For more technical details on how to create a table from scratch to annotate you
 
 ::::
 
-::::{dropdown} How do I analyze a spatial subset of my data?
+::::{dropdown} How do I select a spatial subset of my data?
 
 Eventually, you might want to know which cells are present in which region (e.g. 'Are immune cells infiltrating the tumor core?').
 Therefore, subsampling your data based on spatial coordinates can be helpful. Other examples would be for instance if you want to target your analysis to a specific subregion of the tissue (e.g. tumor core), if you have multiple tissues on one slide, if you want to start small, or if you want to only focus on regions with good tissue quality.
