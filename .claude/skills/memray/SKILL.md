@@ -1,8 +1,9 @@
 ---
+
 name: memray
 description: Profile the memory usage of a Python script using memray and visualize a temporal flamegraph in the browser. Use when the user wants to investigate memory consumption, find leaks, or understand allocation patterns.
 compatibility: Requires the pixi profiling environment (pixi run -e profiling). Supports Linux and macOS.
-allowed-tools: Bash(pixi run -e profiling memray-run:*) Bash(pixi run -e profiling memray-flame:*) Bash(open:*) Bash(xdg-open:*) Bash(python -m webbrowser:*)
+allowed-tools: Bash(pixi run -e profiling memray-run:_) Bash(pixi run -e profiling memray-flame:_) Bash(open:_) Bash(xdg-open:_) Bash(python -m webbrowser:*)
 ---
 
 ## Steps
@@ -11,24 +12,24 @@ allowed-tools: Bash(pixi run -e profiling memray-run:*) Bash(pixi run -e profili
 
 2. Run the script under memray:
 
-    ```bash
-    pixi run -e profiling memray-run script.py
-    ```
+   ```bash
+   pixi run -e profiling memray-run script.py
+   ```
 
-    This produces a binary file named `memray-script.py.<pid>.bin` in the current directory.
+   This produces a binary file named `memray-script.py.<pid>.bin` in the current directory.
 
 3. Generate the flamegraph HTML report from the `.bin` file:
 
-    ```bash
-    pixi run -e profiling memray-flame memray-script.py.<pid>.bin
-    ```
+   ```bash
+   pixi run -e profiling memray-flame memray-script.py.<pid>.bin
+   ```
 
-    Replace `<pid>` with the actual PID shown in the filename. This writes `memray-flamegraph-script.py.<pid>.html`.
+   Replace `<pid>` with the actual PID shown in the filename. This writes `memray-flamegraph-script.py.<pid>.html`.
 
 4. Open the report in the browser:
-    - macOS: `open memray-flamegraph-script.py.<pid>.html`
-    - Linux: `xdg-open memray-flamegraph-script.py.<pid>.html`
-    - Either: `python -m webbrowser memray-flamegraph-script.py.<pid>.html`
+   - macOS: `open memray-flamegraph-script.py.<pid>.html`
+     - Linux: `xdg-open memray-flamegraph-script.py.<pid>.html`
+       - Either: `python -m webbrowser memray-flamegraph-script.py.<pid>.html`
 
 ## Notes
 
