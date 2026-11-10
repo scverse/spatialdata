@@ -10,7 +10,7 @@ Looking to do something specific with SpatialData? Check out the FAQs below for 
 
 If you want to read more about the framework, please have a look at our publication: [Marconato et al.](https://www.nature.com/articles/s41592-024-02212-x)
 
-# Getting started
+## Getting started
 
 :::{dropdown} How can I install SpatialData?
 :open:
@@ -73,7 +73,7 @@ Please see [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/
 :::
 
 
-# Preparing your data
+## Preparing your data
 
 :::{dropdown} How do I align my images?
 :open:
@@ -147,7 +147,7 @@ The method of aggregation depends on the type of elements in your SpatialData ob
 
 :::
 
-# Visualization and Analysis
+## Visualization and Analysis
 
 :::{dropdown} How do I visualize my data?
 :open:
@@ -190,7 +190,7 @@ If you want to see how SpatialData and Squidpy can interact, please have a look 
 :::
 
 
-# Going further
+## Going further
 
 :::{dropdown} SpatialData looks amazing, I want to learn more. Give me all the technical details!
 :open:
