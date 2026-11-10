@@ -47,10 +47,32 @@ always_use_bars_union = True  # use `|` instead of `Union` in types even when bu
 intersphinx_mapping = intersphinx() | {
     "annsel": ("https://annsel.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
-    "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
+    "datashader": ("https://datashader.org/", None),
     "geopandas": ("https://geopandas.org/en/stable/", None),
+    "ome_zarr": ("https://ome-zarr.readthedocs.io/en/stable/", None),
+    "pooch": ("https://www.fatiando.org/pooch/latest/", None),
     "shapely": ("https://shapely.readthedocs.io/en/stable", None),
+    "torch": ("https://docs.pytorch.org/docs/stable/", None),
+    "upath": ("https://universal-pathlib.readthedocs.io/en/latest/", None),
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
+    "xrspatial": ("https://xarray-spatial.readthedocs.io/en/stable/", None),
+    "zarr": ("https://zarr.readthedocs.io/en/stable/", None),
+}
+
+xref_overrides = {
+    # private paths of public objects, as they appear in type annotations
+    "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
+    "zarr.storage._fsspec.FsspecStore": "zarr.storage.FsspecStore",
+    "zarr.storage._local.LocalStore": "zarr.storage.LocalStore",
+    # wrong names in the tutorials notebooks (scverse/spatialdata-tutorials); remove once fixed there
+    "spatialdata.ops.get_transformation_between_coordinate_systems": (
+        "py:func",
+        "spatialdata.transformations.get_transformation_between_coordinate_systems",
+    ),
+    "spatialdata.transformations.Transformation.to_affine_matrix": (
+        "py:meth",
+        "spatialdata.transformations.BaseTransformation.to_affine_matrix",
+    ),
 }
 
 exclude_patterns = [
@@ -67,7 +89,6 @@ exclude_patterns = [
     "tutorials/notebooks/notebooks/examples/stereoseq_data/*",
 ]
 
-nitpicky = False  # TODO: solve upstream, then set back to True to warn about broken links.
 # no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
 
 ogp_image = "_static/img/spatialdata_horizontal.png"
@@ -87,4 +108,21 @@ html_theme_options = {"show_toc_level": 4}
 nitpick_ignore = [
     # Add an entry here when a missing link is outside our control.
     ("py:class", "igraph.Graph"),
+    # upstream packages without an intersphinx inventory
+    ("py:class", "multiscale_spatial_image.to_multiscale.to_multiscale.Methods"),
+    # not in datashader's API docs (only the concrete reductions are)
+    ("py:class", "datashader.reductions.Reduction"),
+    # private classes that appear in public signatures and base classes, but are not part of the API docs
+    ("py:class", "spatialdata._core._elements.Images"),
+    ("py:class", "spatialdata._core._elements.Labels"),
+    ("py:class", "spatialdata._core._elements.Points"),
+    ("py:class", "spatialdata._core._elements.Shapes"),
+    ("py:class", "spatialdata._core._elements.Tables"),
+    ("py:class", "spatialdata._core.spatialdata.QueryManager"),
+    ("py:class", "spatialdata._io.format.CoordinateMixinV01"),
+    ("py:class", "spatialdata._io.format.PointsAttrsMixinV01"),
+    ("py:attr", "spatialdata._io._utils.BadFileHandleMethod.ERROR"),
+    ("py:attr", "spatialdata._io._utils.BadFileHandleMethod.WARN"),
+    ("py:class", "spatialdata.models.models.RasterSchema"),
+    ("py:type", "spatialdata._types.JSONValue"),
 ]
