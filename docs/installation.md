@@ -1,6 +1,6 @@
 # Installation
 
-`spatialdata` needs a recent version of Python; the minimum supported version is listed on [PyPI](https://pypi.org/project/spatialdata/). Installation takes a few minutes on a standard desktop computer.
+`spatialdata` requires {{ python_requirement }}. Installation takes a few minutes on a standard desktop computer.
 
 ## PyPI
 

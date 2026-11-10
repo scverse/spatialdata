@@ -1,3 +1,4 @@
+import re
 import sys
 from datetime import datetime
 from importlib.metadata import metadata
@@ -18,6 +19,8 @@ version = info["Version"]
 urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
 source_repository = urls["Source"]
 release = info["Version"]
+requires_python = info["Requires-Python"]
+min_python = m[1] if (m := re.fullmatch(r">=\s*([\d.]+)", requires_python)) else None
 
 bibtex_bibfiles = ["references.bib"]
 bibtex_reference_style = "author_year"
@@ -41,6 +44,10 @@ autodoc_default_options = {
 }
 autodoc_process_signature = True
 myst_url_schemes = ("http", "https", "mailto")
+myst_enable_extensions = [*DEFAULTS.myst_enable_extensions, "substitution"]
+myst_substitutions = {
+    "python_requirement": f"Python {min_python} or newer" if min_python else f"Python {requires_python}",
+}
 typehints_defaults = "braces"
 always_use_bars_union = True  # use `|` instead of `Union` in types even when building with Python ≤3.14
 
