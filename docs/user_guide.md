@@ -6,7 +6,7 @@
 Authors: {bdg-secondary}`Lotte Pollaris` {bdg-secondary}`Bishoy Wadie` {bdg-secondary}`Friedrich Preusser`
 ::::
 
-Looking to do something specific with SpatialData? Checkout the FAQs below for quick guides, code snippets and links to in-depth tutorials.
+Looking to do something specific with SpatialData? Check out the FAQs below for quick guides, code snippets and links to in-depth tutorials.
 
 If you want to read more about the framework, please have a look at our publication: [Marconato et al.](https://www.nature.com/articles/s41592-024-02212-x)
 
@@ -19,7 +19,7 @@ pip install spatialdata
 ```
 
 This command installs barebone SpatialData.
-For a more detailed description on the installation process including all bells and whistles, see [here](https://spatialdata.scverse.org/en/stable/installation.html).
+For a more detailed description of the installation process including all bells and whistles, see [here](https://spatialdata.scverse.org/en/stable/installation.html).
 
 :::
 
@@ -183,7 +183,7 @@ If you run into scalability issues with your plotting, or everything feels very 
 
 :::{dropdown} How can I use SpatialData to analyze my data?
 
-SpatialData is **not** intended to analyze data itself, but to provide data infrastucture to efficiently manipulate spatial omics data. If you want to learn more about analyzing spatial omics data, please browse [these other tutorials](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#external-tutorials) for a demo of how various analysis packages work with SpatialData.
+SpatialData is **not** intended to analyze data itself, but to provide data infrastructure to efficiently manipulate spatial omics data. If you want to learn more about analyzing spatial omics data, please browse [these other tutorials](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#external-tutorials) for a demo of how various analysis packages work with SpatialData.
 
 If you want to see how SpatialData and Squidpy can interact, please have a look [here](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/squidpy_integration.html).
 
@@ -199,9 +199,9 @@ Sure, no problem! There is much more to learn about SpatialData.
 
 You want to learn how to combine SpatialData and deep learning? We got you covered [here](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/densenet.html).
 
-If you want to create a labels layer from your shapes (rasterize), a shapes layer from you labels (vectorize, or convert your spot-based data to a labels layer [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/labels_shapes_interchangeability.html) might help you out). This is mainly useful to unlock specific functionalities, or speed up calculations.
+If you want to create a labels layer from your shapes (rasterize), a shapes layer from your labels (vectorize), or convert your spot-based data to a labels layer, [this tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/labels_shapes_interchangeability.html) might help you out. This is mainly useful to unlock specific functionalities, or speed up calculations.
 
-Finally here is a more [advanced technical tutorial on transformations](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/transformations_advanced.html#other-technical-topics).
+Finally, here is a more [advanced technical tutorial on transformations](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/transformations_advanced.html#other-technical-topics).
 
 :::
 
@@ -210,6 +210,6 @@ Finally here is a more [advanced technical tutorial on transformations](https://
 
 
 Thank you for your interest in contributing to SpatialData! [Here](https://spatialdata.scverse.org/en/stable/contributing.html) is a guide that explains how to contribute to SpatialData as a developer. If you would like to contribute to satellite projects, such as `spatialdata-io`, `spatialdata-plot` etc, please consult the contribution guides also in those repositories.
-For larger contributions, and especially regarding new APIs or new design choices, please before writing any code get in touch with us! We are happy to talk via GitHub, via chat or with a call. [In the README](https://github.com/scverse/spatialdata/#contact) you can find multiple ways for reaching out.
+For larger contributions, and especially regarding new APIs or new design choices, please before writing any code get in touch with us! We are happy to talk via GitHub, via chat or with a call. [In the README](https://github.com/scverse/spatialdata/#contact) you can find multiple ways of reaching out.
 
 :::
