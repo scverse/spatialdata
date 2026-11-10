@@ -123,7 +123,9 @@ def _(
 def _(
     element: DaskDataFrame,
 ) -> pd.Index:
-    index: pd.Index = element.index
+    # Selecting no columns lets dask read only the index, plus the columns needed to compute it (e.g. the coordinates,
+    # for a points element lazily filtered by a spatial query), instead of all the columns.
+    index: pd.Index = element[[]].index
     return index
 
 
@@ -291,10 +293,7 @@ def _right_exclusive_join_spatialelement_table(
             if name in regions:
                 group_df = groups_df.get_group(name)
                 table_instance_key_column = group_df[instance_key]
-                if element_type in ["points", "shapes"]:
-                    element_indices = element.index
-                else:
-                    element_indices = get_element_instances(element)
+                element_indices = get_element_instances(element)
                 submask = ~table_instance_key_column.isin(element_indices)
                 keep[group_df.index[submask.to_numpy()]] = True
                 has_match = True
@@ -342,7 +341,7 @@ def _right_join_spatialelement_table(
                 group_df = groups_df.get_group(name)
                 table_instance_key_column = group_df[instance_key]
                 if element_type in ["points", "shapes"]:
-                    element_indices = element.index
+                    element_indices = get_element_instances(element)
                 else:
                     if filter_label_pixels is True:
                         element_dict[element_type][name] = _filter_labels_element(
@@ -389,7 +388,7 @@ def _inner_join_spatialelement_table(
                 group_df = groups_df.get_group(name)
                 table_instance_key_column = group_df[instance_key]  # This is always a series
                 if element_type in ["points", "shapes"]:
-                    element_indices = element.index
+                    element_indices = get_element_instances(element)
                 else:
                     if filter_label_pixels is True:
                         element_dict[element_type][name] = _filter_labels_element(
@@ -507,15 +506,12 @@ def _left_join_spatialelement_table(
     obs = obs.reset_index()
     groups_df = obs.groupby(by=region_column_name, observed=False)
     joined_indices = None
-    for element_type, name_element in element_dict.items():
+    for name_element in element_dict.values():
         for name, element in name_element.items():
             if name in regions:
                 group_df = groups_df.get_group(name)
                 table_instance_key_column = group_df[instance_key]  # This is always a series
-                if element_type in ["points", "shapes"]:
-                    element_indices = element.index
-                else:
-                    element_indices = get_element_instances(element)
+                element_indices = get_element_instances(element)
 
                 joined_indices = _get_joined_table_indices(
                     joined_indices, element_indices, table_instance_key_column, match_rows
