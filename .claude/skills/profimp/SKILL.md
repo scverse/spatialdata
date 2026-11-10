@@ -1,16 +1,17 @@
 ---
+
 name: profimp
 description: Profile Python import time using profimp and open a waterfall HTML report. Use when investigating slow startup or wanting to identify which imports are most expensive.
 compatibility: Requires profimp (available as a pixi dependency). macOS or Linux.
-allowed-tools: Bash(profimp:*) Bash(open:*) Bash(xdg-open:*) Bash(python -m webbrowser:*)
+allowed-tools: Bash(profimp:_) Bash(open:_) Bash(xdg-open:_) Bash(python -m webbrowser:_)
 ---
 
 ## Steps
 
 1. Ask what to profile. Suggest common patterns for this repo:
-    - `import spatialdata`
-    - `from spatialdata import SpatialData`
-    - `from spatialdata_io import xenium`
+   - `import spatialdata`
+     - `from spatialdata import SpatialData`
+       - `from spatialdata_io import xenium`
 
 2. Run:
 
@@ -19,9 +20,9 @@ profimp --html "<import_stmt>" > /tmp/profimp.html
 ```
 
 3. Open the report:
-    - macOS: `open /tmp/profimp.html`
-    - Linux: `xdg-open /tmp/profimp.html`
-    - Either: `python -m webbrowser /tmp/profimp.html`
+   - macOS: `open /tmp/profimp.html`
+     - Linux: `xdg-open /tmp/profimp.html`
+       - Either: `python -m webbrowser /tmp/profimp.html`
 
 ## Notes
 
