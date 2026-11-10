@@ -1,4 +1,4 @@
-# How-to guides
+# SpatialData User Guide
 
 ::::{card}
 :class-card: sd-mb-4 sd-shadow-sm
