@@ -39,12 +39,12 @@ from spatialdata.transformations.transformations import (
 )
 
 MIN_COORDINATE_DOCS = """\
-    The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
+The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
 """
 MAX_COORDINATE_DOCS = """\
-    The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes)
+The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
 """
 
 
