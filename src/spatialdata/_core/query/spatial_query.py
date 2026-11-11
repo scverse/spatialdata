@@ -527,7 +527,7 @@ def bounding_box_query(
     -----
     If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
     consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
-    """
+    """  # noqa: DOC101, DOC103 (**kwargs only exists for singledispatch; nothing extra is accepted)
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
 
