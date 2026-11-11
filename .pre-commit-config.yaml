@@ -12,6 +12,7 @@ repos:
           - id: biome-format
             exclude: ^\.cruft\.json$ # inconsistent indentation with cruft - file never to be modified manually.
             groups: [format]
+            # further file exclusions and other options are configured in biome.jsonc
     - repo: https://github.com/tox-dev/pyproject-fmt
       rev: v2.30.3
       hooks:
