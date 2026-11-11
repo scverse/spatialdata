@@ -59,14 +59,15 @@ If there is no reader implemented for your data type, see [the tutorial section 
 
 
 :::
+::::
 
-:::{dropdown} If you want to play around with existing data.
+:::{dropdown} Do you have datasets I can directly open and play around with?
 
-Browse our [collection of demo datasets](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) (already available as .zarr), generated with different spatial omics technologies.
+Yes! Browse our [collection of demo datasets](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) (already available as .zarr), generated with different spatial omics technologies.
 
 :::
 
-::::
+
 
 
 ## Preparing your data
