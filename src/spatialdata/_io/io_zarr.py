@@ -324,6 +324,8 @@ def _group_for_element_exists(zarr_path: Path, element_type: str, element_name: 
 
     Parameters
     ----------
+    zarr_path
+        Path to the Zarr store.
     element_type
         type of the element; must be in ["images", "labels", "points", "polygons", "shapes", "tables"].
     element_name

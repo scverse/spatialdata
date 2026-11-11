@@ -59,12 +59,12 @@ def overwrite_coordinate_transformations_non_raster(
 
     Parameters
     ----------
-    group: zarr.Group
+    group
         The zarr group containing the non-raster element for which to write the transformations, e.g. the zarr group
         containing sdata['points'].
-    axes: tuple[ValidAxis_t, ...]
+    axes
         The list with axes names in the same order as the coordinates of the non-raster element.
-    transformations: MappingToCoordinateSystem_t
+    transformations
         Mapping between names of the coordinate system and the transformations.
     """
     _validate_mapping_to_coordinate_system_type(transformations)

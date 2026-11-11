@@ -59,7 +59,8 @@ def blobs(
         Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
     n_channels
         Number of channels of the image
-
+    c_coords
+        Channel names of the image. If given, overrides `n_channels`.
 
     Returns
     -------
@@ -189,6 +190,8 @@ class BlobsDataset:
             Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
         n_channels
             Number of channels of the image
+        c_coords
+            Channel names of the image. If given, overrides `n_channels`.
         """
         self.length = length
         self.n_points = n_points

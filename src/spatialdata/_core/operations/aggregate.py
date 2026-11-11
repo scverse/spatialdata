@@ -366,6 +366,14 @@ def _aggregate_shapes(
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     table_name
         Name of the table optionally containing the value_key column.
+    fractions
+        Whether to weight the values by the fraction of the `values` region overlapping the `by` region.
+    buffer_resolution
+        Resolution parameter passed to the `.buffer()` method when converting circles to polygons.
+
+    Returns
+    -------
+    An AnnData object with one row per region in `by` and the aggregated values as columns.
     """
     from spatialdata._core.operations.vectorize import to_polygons
     from spatialdata.models import points_dask_dataframe_to_geopandas
