@@ -141,9 +141,9 @@ def _filter_table_by_elements(table: AnnData | None, elements_dict: dict[str, di
 
     Returns
     -------
-    The filtered table, or None if the input table is None or no rows match.
+    The filtered table, or None if the input table is None, has no annotation metadata or no rows match.
     """
-    if table is None:
+    if table is None or not table.uns.get(TableModel.ATTRS_KEY):
         return None
     elements_by_name = {
         name: element
