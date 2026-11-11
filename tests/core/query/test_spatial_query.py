@@ -518,6 +518,31 @@ def test_query_spatial_data(full_sdata):
 
 
 @pytest.mark.parametrize("with_polygon_query", [True, False])
+def test_query_labels_without_annotated_instances(with_polygon_query: bool):
+    labels = np.zeros((10, 10), dtype=np.int32)
+    labels[6:9, 6:9] = 1
+    table = AnnData(shape=(1, 0))
+    table.obs["region"] = pd.Categorical(["labels"])
+    table.obs["instance_id"] = [1]
+    table = TableModel.parse(table, region="labels", region_key="region", instance_key="instance_id")
+    sdata = SpatialData(labels={"labels": Labels2DModel.parse(labels)}, tables={"table": table})
+
+    if with_polygon_query:
+        polygon = Polygon([(0, 0), (0, 2), (2, 2), (2, 0)])
+        queried = polygon_query(sdata, polygon=polygon, target_coordinate_system="global", filter_table=True)
+    else:
+        queried = sdata.query.bounding_box(
+            axes=("x", "y"),
+            min_coordinate=np.array([0, 0]),
+            max_coordinate=np.array([2, 2]),
+            filter_table=True,
+            target_coordinate_system="global",
+        )
+    assert "labels" in queried.labels
+    assert len(queried.tables) == 0
+
+
+@pytest.mark.parametrize("with_polygon_query", [True, False])
 def test_query_filter_table(with_polygon_query: bool):
     coords0 = np.array([[10, 10], [20, 20]])
     coords1 = np.array([[30, 30]])
