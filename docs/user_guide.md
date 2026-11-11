@@ -28,7 +28,7 @@ For a more detailed description of the installation process including all bells 
 sdata = sd.read_zarr("your-dataset.zarr")
 ```
 
-See [reading SpatialData Zarr data](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reading-spatialdata-zarr-data) for more context about how to read in a new zarr file. The [introduction to the SpatialData object](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/intro.html) also explains how to explore the different element types within the SpatialData object.
+For more details, see [the tutorial section on reading zarr data](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reading-spatialdata-zarr-data). Additionaly, see [the introductory tutorial on SpatialData](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/intro.html) to understand how to explore the different element types within a SpatialData object.
 
 :::
 
@@ -38,14 +38,14 @@ See [reading SpatialData Zarr data](https://spatialdata.scverse.org/en/stable/tu
 ::::{tab-set}
 :::{tab-item} If you have an existing Squidpy object.
 
-Please have a look at the tutorial on [creating a SpatialData object from scratch](https://github.com/scverse/spatialdata-notebooks/blob/main/notebooks%2Fexamples%2Fsdata_from_scratch.ipynb).
+Checkout [the tutorial on creating a SpatialData object from scratch](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/sdata_from_scratch.html).
 
 :::
 
 :::{tab-item} If you want to start from raw files
 
-If you don’t have a SpatialData object or corresponding zarr file, you will have to create a SpatialData object to make use of the SpatialData framework.
-You can create a SpatialData object directly from your raw files (e.g. CSVs, cell-gene matrix/cell-proteins matrix, images etc.) by using the [spatialdata-io](https://github.com/scverse/spatialdata-io) library that has reader functions for most spatial omics techniques. See the [technologies supported by spatialdata-io](https://spatialdata.scverse.org/projects/io/en/latest/).
+If you don’t have a SpatialData object or corresponding zarr data on disk, you will have to create a SpatialData object to make use of the SpatialData framework.
+You can create a SpatialData object directly from your raw files (e.g. CSVs, cell-gene matrix/cell-proteins matrix, images etc.) by using the [spatialdata-io](https://github.com/scverse/spatialdata-io) library that has reader functions for most spatial omics techniques. See the [list of technologies currently supported by spatialdata-io](https://spatialdata.scverse.org/projects/io/en/latest/).
 
 For example, if you have data coming from a MERSCOPE®, just use:
 
@@ -55,9 +55,9 @@ sdata = spatialdata_io.merscope(
     )
 ```
 
-For more technical details on creating a SpatialData object from raw data, see [reader functions from spatialdata-io](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reader-functions-from-spatialdata-io).
+For more technical details on creating a SpatialData object from raw data, see [the tutorial section on reader functions from spatialdata-io](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#reader-functions-from-spatialdata-io).
 
-If there is no reader implemented for your data type, see [constructing a SpatialData object from scratch](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#construct-a-spatialdata-object-from-scratch).
+If there is no reader implemented for your data type, see [the tutorial section on constructing a SpatialData object from scratch](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models1.html#construct-a-spatialdata-object-from-scratch).
 
 
 :::
@@ -68,7 +68,7 @@ If there is no reader implemented for your data type, see [constructing a Spatia
 
 :::{dropdown} If you want to play around with existing data.
 
-Browse our [demo datasets](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) (already available as .zarr), generated with different spatial omics technologies.
+Browse our [collection of demo datasets](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/datasets/README.html) (already available as .zarr), generated with different spatial omics technologies.
 
 :::
 
@@ -96,7 +96,7 @@ Annotation can have a lot of meanings. You might want to annotate specific regio
 
 :::{dropdown} How can I interactively annotate regions in my data?
 
-This is possible within the SpatialData framework, making use of napari, as explained in the [napari ROI annotation tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html).
+This is possible within the SpatialData framework, making use of napari, as explained in the [tutorial on ROI annotation with Napari](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/napari_rois.html).
 
 :::
 
@@ -116,7 +116,7 @@ For more details, including information on how to add annotations for these regi
 :::{dropdown} I have cells in my dataset, how do I annotate them? (usage of AnnData)
 
 One of the most obvious things to do for spatial omics data is to annotate cells using the [AnnData](https://anndata.readthedocs.io/en/stable/) format (called tables in SpatialData). These tables can contain count/intensity data, all types of annotations, and make it possible to make use of [scanpy](https://scanpy.readthedocs.io/en/stable/) functionality (normalization/clustering/DE calculation).
-For more technical details on how to create a table from scratch to annotate your shapes/labels/points, see [tables in the SpatialData models tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables).
+For more technical details on how to create a table from scratch to annotate your shapes/labels/points, see [tutorial section on how tables are modeled in SpatialData](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/models2.html#tables).
 
 :::
 
@@ -177,13 +177,13 @@ You can also chain different plots. For example, if you want to plot regions of 
 
 For more details and examples on visualizing technology-specific datasets, explore our [technology-specific tutorials](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#technology-specific), which includes examples for various technologies (e.g., Visium-HD, Xenium, etc.). Keep in mind that the visualization methods demonstrated in these tutorials are broadly applicable and not limited to a specific technology.
 
-If you run into scalability issues with your plotting, or everything feels very slow, see [speeding up plotting](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/speed_up_illustration.html).
+If you run into scalability issues with your plotting, or everything feels very slow, [the tutorial on speeding up plotting](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/speed_up_illustration.html) might help you out!
 
 :::
 
 :::{dropdown} How can I use SpatialData to analyze my data?
 
-SpatialData is **not** intended to analyze data itself, but to provide data infrastructure to efficiently manipulate spatial omics data. If you want to learn more about analyzing spatial omics data, please browse the [external tutorials](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#external-tutorials) for a demo of how various analysis packages work with SpatialData.
+SpatialData is **not** intended to analyze data itself, but to provide data infrastructure to efficiently manipulate spatial omics data. If you want to learn more about analyzing spatial omics data, please browse the [documentation section on extenal tools](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html#external-tutorials) for demos of how various analysis packages work with SpatialData.
 
 To see how SpatialData and Squidpy interact, see the [Squidpy integration tutorial](https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks/examples/squidpy_integration.html).
 
@@ -197,7 +197,7 @@ To see how SpatialData and Squidpy interact, see the [Squidpy integration tutori
 
 Sure, no problem! There is much more to learn about SpatialData.
 
-You want to learn how to combine SpatialData and deep learning? See the [deep learning tutorial (DenseNet)](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/densenet.html).
+You want to learn how to combine SpatialData and deep learning? Checkout the [tutorial on deep learning with DenseNet](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/densenet.html).
 
 If you want to create a labels layer from your shapes (rasterize), a shapes layer from your labels (vectorize), or convert your spot-based data to a labels layer, see the [labels/shapes interchangeability tutorial](https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/labels_shapes_interchangeability.html). This is mainly useful to unlock specific functionalities, or speed up calculations.
 
