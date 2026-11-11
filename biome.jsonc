@@ -19,4 +19,11 @@
             "json": { "parser": { "allowComments": true } },
         },
     ],
+    "files": {
+        "includes": [
+            "**",
+            // Claude Code skills and settings, not project source.
+            "!.claude",
+        ],
+    },
 }
