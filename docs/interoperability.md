@@ -1,5 +1,9 @@
 # Interoperability
 
+:::{warning}
+The list of software that reads and writes SpatialData is now maintained with the SpatialData specifications: see [storage format implementations](https://spatialdata-spec.scverse.org/storage-format-implementations.html) and [implementations of the data model](https://spatialdata-spec.scverse.org/implementations.html). This page may be out of date.
+:::
+
 The on-disk representation of SpatialData can be read from other languages. Here we list interfaces for working with SpatialData from your language of choice:
 
 ## R
@@ -13,4 +17,4 @@ The on-disk representation of SpatialData can be read from other languages. Here
 
 ## File format
 
-The SpatialData on-disk format builds on [OME-NGFF](https://ngff.openmicroscopy.org/latest/). See the [design document](design_doc.md) for details of the current on-disk layout.
+The SpatialData storage format builds on [OME-NGFF](https://ngff.openmicroscopy.org/latest/). The [SpatialData specifications](https://spatialdata-spec.scverse.org/) define the data model and the on-disk layout, independently of this library; implementations in other languages should follow them.

@@ -1,4 +1,4 @@
-![SpatialData banner](https://github.com/scverse/spatialdata/blob/main/docs/_static/img/spatialdata_horizontal.png?raw=true)
+![SpatialData banner](https://github.com/scverse/spatialdata/blob/main/docs/_static/img/spatialdata_horizontal.svg?raw=true)
 
 # SpatialData: an open and universal framework for processing spatial omics data.
 
@@ -31,10 +31,18 @@ If you like scverse® and want to support our mission, please consider making a 
 
 The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
+SpatialData is an approved de.NBI service, your feedback helps us improve it. We would appreciate it if you could take a moment to complete [our short user survey][denbi-survey] (2 minutes).
+
 <div align="center">
   <a href="https://numfocus.org/project/scverse">
     <img height="60px"
          src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
+         align="center">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.denbi.de/">
+    <img height="60px"
+         src="https://www.denbi.de/templates/nbimaster/img/denbi-logo-color.svg"
          align="center">
   </a>
 </div>
@@ -42,15 +50,14 @@ The spatialdata project also received support by the Chan Zuckerberg Initiative.
 
 ![SpatialDataOverview](https://github.com/scverse/spatialdata/assets/1120672/cb91071f-12a7-4b8e-9430-2b3a0f65e52f)
 
-- **The library is currently under review.** We expect there to be changes as the community provides feedback. We have an announcement channel for communicating these changes, please see the contact section below.
-- The SpatialData storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
+- The SpatialData data model and storage format are defined by the [SpatialData specifications](https://spatialdata-spec.scverse.org/); the storage format is built on top of the [OME-NGFF](https://ngff.openmicroscopy.org/latest/) specification.
 
 ## Getting started
 
 Please refer to the [documentation][link-docs]. In particular:
 
 - [API documentation][link-api].
-- [Design doc][link-design-doc] (includes the roadmap).
+- [Design doc][link-design-doc] (historical; superseded by the [SpatialData specifications](https://spatialdata-spec.scverse.org/)).
 - [Example notebooks][link-notebooks].
 
 Another useful resource to get started is the source code of the [`spatialdata-io`](https://github.com/scverse/spatialdata-io) package, which shows example of how to read data from common technologies.
@@ -98,3 +105,4 @@ Marconato, L., Palla, G., Yamauchi, K.A. et al. SpatialData: an open and univers
 [link-notebooks]: https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks.html
 [badge-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml/badge.svg
 [link-tests]: https://github.com/scverse/spatialdata/actions/workflows/test.yaml
+[denbi-survey]: https://www.surveymonkey.de/r/denbi-service?sc=hd-hub&tool=spatialdata

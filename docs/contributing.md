@@ -9,7 +9,7 @@ For more extensive tutorials, that also cover the absolute basics, please refer 
 [scientific Python tutorials]: https://learn.scientific-python.org/development/tutorials/
 [scanpy developer guide]: https://scanpy.scverse.org/page/dev/
 
-:::{tip} The *hatch* project manager
+:::{tip} The _hatch_ project manager
 
 We highly recommend to familiarize yourself with [`hatch`][hatch].
 Hatch is a Python project manager that
@@ -256,16 +256,16 @@ The naming of the tag matters: it determines whether the package is displayed as
 #### Recommended: create the release via GitHub
 
 - Go to the [releases page on GitHub][releases] and press the “Draft a new release” button.
-    - Press “Choose a tag” and create a new tag.
+  - Press “Choose a tag” and create a new tag.
     - Please name the tag with the same string you intend for the release, including the `v` prefix.
 - Alternatively, go to the [tags page on GitHub][tags], select the latest tag, and press “Create release from tag”.
-    - Please name the release with the same string used for the tag (including the `v` prefix).
+  - Please name the release with the same string used for the tag (including the `v` prefix).
 - Both approaches lead to the same page and view. From there:
-    - Specify whether the release is a pre-release and whether it should be set as the latest release (use the checkboxes accordingly).
+  - Specify whether the release is a pre-release and whether it should be set as the latest release (use the checkboxes accordingly).
     - Fill in the release notes (explained in the next section).
     - Press “Publish release” to make the release available on GitHub.
 - The [release workflow][] will then build the package and [upload it to PyPI](https://pypi.org/project/spatialdata/#history) using [trusted publishing][].
-    - The workflow may fail; check the [release workflow status badge in the README](https://github.com/scverse/spatialdata/actions/workflows/release.yaml).
+  - The workflow may fail; check the [release workflow status badge in the README](https://github.com/scverse/spatialdata/actions/workflows/release.yaml).
 
 [releases]: https://github.com/scverse/spatialdata/releases
 [tags]: https://github.com/scverse/spatialdata/tags

@@ -1,17 +1,14 @@
-import shutil
 import sys
 from datetime import datetime
 from importlib.metadata import metadata
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-from sphinxcontrib import katex
+from scverse_doc.config import DEFAULTS
+from scverse_doc.registry import intersphinx
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE / "extensions"))
 sys.path.insert(0, str(HERE / "tutorials" / "notebooks" / "extensions"))
-
-
-# -- Project information -----------------------------------------------------
 
 info = metadata("spatialdata")
 project = info["Name"]
@@ -19,103 +16,67 @@ author = info["Author"]
 copyright = f"{datetime.now():%Y}, {author}"
 version = info["Version"]
 urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
-repository_url = urls["Source"]
-
+source_repository = urls["Source"]
 release = info["Version"]
 
 bibtex_bibfiles = ["references.bib"]
 bibtex_reference_style = "author_year"
 templates_path = ["_templates"]
-needs_sphinx = "4.0"
-
-html_context = {
-    "display_github": True,  # Integrate GitHub
-    "github_user": "scverse",
-    "github_repo": project,
-    "github_version": "main",
-    "conf_py_path": "/docs/",
-}
-
-# -- General configuration ---------------------------------------------------
 
 extensions = [
-    "git_ref",  # needs to be before scanpydoc.rtd_github_links
-    "scanpydoc.rtd_github_links",  # needs to be before sphinx.ext.linkcode
-    "myst_nb",
-    "sphinx_copybutton",
-    "sphinx.ext.autodoc",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.autosummary",
+    "scverse_doc",
     "sphinx.ext.linkcode",
-    "sphinx.ext.napoleon",
     "sphinxcontrib.bibtex",
-    "sphinxcontrib.katex",
     "sphinx_autodoc_typehints",
-    "sphinx_design",
     "IPython.sphinxext.ipython_console_highlighting",
-    "sphinxext.opengraph",
     "scverse_misc.sphinx_ext",
     *[p.stem for p in (HERE / "extensions").glob("*.py")],
     *[p.stem for p in (HERE / "tutorials" / "notebooks" / "extensions").glob("*.py")],
 ]
-
-rtd_links_prefix = PurePosixPath("src")
 
 autodoc_default_options = {
     "members": True,
     "inherited-members": True,
     "show-inheritance": True,
 }
-
-autosummary_generate = True
 autodoc_process_signature = True
-autodoc_member_order = "groupwise"
-default_role = "literal"
-napoleon_google_docstring = False
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = False
-napoleon_use_rtype = True  # having a separate entry generally helps readability
-napoleon_use_param = True
-myst_heading_anchors = 6  # create anchors for h1-h6
-myst_enable_extensions = [
-    "amsmath",
-    "colon_fence",
-    "deflist",
-    "dollarmath",
-    "html_image",
-    "html_admonition",
-]
 myst_url_schemes = ("http", "https", "mailto")
-nb_output_stderr = "remove"
-nb_execution_mode = "off"
-nb_merge_streams = True
 typehints_defaults = "braces"
 always_use_bars_union = True  # use `|` instead of `Union` in types even when building with Python ≤3.14
 
-source_suffix = {
-    ".rst": "restructuredtext",
-    ".ipynb": "myst-nb",
-    ".myst": "myst-nb",
-}
-
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-    "anndata": ("https://anndata.readthedocs.io/en/stable/", None),
+intersphinx_mapping = intersphinx() | {
     "annsel": ("https://annsel.readthedocs.io/en/latest/", None),
     "dask": ("https://docs.dask.org/en/latest/", None),
-    "datatree": ("https://datatree.readthedocs.io/en/latest/", None),
+    "datashader": ("https://datashader.org/", None),
     "geopandas": ("https://geopandas.org/en/stable/", None),
-    "numpy": ("https://numpy.org/doc/stable/", None),
-    "scanpy": ("https://scanpy.readthedocs.io/en/stable/", None),
+    "ome_zarr": ("https://ome-zarr.readthedocs.io/en/stable/", None),
+    "pooch": ("https://www.fatiando.org/pooch/latest/", None),
     "shapely": ("https://shapely.readthedocs.io/en/stable", None),
+    "torch": ("https://docs.pytorch.org/docs/stable/", None),
+    "upath": ("https://universal-pathlib.readthedocs.io/en/latest/", None),
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
+    "xrspatial": ("https://xarray-spatial.readthedocs.io/en/stable/", None),
+    "zarr": ("https://zarr.readthedocs.io/en/stable/", None),
+}
+
+xref_overrides = {
+    # private paths of public objects, as they appear in type annotations
+    "numpy._typing._array_like.NDArray": ("py:data", "numpy.typing.NDArray"),
+    "zarr.storage._fsspec.FsspecStore": "zarr.storage.FsspecStore",
+    "zarr.storage._local.LocalStore": "zarr.storage.LocalStore",
+    # wrong names in the tutorials notebooks (scverse/spatialdata-tutorials); remove once fixed there
+    "spatialdata.ops.get_transformation_between_coordinate_systems": (
+        "py:func",
+        "spatialdata.transformations.get_transformation_between_coordinate_systems",
+    ),
+    "spatialdata.transformations.Transformation.to_affine_matrix": (
+        "py:meth",
+        "spatialdata.transformations.BaseTransformation.to_affine_matrix",
+    ),
 }
 
 exclude_patterns = [
-    "_build",
-    "Thumbs.db",
-    ".DS_Store",
-    "**.ipynb_checkpoints",
+    *DEFAULTS.exclude_patterns,
     "tutorials/notebooks/index.md",
     "tutorials/notebooks/README.md",
     "tutorials/notebooks/references.md",
@@ -128,34 +89,40 @@ exclude_patterns = [
     "tutorials/notebooks/notebooks/examples/stereoseq_data/*",
 ]
 
-nitpicky = False  # TODO: solve upstream, then set back to True to warn about broken links.
 # no solution yet (7.4.7); using the workaround shown here: https://github.com/sphinx-doc/sphinx/issues/12589
+
+ogp_image = "_static/img/spatialdata_horizontal.png"
+
 suppress_warnings = [
     "autosummary.import_cycle",
 ]
 
-
-# -- Options for HTML output -------------------------------------------------
-
-html_theme = "sphinx_book_theme"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
 
 html_title = project
-html_logo = "_static/img/spatialdata_horizontal.png"
+html_logo = "_static/img/spatialdata_horizontal.svg"
 
-html_theme_options = {
-    "repository_url": repository_url,
-    "use_repository_button": True,
-    "path_to_docs": "docs/",
-    "navigation_with_keys": False,
-    "show_toc_level": 4,
-}
-
-pygments_style = "default"
-katex_prerender = shutil.which(katex.NODEJS_BINARY) is not None
+html_theme_options = {"show_toc_level": 4}
 
 nitpick_ignore = [
     # Add an entry here when a missing link is outside our control.
     ("py:class", "igraph.Graph"),
+    # upstream packages without an intersphinx inventory
+    ("py:class", "multiscale_spatial_image.to_multiscale.to_multiscale.Methods"),
+    # not in datashader's API docs (only the concrete reductions are)
+    ("py:class", "datashader.reductions.Reduction"),
+    # private classes that appear in public signatures and base classes, but are not part of the API docs
+    ("py:class", "spatialdata._core._elements.Images"),
+    ("py:class", "spatialdata._core._elements.Labels"),
+    ("py:class", "spatialdata._core._elements.Points"),
+    ("py:class", "spatialdata._core._elements.Shapes"),
+    ("py:class", "spatialdata._core._elements.Tables"),
+    ("py:class", "spatialdata._core.spatialdata.QueryManager"),
+    ("py:class", "spatialdata._io.format.CoordinateMixinV01"),
+    ("py:class", "spatialdata._io.format.PointsAttrsMixinV01"),
+    ("py:attr", "spatialdata._io._utils.BadFileHandleMethod.ERROR"),
+    ("py:attr", "spatialdata._io._utils.BadFileHandleMethod.WARN"),
+    ("py:class", "spatialdata.models.models.RasterSchema"),
+    ("py:type", "spatialdata._types.JSONValue"),
 ]

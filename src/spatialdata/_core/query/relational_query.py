@@ -259,7 +259,7 @@ def _get_masked_element(
 
 
 def _region_as_str_if_list_of_len_one(region: list[str]) -> str | list[str]:
-    return region if len(region) > 1 else region[0]
+    return region[0] if len(region) == 1 else region
 
 
 def _right_exclusive_join_spatialelement_table(
