@@ -295,6 +295,10 @@ class _ErrorDetailsCollector:
             Tuple of strings identifying the parent element
         expected_exception
             The class of the exception to catch. Other exceptions are raised.
+
+        Returns
+        -------
+        The collector itself, to be used as a context manager.
         """
         if isinstance(location, str):
             location = (location,)

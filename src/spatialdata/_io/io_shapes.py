@@ -146,6 +146,10 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: S
         The zarr group in the 'shapes' zarr group to write the shapes element to.
     element_format
         The format of the shapes element used to store it.
+
+    Returns
+    -------
+    The attributes (metadata) to write for the shapes element.
     """
     # np.array() creates a writable copy, needed for pandas 3.0 CoW compatibility
     # https://github.com/geopandas/geopandas/issues/3697
@@ -186,6 +190,10 @@ def _write_shapes_v02_v03(
     geometry_encoding
         Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
         details.
+
+    Returns
+    -------
+    The attributes (metadata) to write for the shapes element.
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 

@@ -101,10 +101,6 @@ class ImageTilesDataset(Dataset[Any]):
         Keyword arguments passed to :func:`spatialdata.rasterize` if `rasterize` is `True`.
         This argument can be used in particular to choose the pixel dimension of the produced image tiles; please refer
         to the :func:`spatialdata.rasterize` documentation for this use case.
-
-    Returns
-    -------
-    :class:`torch.utils.data.Dataset` for loading tiles from a :class:`spatialdata.SpatialData`.
     """
 
     INSTANCE_KEY = "instance_id"

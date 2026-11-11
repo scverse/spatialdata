@@ -69,6 +69,10 @@ def _is_regular_dask_chunk_grid(chunk_grid: Sequence[Sequence[int]]) -> bool:
     chunk_grid
         Per-axis tuple of chunk sizes, for instance as returned by ``dask_array.chunks``.
 
+    Returns
+    -------
+    Whether the chunk grid is regular.
+
     Examples
     --------
     Triggers ``continue`` on the first ``if`` (single or empty axis):
@@ -319,7 +323,7 @@ def _write_raster(
         The raster data to write.
     group
         The zarr group in the 'image' or 'labels' zarr group to write the raster data to.
-    name: str
+    name
         The name of the raster element.
     raster_format
         The format used to write the raster data.
@@ -561,6 +565,10 @@ def _write_raster_datatree(
         Compression settings as a len-1 dictionary with a single key-value {compression: compression level} pair
     metadata
         Additional metadata for the raster element
+
+    Returns
+    -------
+    The zarr group the raster data was written to.
     """
     write_multi_scale_ngff = write_multiscale_ngff if raster_type == "image" else write_multiscale_labels_ngff
     data = get_pyramid_levels(raster_data, attr="data")

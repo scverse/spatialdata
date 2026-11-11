@@ -60,12 +60,13 @@ def _set_transformations_to_element(element: Any, transformations: MappingToCoor
 def _set_transformations(e: SpatialElement, transformations: MappingToCoordinateSystem_t) -> None:
     """
     Set the transformation of a SpatialElement *only in memory*.
+
     Parameters
     ----------
     e
         SpatialElement
-    t
-        transformation
+    transformations
+        Mapping from coordinate system names to transformations.
 
     Notes
     -----
@@ -276,6 +277,8 @@ def convert_transformations_to_affine(sdata: SpatialData, coordinate_system: str
 
     Parameters
     ----------
+    sdata
+        The SpatialData object whose elements' transformations are converted.
     coordinate_system
         The coordinate system to convert to.
 

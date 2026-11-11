@@ -200,9 +200,9 @@ def iterate_pyramid_levels(
         If `None`, return the data of the pyramid level as a `DataArray`, if not None, return the specified attribute
         within the `DataArray` data.
 
-    Returns
-    -------
-    A generator to iterate over the pyramid levels.
+    Yields
+    ------
+    The pyramid levels (or their attribute `attr`, if given).
     """
     scale0 = data["scale0"]
     assert isinstance(scale0, DataTree)

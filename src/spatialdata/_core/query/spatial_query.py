@@ -65,9 +65,9 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-    {min_coordinate_docs}
+        {min_coordinate_docs}
     max_coordinate
-    {max_coordinate_docs}
+        {max_coordinate_docs}
     target_coordinate_system
         The coordinate system the bounding box is defined in.
 
@@ -406,15 +406,9 @@ def _bounding_box_mask_points(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-        PLACEHOLDER
-        The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
-    {min_coordinate_docs}
+        {min_coordinate_docs}
     max_coordinate
-        The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
-    {max_coordinate_docs}
-
+        {max_coordinate_docs}
 
     Returns
     -------
