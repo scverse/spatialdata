@@ -30,4 +30,4 @@ sdata = sd.read_zarr("blobs.zarr")
 ```
 
 To load data from a specific technology, see [spatialdata-io](https://spatialdata.scverse.org/projects/io/en/stable/), and to plot it, [spatialdata-plot](https://spatialdata.scverse.org/projects/plot/en/stable/).
-The {doc}`user_guide` points you to the tutorial for your question, and {doc}`api` lists every function.
+For help with common questions and tasks, see {doc}`How-to guides <user_guide>`. For details on functions and classes, see the {doc}`API reference <api>`.

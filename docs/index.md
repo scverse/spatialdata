@@ -63,17 +63,17 @@ If you like scverse® and want to support our mission, please consider making a 
 
     Learn how to install ``spatialdata``.
 
-.. card:: User Guide
+.. card:: How-to guides
     :link: user_guide
     :link-type: doc
 
-    Navigate your way through ``spatialdata`` tutorials.
+    Get help with common questions and tasks in ``spatialdata``.
 
 .. card:: Tutorials
     :link: tutorials/notebooks/notebooks
     :link-type: doc
 
-    Learn how to use ``spatialdata`` with hands-on examples.
+    Learn how to use ``spatialdata`` with detailed hands-on examples.
 
 .. card:: API
     :link: api
