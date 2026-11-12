@@ -4,7 +4,10 @@ import importlib
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Any
 
-import spatialdata.models._accessor
+from spatialdata.models._accessor import register_attrs_accessor_dask_df_series
+
+# Import registers Dask .attrs accessor, enabling metadata handling on Dask collections
+register_attrs_accessor_dask_df_series()
 
 __version__ = version("spatialdata")
 
@@ -59,7 +62,6 @@ _LAZY_IMPORTS: dict[str, str] = {
     "polygon_query": "spatialdata._core.query.spatial_query",
     # _core.spatialdata
     "SpatialData": "spatialdata._core.spatialdata",
-    # _io._utils
     "get_dask_backing_files": "spatialdata._io._utils",
     # _io.format
     "SpatialDataFormatType": "spatialdata._io.format",

@@ -2,20 +2,17 @@ from __future__ import annotations
 
 from spatialdata._core.validation import check_target_region_column_symmetry
 from spatialdata.models._utils import (
-    C,
-    SpatialElement,
-    X,
-    Y,
-    Z,
+    convert_region_column_to_categorical,
     force_2d,
     get_axes_names,
     get_channel_names,
-    get_spatial_axes,
+    get_raster_model_from_data_dims,
     points_dask_dataframe_to_geopandas,
     points_geopandas_to_dask_dataframe,
     set_channel_names,
-    validate_axes,
-    validate_axis_name,
+)
+from spatialdata.models.literals import (
+    ATTRS_KEY,
 )
 from spatialdata.models.models import (
     Image2DModel,
@@ -23,12 +20,14 @@ from spatialdata.models.models import (
     Labels2DModel,
     Labels3DModel,
     PointsModel,
+    RasterSchema,
     ShapesModel,
     TableModel,
     get_model,
     get_table_keys,
     validate_element,
 )
+from spatialdata.models.types import SpatialElement
 
 __all__ = [
     "Labels2DModel",
@@ -37,17 +36,10 @@ __all__ = [
     "Image3DModel",
     "ShapesModel",
     "PointsModel",
+    "RasterSchema",
     "TableModel",
     "get_model",
     "SpatialElement",
-    "get_spatial_axes",
-    "validate_axes",
-    "validate_axis_name",
-    "X",
-    "Y",
-    "Z",
-    "C",
-    "get_axes_names",
     "points_geopandas_to_dask_dataframe",
     "points_dask_dataframe_to_geopandas",
     "check_target_region_column_symmetry",
@@ -56,4 +48,8 @@ __all__ = [
     "get_channel_names",
     "set_channel_names",
     "force_2d",
+    "ATTRS_KEY",
+    "get_axes_names",
+    "convert_region_column_to_categorical",
+    "get_raster_model_from_data_dims",
 ]

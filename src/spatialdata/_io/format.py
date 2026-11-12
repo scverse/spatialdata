@@ -15,7 +15,7 @@ from ome_zarr.format import (
 )
 from shapely import GeometryType
 
-from spatialdata.models.models import ATTRS_KEY, PointsModel, ShapesModel
+from spatialdata.models import ATTRS_KEY, PointsModel, ShapesModel
 
 CoordinateTransform_t = list[dict[str, Any]]
 

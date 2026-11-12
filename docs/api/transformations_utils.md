@@ -10,4 +10,5 @@
 .. autofunction:: get_transformation_between_landmarks
 .. autofunction:: align_elements_using_landmarks
 .. autofunction:: remove_transformations_to_coordinate_system
+.. autofunction:: get_spatial_axes
 ```

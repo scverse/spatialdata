@@ -15,7 +15,7 @@ from spatialdata._core.operations.vectorize import (
     to_polygons,
 )
 from spatialdata.datasets import blobs
-from spatialdata.models.models import ShapesModel
+from spatialdata.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
 
 

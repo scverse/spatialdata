@@ -26,6 +26,7 @@ from spatialdata._io.format import (
     ShapesFormatV03,
     _parse_version,
 )
+from spatialdata.literals import TRANSFORM_KEY
 from spatialdata.models import ShapesModel, get_axes_names
 from spatialdata.transformations._utils import (
     _get_transformations,
@@ -195,8 +196,6 @@ def _write_shapes_v02_v03(
     -------
     The attributes (metadata) to write for the shapes element.
     """
-    from spatialdata.models._utils import TRANSFORM_KEY
-
     element_store = group.store_path.store
     if not isinstance(element_store, LocalStore):
         raise TypeError(f"Writing a shapes element requires a local zarr store, got {type(element_store).__name__}.")

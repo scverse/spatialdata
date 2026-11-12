@@ -31,14 +31,7 @@ from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
 from spatialdata.config import LARGE_CHUNK_THRESHOLD_BYTES
-from spatialdata.models import get_table_keys
-from spatialdata.models._utils import (
-    force_2d,
-    points_dask_dataframe_to_geopandas,
-    points_geopandas_to_dask_dataframe,
-    validate_axis_name,
-)
-from spatialdata.models.models import (
+from spatialdata.models import (
     Image2DModel,
     Image3DModel,
     Labels2DModel,
@@ -47,10 +40,17 @@ from spatialdata.models.models import (
     RasterSchema,
     ShapesModel,
     TableModel,
-    get_axes_names,
     get_model,
+    get_table_keys,
+)
+from spatialdata.models._utils import (
+    force_2d,
+    get_axes_names,
+    points_dask_dataframe_to_geopandas,
+    points_geopandas_to_dask_dataframe,
 )
 from spatialdata.testing import assert_elements_are_identical
+from spatialdata.transformations._graph.utils import validate_axis_name
 from spatialdata.transformations._utils import _set_transformations
 from spatialdata.transformations.operations import get_transformation, set_transformation
 from spatialdata.transformations.transformations import Identity, Scale

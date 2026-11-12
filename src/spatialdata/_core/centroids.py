@@ -11,9 +11,7 @@ from shapely import MultiPolygon, Point, Polygon
 from xarray import DataArray, DataTree
 
 from spatialdata._core.operations.transform import transform
-from spatialdata.models import get_axes_names
-from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import Labels2DModel, Labels3DModel, PointsModel, get_model
+from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, SpatialElement, get_axes_names, get_model
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
 

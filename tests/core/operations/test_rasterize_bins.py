@@ -22,7 +22,7 @@ from spatialdata._core.operations.rasterize_bins import (
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata._types import ArrayLike
-from spatialdata.models.models import (
+from spatialdata.models import (
     Image2DModel,
     PointsModel,
     ShapesModel,
