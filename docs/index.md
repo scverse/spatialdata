@@ -47,7 +47,7 @@ If you like scverse® and want to support our mission, please consider making a 
   <img
     src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
     width="200"
-  >
+>
 </a>
 </div>
 
@@ -56,6 +56,7 @@ If you like scverse® and want to support our mission, please consider making a 
    This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
 ```
 
+<!-- panache-ignore-format-start -->
 ```{eval-rst}
 .. card:: Installation
     :link: installation
@@ -100,6 +101,7 @@ If you like scverse® and want to support our mission, please consider making a 
     Learn how to contribute to ``spatialdata``.
 
 ```
+<!-- panache-ignore-format-end -->
 
 ```{toctree}
 :caption: Getting started
