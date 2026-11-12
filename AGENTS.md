@@ -26,7 +26,7 @@ assert not isinstance(transformation, dict)
 assert_type(transformation, BaseTransformation)
 ```
 
-When all branches of a union have been handled, use `typing.assert_never` instead of a generic "should not reach here"
+When all branches of a union have been handled, use `typing.assert_never` instead of a generic “should not reach here”
 error, so the type checker tells us if a new type is added to the union and not handled:
 
 ```python
@@ -42,7 +42,7 @@ else:
 
 #### Why
 
-Because of Python's (multiple-)inheritance model, a positive `isinstance` assertion can never be rejected by a type
+Because of Python’s (multiple-)inheritance model, a positive `isinstance` assertion can never be rejected by a type
 checker, even when it contradicts the declared type:
 
 ```python
@@ -60,7 +60,7 @@ assert not isinstance(transformations, BaseTransformation)
 assert_type(transformations, dict[str, BaseTransformation])
 ```
 
-Optional values are already narrowed "negatively", so keep using `is not None`:
+Optional values are already narrowed “negatively”, so keep using `is not None`:
 
 ```python
 assert target_depth is not None

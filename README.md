@@ -64,7 +64,7 @@ Another useful resource to get started is the source code of the [`spatialdata-i
 
 ## Installation
 
-Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/stable/installation.html). To get started with the "batteries included" installation, you can install via pip:
+Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/stable/installation.html). To get started with the “batteries included” installation, you can install via pip:
 
 ```bash
 pip install "spatialdata[extra]"

@@ -28,7 +28,7 @@ Rasterization is the process of converting data from a vector format (see defini
 
 ## ROI
 
-An ROI (_Region of Interest_) is a specific subset of a dataset that highlights an area of particular relevance, such as a niche, cell, or tissue location. For example, an ROI may be defined as a polygon outlining a lymphoid structure.
+An ROI (*Region of Interest*) is a specific subset of a dataset that highlights an area of particular relevance, such as a niche, cell, or tissue location. For example, an ROI may be defined as a polygon outlining a lymphoid structure.
 
 ## Spatial query
 
@@ -40,7 +40,7 @@ An extension of the OME-Zarr format used to represent SpatialData objects on dis
 
 ## SpatialElements
 
-_SpatialElements_ are the building blocks of _SpatialData_ datasets, and are split into multiple categories: `images`, `labels`, `shapes` and `points`. SpatialData SpatialElements are not special classes, but are instead standard scientific Python classes (e.g., `xarray.DataArray`, `geopandas.GeoDataFrame`) with specified metadata. The metadata provides the necessary information for displaying and integrating the different elements (e.g., coordinate systems and coordinate transformations). SpatialElements can be annotated by `tables`, which are represented as `anndata.AnnData` objects. Tables are a building block of SpatialData, but are not considered SpatialElements since they do not contain spatial information.
+*SpatialElements* are the building blocks of *SpatialData* datasets, and are split into multiple categories: `images`, `labels`, `shapes` and `points`. SpatialData SpatialElements are not special classes, but are instead standard scientific Python classes (e.g., `xarray.DataArray`, `geopandas.GeoDataFrame`) with specified metadata. The metadata provides the necessary information for displaying and integrating the different elements (e.g., coordinate systems and coordinate transformations). SpatialElements can be annotated by `tables`, which are represented as `anndata.AnnData` objects. Tables are a building block of SpatialData, but are not considered SpatialElements since they do not contain spatial information.
 
 ## Tables
 
@@ -50,7 +50,7 @@ A building block of SpatialData, represented as `anndata.AnnData` objeets. Table
 
 Vector data represents spatial information using geometric shapes such as points, circles, or polygons, each defined by mathematical coordinates.
 
-Vectorization is the process of converting raster data (i.e. pixel-based images) into vector format. For instance, a "raster" cell boundary can be "vectorized" into a polygon represented by the coordinates of the vertices of the polygon.
+Vectorization is the process of converting raster data (i.e. pixel-based images) into vector format. For instance, a “raster” cell boundary can be “vectorized” into a polygon represented by the coordinates of the vertices of the polygon.
 
 ## Zarr storage
 
