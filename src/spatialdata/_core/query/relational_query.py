@@ -233,19 +233,16 @@ def _get_masked_element(
     The masked spatial element based on the provided indices and match rows.
     """
     mask = np.isin(table_instance_key_column.to_numpy(), element_indices)
-    masked_table_instance_key_column = table_instance_key_column[mask]
-    mask_values: NDArray[Any] | pd.Index | None = (
-        masked_values if len(masked_values := masked_table_instance_key_column.to_numpy()) != 0 else None
-    )
-    if match_rows in ["left", "right"]:
+    mask_values: NDArray[Any] | pd.Index = table_instance_key_column[mask].to_numpy()
+    if match_rows in ["left", "right"] and len(mask_values) != 0:
         left_index, _ = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
 
-        if mask_values is not None and len(left_index) != len(mask_values):
+        if len(left_index) != len(mask_values):
             mask = left_index.isin(mask_values)
             mask_values = left_index[mask]
         else:
             mask_values = left_index
-    elif mask_values is not None:
+    else:
         order_mask = np.isin(element_indices, mask_values)
         mask_values = np.asarray(element_indices)[order_mask]
 
@@ -254,7 +251,7 @@ def _get_masked_element(
         return masked
     if not isinstance(element, GeoDataFrame):
         raise TypeError(f"Only points and shapes elements can be masked, got {type(element).__name__}.")
-    masked_shapes: GeoDataFrame = element.loc[mask_values if mask_values is not None else [], :]
+    masked_shapes: GeoDataFrame = element.loc[mask_values, :]
     return masked_shapes
 
 
@@ -562,6 +559,8 @@ def _match_rows(
     element_index_df = pd.DataFrame({"index_left": element_indices})
 
     merged_df = pd.merge(element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows)
+    if merged_df.empty:  # the element and the table share no instance
+        return pd.Index([]), pd.Index([])
     index_left = merged_df["index_left"]
     index_right = merged_df["index_right"]
 
