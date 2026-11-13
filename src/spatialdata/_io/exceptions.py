@@ -24,3 +24,7 @@ class WritingToZarrV2DeprecationWarning(DeprecationWarning):
         "and will be removed in a future version. "
         "Please consider writing to zarr v3."
     )
+
+
+class TableWriteOptionsError(ValueError):
+    """Exception raised when table write options cannot be honoured by the active backend."""
