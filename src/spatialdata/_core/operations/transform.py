@@ -318,7 +318,7 @@ def _(
     assert issubclass(schema, RasterSchema)
     from spatialdata.transformations import get_transformation
 
-    kwargs = {"prefilter": False, "order": 0}
+    kwargs = {"order": 0}
     axes = get_axes_names(data)
     transformed_dask, raster_translation = _transform_raster(
         data=data.data, axes=axes, transformation=transformation, **kwargs
@@ -363,7 +363,7 @@ def _(
     # labels hold categorical ids, so they must be resampled with nearest neighbour (order=0): interpolating would
     # create ids that are not present in the input, as for single-scale labels in the DataArray overload above
     if schema in (Labels2DModel, Labels3DModel):
-        kwargs = {"prefilter": False, "order": 0}
+        kwargs = {"order": 0}
         channel_names = None
     elif schema in (Image2DModel, Image3DModel):
         kwargs = {}
