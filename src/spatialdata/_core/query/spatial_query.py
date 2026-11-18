@@ -524,7 +524,7 @@ def bounding_box_query(
     Shapes are not cut to the bounding box: a shape that intersects it is returned whole. For a `MultiPolygon` this
     includes components that lie entirely outside the bounding box. To cut the shapes to the bounding box, use
     :func:`polygon_query` with `clip=True` and the bounding box as polygon, e.g. `shapely.box(xmin, ymin, xmax, ymax)`.
-    """ # noqa: DOC101, DOC103 (**kwargs only exists for singledispatch; nothing extra is accepted)
+    """  # noqa: DOC101, DOC103 (**kwargs only exists for singledispatch; nothing extra is accepted)
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
 
