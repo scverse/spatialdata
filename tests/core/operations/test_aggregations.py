@@ -12,7 +12,7 @@ from numpy.random import default_rng
 from spatialdata import aggregate, to_polygons
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, TableModel
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel
 from spatialdata.transformations import Affine, Identity, set_transformation
 
 RNG = default_rng(42)
@@ -574,3 +574,30 @@ def test_aggregate_deepcopy(sdata_blobs: SpatialData) -> None:
 
     assert sdata0["blobs_polygons"] is not sdata_blobs["blobs_polygons"]
     assert sdata1["blobs_polygons"] is sdata_blobs["blobs_polygons"]
+
+
+@pytest.mark.parametrize("agg_func", ["sum", "count"])
+def test_aggregate_points_by_shapes_partitioned(agg_func: str) -> None:
+    # the partitioned points path must match geopandas.sjoin(): boundary points count, overlapping regions both count,
+    # missing values are skipped
+    import dask.dataframe as dd
+    from shapely import box
+
+    by = ShapesModel.parse(GeoDataFrame(geometry=[box(0, 0, 10, 10), box(5, 5, 15, 15), box(20, 20, 30, 30)]))
+    rng = default_rng(0)
+    df = pd.DataFrame({"x": rng.uniform(-5, 35, 1000), "y": rng.uniform(-5, 35, 1000)})
+    df.loc[0, ["x", "y"]] = [10.0, 3.0]  # on the boundary of the first box
+    df["gene"] = pd.Categorical(rng.choice(["a", "b", "c"], len(df)))
+    df.loc[1, "gene"] = np.nan
+    df["value"] = rng.normal(size=len(df))
+    df.loc[2, "value"] = np.nan
+    points = PointsModel.parse(dd.from_pandas(df, npartitions=7))
+
+    joined = by.sjoin(geopandas.GeoDataFrame(df, geometry=geopandas.points_from_xy(df.x, df.y)))
+    for value_key in ["gene", "value"]:
+        X = aggregate(values=points, by=by, value_key=value_key, agg_func=agg_func)["table"].X.toarray()
+        if value_key == "gene":
+            expected = joined.groupby([joined.index, "gene"], observed=False).size().unstack().reindex(by.index)
+        else:
+            expected = joined.groupby(joined.index)[["value"]].agg(agg_func).reindex(by.index)
+        np.testing.assert_allclose(X, expected.fillna(0).to_numpy())

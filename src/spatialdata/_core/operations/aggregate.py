@@ -10,8 +10,10 @@ import dask.dataframe as ddf
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import shapely
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from scipy import sparse
 from shapely import Point
 from xarray import DataArray, DataTree
 
@@ -126,9 +128,9 @@ def aggregate(
     different object you can do a deepcopy manually (this loads the data into memory), or you can save the `SpatialData`
     object to disk and reload it (this keeps the data lazily represented).
 
-    When aggregation points by shapes, the current implementation loads all the points into memory and thus could lead
-    to a large memory usage. This Github issue https://github.com/scverse/spatialdata/issues/210 keeps track of the
-    changes required to address this behavior.
+    When aggregating points by shapes with `agg_func` `"sum"` or `"count"` and `value_key` referring to columns of the
+    points, the points are processed one partition at a time on a thread pool and never fully loaded into memory.
+    Other point aggregations load all the points into memory, see https://github.com/scverse/spatialdata/issues/210.
     """
     values_ = _parse_element(
         element=values, sdata=values_sdata, element_var_name="values", sdata_var_name="values_sdata"
@@ -380,6 +382,23 @@ def _aggregate_shapes(
 
     assert value_key is not None
     assert (values_sdata is None) == (values_element_name is None)
+    value_keys = [value_key] if isinstance(value_key, str) else list(value_key)
+    if (
+        isinstance(values, DaskDataFrame)
+        and not fractions
+        and agg_func in ("sum", "count")
+        and all(vk in values.columns for vk in value_keys)
+    ):
+        dtypes = [values[vk].dtype for vk in value_keys]
+        categorical_ = len(value_keys) == 1 and isinstance(dtypes[0], pd.CategoricalDtype)
+        if categorical_ or all(isinstance(dt, np.dtype) and dt.kind in "iuf" for dt in dtypes):
+            return _aggregate_points_by_shapes(
+                points=values,
+                by=to_polygons(by, buffer_resolution=buffer_resolution),
+                value_keys=value_keys,
+                categorical=categorical_,
+                agg_func=agg_func,
+            )
     if values_sdata is not None:
         actual_values = get_values(
             value_key=value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
@@ -527,3 +546,75 @@ def _aggregate_shapes(
     values.drop(columns=[ONES_COLUMN, AREAS_COLUMN] + to_remove, inplace=True)
 
     return anndata
+
+
+def _count_partition(
+    part: pd.DataFrame,
+    tree: shapely.STRtree,
+    value_keys: list[str],
+    categories: pd.Index | None,
+    count: bool,
+    shape: tuple[int, int],
+) -> sparse.csr_matrix:
+    """Sum (or count) the values of the points of one partition that fall in each region."""
+    # same predicate as the default of geopandas.sjoin(): points on a region's boundary count for that region
+    pt, region = tree.query(shapely.points(part["x"].to_numpy(), part["y"].to_numpy()), predicate="intersects")
+    if categories is not None:
+        codes = pd.Categorical(part[value_keys[0]], categories=categories).codes[pt]
+        keep = codes >= 0  # pandas groupby drops missing categories
+        rows, cols = region[keep], codes[keep]
+        data = np.ones(len(rows), dtype=np.int64)
+    else:
+        vals = part[value_keys].to_numpy()[pt]
+        missing = pd.isna(vals)
+        data = (~missing).astype(np.int64) if count else np.where(missing, 0, vals)  # pandas skips NaN in sum/count
+        rows = np.repeat(region, len(value_keys))
+        cols = np.tile(np.arange(len(value_keys)), len(region))
+        data = data.ravel()
+    out = sparse.coo_matrix((data, (rows, cols)), shape=shape).tocsr()
+    out.sum_duplicates()  # compress per partition so the final sum stays small
+    return out
+
+
+def _aggregate_points_by_shapes(
+    points: DaskDataFrame,
+    by: gpd.GeoDataFrame,
+    value_keys: list[str],
+    categorical: bool,
+    agg_func: str,
+) -> ad.AnnData:
+    """
+    Sum or count point values per region without loading all the points into memory.
+
+    Each Dask partition is loaded, joined to the regions with a shared :class:`shapely.STRtree` and reduced to a sparse
+    regions x columns matrix on a thread pool (shapely releases the GIL). The result matches the `geopandas.sjoin()`
+    path in `_aggregate_shapes()`.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    categories = None
+    if categorical:
+        column = points[value_keys[0]]
+        categories = (column.cat.categories if column.cat.known else column.cat.as_known().cat.categories).copy()
+    columns = list(categories) if categories is not None else value_keys
+    shape = (len(by), len(columns))
+    tree = shapely.STRtree(by.geometry.to_numpy())
+    parts = points[["x", "y", *value_keys]].to_delayed()
+
+    def run(part: Any) -> sparse.csr_matrix:
+        # sync scheduler: the thread pool already runs one partition per thread
+        return _count_partition(
+            part.compute(scheduler="sync"), tree, value_keys, categories, agg_func == "count", shape
+        )
+
+    # ponytail: one thread per partition; points stored in a single partition run on one core
+    with ThreadPoolExecutor() as ex:
+        coo = [m.tocoo() for m in ex.map(run, parts)]
+    X = sparse.coo_matrix(
+        (
+            np.concatenate([m.data for m in coo]),
+            (np.concatenate([m.row for m in coo]), np.concatenate([m.col for m in coo])),
+        ),
+        shape=shape,
+    ).tocsr()  # one sum over all partitions
+    return ad.AnnData(X, obs=pd.DataFrame(index=list(map(str, by.index))), var=pd.DataFrame(index=columns))
