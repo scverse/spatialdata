@@ -853,6 +853,14 @@ def test_points_model_preserves_column_order():
     assert list(from_numpy.columns) == expected
 
 
+@pytest.mark.parametrize("x_dtype", [np.uint16, np.int16, np.float16, np.int64])
+def test_points_model_pandas_common_coordinate_dtype(x_dtype) -> None:
+    # coordinates of a pandas frame get one common dtype, so narrow or mixed dtypes stay valid
+    data = pd.DataFrame({"x": np.arange(4).astype(x_dtype), "y": np.arange(4, dtype=np.float32)})
+    points = PointsModel.parse(data)
+    assert points["x"].dtype == points["y"].dtype == np.result_type(x_dtype, np.float32)
+
+
 def test_dask_points_unsorted_index_with_warning(points):
     chunksize = 300
     element = points["points_0"]

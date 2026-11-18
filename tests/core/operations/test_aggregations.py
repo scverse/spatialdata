@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+from typing import Any
+
 import geopandas
 import numpy as np
 import pandas as pd
@@ -12,7 +16,7 @@ from numpy.random import default_rng
 from spatialdata import aggregate, to_polygons
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.spatialdata import SpatialData
-from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, TableModel
+from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel
 from spatialdata.transformations import Affine, Identity, set_transformation
 
 RNG = default_rng(42)
@@ -574,3 +578,156 @@ def test_aggregate_deepcopy(sdata_blobs: SpatialData) -> None:
 
     assert sdata0["blobs_polygons"] is not sdata_blobs["blobs_polygons"]
     assert sdata1["blobs_polygons"] is sdata_blobs["blobs_polygons"]
+
+
+@pytest.mark.parametrize(
+    "agg_func",
+    ["sum", "count", "mean", "min", "max", "median", pytest.param(lambda v: v.max() - v.min(), id="callable")],
+)
+@pytest.mark.parametrize("value_key", ["gene", "name", "value", "small", "big", "flag", "x", ["value", "small"]])
+def test_aggregate_points_by_shapes_matches_sjoin(agg_func: Any, value_key: str | list[str]) -> None:
+    # the numba join must give what the geopandas.sjoin() path gives: boundary points and overlaps count, missing
+    # values are skipped, regions with only missing values and without points, small integers do not wrap
+    import dask.dataframe as dd
+    from shapely import Polygon, box
+
+    from spatialdata._core.operations.aggregate import _aggregate_shapes_sjoin
+
+    if value_key == "gene" and not isinstance(agg_func, str) or (value_key, agg_func) == ("gene", "mean"):
+        pytest.skip("not supported for categorical values")
+    if value_key == "name" and agg_func != "count":
+        pytest.skip("only counting is supported for strings")
+    if value_key == "flag" and agg_func not in ("sum", "count", "min", "max"):
+        pytest.skip("not meaningful for booleans")
+    boxes = [
+        box(0, 0, 10, 10),
+        box(5, 5, 15, 15),
+        Polygon(),
+        box(20, 20, 30, 30),
+        box(40, 40, 50, 50),
+        box(60, 60, 70, 70),
+    ]
+    by = ShapesModel.parse(GeoDataFrame(geometry=boxes))
+    rng = default_rng(0)
+    df = pd.DataFrame({"x": rng.uniform(-5, 35, 1000), "y": rng.uniform(-5, 35, 1000)})
+    df.loc[:5, ["x", "y"]] = [[10.0, 3.0], [2.0, 2.0], [3.0, 3.0], [np.nan, 1.0], [45.0, 45.0], [46.0, 46.0]]
+    df["gene"] = pd.Categorical(rng.choice(["a", "b", "c"], len(df)))
+    df["value"] = rng.normal(size=len(df))
+    df["name"] = df["gene"].astype(str)  # strings, as read from some parquet files
+    df["small"] = rng.integers(200, 256, len(df)).astype(np.uint8)
+    df["big"] = 2**62 + np.arange(len(df))  # not exact in float64
+    df["flag"] = rng.random(len(df)) < 0.5
+    df.loc[1, "gene"] = np.nan
+    df.loc[[2, 4, 5], "value"] = np.nan  # the region at (45, 45) has only missing values
+    points = PointsModel.parse(dd.from_pandas(df, npartitions=7))
+
+    keys = [value_key] if isinstance(value_key, str) else value_key
+    expected = _aggregate_shapes_sjoin(points, by, None, None, None, keys, agg_func, False, 16)
+    out = aggregate(values=points, by=by, value_key=value_key, agg_func=agg_func)["table"]
+    assert out.var_names.tolist() == expected.var_names.tolist()
+    assert out.X.dtype == expected.X.dtype
+    if out.X.dtype.kind == "f":
+        np.testing.assert_allclose(out.X.toarray(), expected.X.toarray())
+    else:
+        np.testing.assert_array_equal(out.X.toarray(), expected.X.toarray())
+
+
+def test_aggregate_points_by_labels_with_hole() -> None:
+    # a label inside another one becomes a hole of the outer polygon: its points must not count for the outer label
+    import dask.dataframe as dd
+
+    labels = np.zeros((40, 40), dtype=np.int32)
+    labels[5:35, 5:35] = 1
+    labels[13:27, 13:27] = 2
+    df = pd.DataFrame(
+        {"x": RNG.uniform(14, 26, 100), "y": RNG.uniform(14, 26, 100), "gene": pd.Categorical(["a"] * 100)}
+    )
+    by = to_polygons(Labels2DModel.parse(labels, dims=("y", "x")))
+    X = aggregate(
+        values=PointsModel.parse(dd.from_pandas(df, npartitions=2)), by=by, value_key="gene", agg_func="count"
+    )
+    assert X["table"].X.toarray().ravel().tolist() == [0, 100]
+
+
+def test_aggregate_points_default_value_key_transformed() -> None:
+    # without value_key a column of ones is added to the transformed copy of the points, not to the element
+    from shapely import box
+
+    from spatialdata.transformations import Scale
+
+    pts = PointsModel.parse(
+        pd.DataFrame({"x": [1.0, 1.0, 6.0], "y": [1.0, 1.0, 6.0]}),
+        transformations={"global": Scale([2, 2], axes=("x", "y"))},
+    )
+    by = ShapesModel.parse(GeoDataFrame(geometry=[box(0, 0, 4, 4), box(10, 10, 14, 14)]))
+    sdata = SpatialData(points={"p": pts}, shapes={"b": by})
+    out = aggregate(values_sdata=sdata, values="p", by_sdata=sdata, by="b", agg_func="sum")["table"]
+    assert out.X.toarray().ravel().tolist() == [2, 1]
+
+
+def test_aggregate_points_several_categorical_keys() -> None:
+    from shapely import box
+
+    df = pd.DataFrame({"x": [1.0], "y": [1.0], "g": pd.Categorical(["a"]), "g2": pd.Categorical(["b"])})
+    by = ShapesModel.parse(GeoDataFrame(geometry=[box(0, 0, 4, 4)]))
+    with pytest.raises(ValueError, match="one categorical column"):
+        aggregate(values=PointsModel.parse(df), by=by, value_key=["g", "g2"], agg_func="sum")
+
+
+def _polygon_index_case() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    import shapely
+
+    rng = default_rng(0)
+    t = np.linspace(0, 2 * np.pi, 9)
+    ring = np.stack([5.5 * np.cos(t), 5.5 * np.sin(t)], 1)
+    centers = np.stack(np.meshgrid(np.arange(10), np.arange(10)), -1).reshape(-1, 2) * 10.0
+    geoms = list(shapely.polygons(centers[:, None, :] + ring[None]))  # radius 5.5 on a 10 grid: neighbours overlap
+    geoms[0] = shapely.Polygon(centers[0] + ring, [centers[0] + ring * 0.3])  # hole
+    geoms[1] = shapely.MultiPolygon([geoms[1], shapely.box(-50, -50, -40, -40)])
+    geoms[2] = shapely.MultiPolygon([shapely.box(-60, 0, -55, 5), shapely.box(-55, 5, -50, 10)])  # parts touch
+    geoms[3], geoms[4] = shapely.Polygon(), shapely.LineString([(-70, -70), (-65, -65)])  # match nothing
+    geoms.append(shapely.Point(40, 40).buffer(30, quad_segs=200))  # many vertices: tested by GEOS
+    x, y = rng.uniform(-60, 100, (2, 20_000))
+    x[:6] = [centers[5, 0] + 5.5, -45, centers[0, 0], -55, np.nan, np.inf]  # vertex, edge, hole, touch point
+    y[:6] = [centers[5, 1], -40, centers[0, 1], 5, 0.0, 0.0]
+    return np.array(geoms, dtype=object), x, y
+
+
+def test_polygon_index_matches_shapely() -> None:
+    import shapely
+
+    from spatialdata._core.operations._points_in_polygons import PolygonIndex
+
+    geoms, x, y = _polygon_index_case()
+    pt, poly = PolygonIndex(geoms).query(x, y)
+    ref_pt, ref_poly = shapely.STRtree(geoms).query(shapely.points(x, y), predicate="intersects")
+    assert sorted(zip(pt.tolist(), poly.tolist(), strict=True)) == sorted(
+        zip(ref_pt.tolist(), ref_poly.tolist(), strict=True)
+    )
+
+
+def test_polygon_index_compiled() -> None:
+    # the test suite disables numba; check the compiled kernels (NaN and inf coordinates included) once
+    import subprocess
+    import sys
+
+    code = (
+        "from tests.core.operations.test_aggregations import _polygon_index_case\n"
+        "from spatialdata._core.operations._points_in_polygons import PolygonIndex\n"
+        "import shapely\n"
+        "g, x, y = _polygon_index_case()\n"
+        "a = sorted(zip(*(v.tolist() for v in PolygonIndex(g).query(x, y))))\n"
+        "b = sorted(zip(*(v.tolist() for v in shapely.STRtree(g).query(shapely.points(x, y), predicate='intersects'))))\n"
+        "assert a == b, (len(a), len(b))\n"
+        # many-vertex geometries queried from several threads at once (prepared GEOS geometries are not thread-safe)
+        "import numpy as np\nfrom concurrent.futures import ThreadPoolExecutor\n"
+        "c = np.stack(np.meshgrid(np.arange(30), np.arange(30)), -1).reshape(-1, 2) * 3.0\n"
+        "g = np.array([shapely.Point(*p).buffer(1.4, quad_segs=200) for p in c])\n"
+        "x, y = np.random.default_rng(0).uniform(0, 90, (2, 2_000_000))\n"
+        "index = PolygonIndex(g)\n"
+        "with ThreadPoolExecutor(8) as ex:\n"
+        "    n = sum(len(p) for p, _ in ex.map(lambda i: index.query(x[i::8], y[i::8]), range(8)))\n"
+        "assert n == shapely.STRtree(g).query(shapely.points(x, y), predicate='intersects').shape[1]\n"
+    )
+    env = {**os.environ, "NUMBA_DISABLE_JIT": "0"}
+    subprocess.run([sys.executable, "-c", code], check=True, env=env, cwd=Path(__file__).parents[3])

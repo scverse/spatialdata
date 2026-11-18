@@ -692,6 +692,26 @@ class ShapesModel:
         return data
 
 
+def _from_pandas(df: pd.DataFrame, sort: bool, npartitions: int | None = None, **kwargs: Any) -> DaskDataFrame:
+    """`dd.from_pandas`, but takes the divisions of a sorted RangeIndex directly instead of computing them."""
+    idx = df.index
+    out: DaskDataFrame
+    if sort and isinstance(idx, pd.RangeIndex) and idx.step > 0 and len(df) and npartitions and not kwargs:
+        # dask computes divisions in pure Python over the whole index (~10 s per 60M rows)
+        size = -(-len(df) // npartitions)
+        starts = list(range(0, len(df), size))
+        out = dd.from_map(
+            lambda i: df.iloc[i : i + size],
+            starts,
+            divisions=[*idx[starts].tolist(), idx[-1]],
+            meta=df.iloc[:0],
+            enforce_metadata=False,
+        )
+    else:
+        out = dd.from_pandas(df, sort=sort, npartitions=npartitions, **kwargs)
+    return out
+
+
 class PointsModel:
     INSTANCE_KEY = "instance_key"
     FEATURE_KEY = "feature_key"
@@ -822,7 +842,7 @@ class PointsModel:
                 if c not in handled_columns:
                     df_dict[c] = annotation[c]
 
-        table: DaskDataFrame = dd.from_pandas(pd.DataFrame(data=df_dict, index=index), **kwargs)
+        table = _from_pandas(pd.DataFrame(data=df_dict, index=index), sort=kwargs.pop("sort", True), **kwargs)
         return cls._add_metadata_and_validate(
             table,
             feature_key=feature_key,
@@ -860,7 +880,7 @@ class PointsModel:
                 index_monotonically_increasing = index_monotonically_increasing.compute()
             sort = index_monotonically_increasing
         else:
-            sort = kwargs["sort"]
+            sort = kwargs.pop("sort")
         if not sort:
             warnings.warn(
                 "The index of the dataframe is not monotonic increasing. It is recommended to sort the data to "
@@ -869,39 +889,25 @@ class PointsModel:
                 UserWarning,
                 stacklevel=2,
             )
-        if isinstance(data, pd.DataFrame):
-            table: DaskDataFrame = dd.from_pandas(
-                pd.DataFrame(
-                    data[[coordinates[ax] for ax in axes]].to_numpy(),
-                    columns=axes,
-                    index=data.index,
-                ),
-                # we need to pass sort=True also when the index is sorted to ensure that the divisions are computed
-                sort=sort,
-                **kwargs,
-            )
-            # TODO: dask does not allow for setting divisions directly anymore. We have to decide on forcing the user.
-            if feature_key is not None:
-                feature_categ = dd.from_pandas(
-                    data[feature_key],
-                    sort=sort,
-                    **kwargs,
-                )
-                table[feature_key] = feature_categ
-        elif isinstance(data, dd.DataFrame):
-            table = data[[coordinates[ax] for ax in axes]]
-            table.columns = axes
+        if isinstance(data, pd.DataFrame) and feature_key is not None and data[feature_key].dtype.name != "category":
+            data = data.assign(**{feature_key: data[feature_key].astype(str).astype("category")})
+        # one conversion: each pandas column assigned to a dask frame would recompute the divisions
+        ddf = data if isinstance(data, DaskDataFrame) else _from_pandas(data, sort=sort, **kwargs)
+        table = ddf[[coordinates[ax] for ax in axes]]
+        table.columns = axes
+        if isinstance(data, pd.DataFrame) and table.dtypes.nunique() > 1:  # one dtype for all coordinates
+            table = table.astype(np.result_type(*table.dtypes))
 
         if feature_key is not None:
             if data[feature_key].dtype.name == "category":
-                table[feature_key] = data[feature_key]
+                table[feature_key] = ddf[feature_key]
             else:
                 # this will cause the categories to be unknown and trigger the warning (and performance slowdown) in
                 # _add_metadata_and_validate()
-                table[feature_key] = data[feature_key].astype(str).astype("category")
+                table[feature_key] = ddf[feature_key].astype(str).astype("category")
 
         if instance_key is not None:
-            table[instance_key] = data[instance_key]
+            table[instance_key] = ddf[instance_key]
         for c in [X, Y, Z]:
             if c in coordinates and c != coordinates[c] and c in data.columns:
                 logger.info(
@@ -920,7 +926,7 @@ class PointsModel:
         }
         for c in data.columns:
             if c not in handled_columns:
-                table[c] = data[c]
+                table[c] = ddf[c]
 
         validated = cls._add_metadata_and_validate(
             table,

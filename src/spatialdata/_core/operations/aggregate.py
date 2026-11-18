@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, assert_type
 
 import anndata as ad
 import dask as da
@@ -12,16 +12,20 @@ import numpy as np
 import pandas as pd
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
+from scipy import sparse
 from shapely import Point
 from xarray import DataArray, DataTree
 
 from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
-from spatialdata._core.query.relational_query import get_values
+from spatialdata._core.query.relational_query import _locate_values, get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_model
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
+
+if TYPE_CHECKING:
+    from spatialdata._core.operations._points_in_polygons import PolygonIndex
 
 __all__ = ["aggregate"]
 
@@ -126,9 +130,9 @@ def aggregate(
     different object you can do a deepcopy manually (this loads the data into memory), or you can save the `SpatialData`
     object to disk and reload it (this keeps the data lazily represented).
 
-    When aggregation points by shapes, the current implementation loads all the points into memory and thus could lead
-    to a large memory usage. This Github issue https://github.com/scverse/spatialdata/issues/210 keeps track of the
-    changes required to address this behavior.
+    Points aggregated by shapes (except with `fractions=True`) are joined to the shapes one Dask partition at a time on
+    a thread pool, without building a GeoDataFrame of the points. `"sum"`, `"count"`, `"mean"`, `"min"` and `"max"` are
+    reduced per partition; other functions collect the matched values of all the points before aggregating them.
     """
     values_ = _parse_element(
         element=values, sdata=values_sdata, element_var_name="values", sdata_var_name="values_sdata"
@@ -180,20 +184,23 @@ def aggregate(
 
         assert isinstance(by_, GeoDataFrame)
         assert isinstance(values_, GeoDataFrame | DaskDataFrame)
-        adata = _aggregate_shapes(
-            values=values_,
-            by=by_,
-            values_sdata=values_sdata,
-            values_element_name=values if isinstance(values, str) else None,
-            value_key=value_key,
-            agg_func=agg_func,
-            fractions=fractions,
-            table_name=table_name,
-        )
-
-        # eventually remove the colum of ones if it was added
-        if ONES_KEY is not None:
-            del values_[ONES_KEY]
+        # the column of ones exists only in values_, which can be a transformed copy of the element in values_sdata
+        name = values if ONES_KEY is None and isinstance(values, str) else None
+        try:
+            adata = _aggregate_shapes(
+                values=values_,
+                by=by_,
+                values_sdata=values_sdata if name is not None else None,
+                values_element_name=name,
+                value_key=value_key,
+                agg_func=agg_func,
+                fractions=fractions,
+                table_name=table_name,
+                buffer_resolution=buffer_resolution,
+            )
+        finally:
+            if ONES_KEY is not None:
+                del values_[ONES_KEY]
 
     if by_type is Labels2DModel and values_type is Image2DModel:
         if fractions is True:
@@ -281,7 +288,6 @@ def _aggregate_image_by_labels(
     -------
     AnnData of shape `(by.shape[0], len(agg_func)]`.
     """
-    from scipy import sparse
     from xrspatial.zonal import stats as zonal_stats
 
     if isinstance(by, DataTree):
@@ -376,10 +382,53 @@ def _aggregate_shapes(
     An AnnData object with one row per region in `by` and the aggregated values as columns.
     """
     from spatialdata._core.operations.vectorize import to_polygons
-    from spatialdata.models import points_dask_dataframe_to_geopandas
 
     assert value_key is not None
     assert (values_sdata is None) == (values_element_name is None)
+    value_key = [value_key] if isinstance(value_key, str) else list(value_key)
+    by = to_polygons(by, buffer_resolution=buffer_resolution)
+    if values_sdata is None:
+        locations = _locate_values(value_key, element=values)
+    else:
+        locations = _locate_values(
+            value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
+        )
+    categorical = locations[0].is_categorical
+    assert not (categorical and agg_func == "mean"), (
+        "Incompatible choice: aggregating a categorical column with agg_func='mean'"
+    )
+    # each categorical column would give a different table, and we only return one
+    if categorical and len(value_key) > 1:
+        raise ValueError(
+            "Can only aggregate one categorical column at the time. Please call aggregate() multiple times."
+        )
+    if isinstance(values, DaskDataFrame) and not fractions:
+        table_values: pd.DataFrame | None = None
+        if locations[0].origin != "df":  # in memory, as in the sjoin path
+            found = get_values(value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name)
+            assert not isinstance(found, np.ndarray)
+            table_values = assert_type(found, pd.DataFrame)
+        return _aggregate_points_by_shapes(values, by, value_key, categorical, agg_func, table_values)
+    return _aggregate_shapes_sjoin(
+        values, by, values_sdata, values_element_name, table_name, value_key, agg_func, fractions, buffer_resolution
+    )
+
+
+def _aggregate_shapes_sjoin(
+    values: gpd.GeoDataFrame | DaskDataFrame,
+    by: gpd.GeoDataFrame,
+    values_sdata: SpatialData | None,
+    values_element_name: str | None,
+    table_name: str | None,
+    value_key: list[str],
+    agg_func: str | list[str],
+    fractions: bool,
+    buffer_resolution: int,
+) -> ad.AnnData:
+    """`_aggregate_shapes()` with `geopandas.sjoin()` or `overlay()`: shapes by shapes, and `fractions=True`."""
+    from spatialdata._core.operations.vectorize import to_polygons
+    from spatialdata.models import points_dask_dataframe_to_geopandas
+
     if values_sdata is not None:
         actual_values = get_values(
             value_key=value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
@@ -395,7 +444,6 @@ def _aggregate_shapes(
         values = to_polygons(values, buffer_resolution=buffer_resolution)
     else:
         raise RuntimeError(f"Unsupported type {type(values)}, this is most likely due to a bug, please report.")
-    by = to_polygons(by, buffer_resolution=buffer_resolution)
 
     categorical = isinstance(actual_values.iloc[:, 0].dtype, pd.CategoricalDtype)
 
@@ -409,9 +457,6 @@ def _aggregate_shapes(
         assert not isinstance(values.iloc[0].geometry, Point), (
             "Fractions cannot be computed when values are points. Please use fractions=False."
         )
-    assert not (categorical and agg_func == "mean"), (
-        "Incompatible choice: aggregating a categorical column with agg_func='mean'"
-    )
 
     # we need to add a column of ones to the values dataframe to be able to count the number of instances in each zone
     # and we need to add a column with the area of each zone to be able to compute the fractions describing the overlaps
@@ -432,8 +477,6 @@ def _aggregate_shapes(
     assert INDEX not in by, f"{INDEX} is a reserved column name"
     assert "__index" not in values, f"{INDEX} is a reserved column name"
 
-    if isinstance(value_key, str):
-        value_key = [value_key]
     # either all the values of value_key are in the GeoDataFrame values, either none of them are (and in such a case
     # value_key refer to either obs or var of the table)
     assert not (any(vk in values.columns for vk in value_key) and not all(vk in values.columns for vk in value_key))
@@ -468,9 +511,6 @@ def _aggregate_shapes(
 
     aggregated_values: ArrayLike
     if categorical:
-        # we only allow the aggregation of one categorical column at the time, because each categorical column would
-        # give a different table as result of the aggregation, and we only support single tables
-        assert len(value_key) == 1
         vk = value_key[0]
         if fractions_of_values is not None:
             joined[ONES_COLUMN] = fractions_of_values
@@ -507,8 +547,6 @@ def _aggregate_shapes(
             columns_categories * (numel // len(columns_categories)), categories=columns_categories
         )
 
-    from scipy import sparse
-
     X = sparse.coo_matrix(
         (
             aggregated_values.ravel(),
@@ -527,3 +565,86 @@ def _aggregate_shapes(
     values.drop(columns=[ONES_COLUMN, AREAS_COLUMN] + to_remove, inplace=True)
 
     return anndata
+
+
+COMBINE = {"sum": "sum", "count": "sum", "min": "min", "max": "max", "mean": "sum"}  # per chunk -> over chunks
+
+
+def _join_chunk(
+    part: pd.DataFrame, i: int, k: int, index: PolygonIndex, value_key: list[str], partial: bool, agg_func: Any
+) -> pd.DataFrame:
+    """Values of chunk i of k of a partition indexed by matched region, aggregated per region if `partial`."""
+    part = part.iloc[len(part) * i // k : len(part) * (i + 1) // k]
+    pt, region = index.query(part["x"].to_numpy(), part["y"].to_numpy())
+    vals = part[value_key].iloc[pt].set_axis(region)
+    if not partial:
+        return vals
+    col = vals.iloc[:, 0]
+    if isinstance(col.dtype, pd.CategoricalDtype):  # points per region and category
+        codes = col.cat.codes.to_numpy()
+        keep = codes >= 0  # groupby drops missing values
+        shape = (index.n_regions, len(col.cat.categories))
+        m = sparse.csr_matrix((np.ones(keep.sum(), np.int64), (region[keep], codes[keep])), shape=shape).tocoo()
+        return pd.DataFrame({"n": m.data, "cat": pd.Categorical.from_codes(m.col, col.cat.categories)}, index=m.row)
+    if agg_func == "mean":  # summed in float, as pandas does
+        return vals.astype(np.float64).groupby(level=0, sort=False).agg(["sum", "count"])
+    out: pd.DataFrame = vals.groupby(level=0, sort=False).agg(agg_func)
+    return out
+
+
+def _aggregate_points_by_shapes(
+    points: DaskDataFrame,
+    by: gpd.GeoDataFrame,
+    value_key: list[str],
+    categorical: bool,
+    agg_func: Any,
+    table_values: pd.DataFrame | None,
+) -> ad.AnnData:
+    """Aggregate point values per region, joining each partition in chunks on Dask threads with a numba kernel."""
+    from dask.base import compute
+    from dask.delayed import delayed
+    from dask.system import CPU_COUNT
+
+    from spatialdata._core.operations._points_in_polygons import PolygonIndex
+
+    index = delayed(PolygonIndex(by.geometry.to_numpy()), pure=False)
+    if table_values is None:
+        parts = points[list(dict.fromkeys(["x", "y", *value_key]))].to_delayed()
+    else:  # values from the table: aligned by position, as in the sjoin path
+        pdf = points[["x", "y"]].compute().assign(**{vk: table_values[vk].values for vk in value_key})
+        parts = [delayed(pdf, pure=False)]
+    dtypes = (points.dtypes if table_values is None else table_values.dtypes)[value_key]
+    numeric = all(isinstance(d, np.dtype) and d.kind in "biuf" for d in dtypes)
+    partial = isinstance(agg_func, str) and agg_func in ({"sum", "count"} if categorical else COMBINE)
+    partial = partial and (categorical or numeric or agg_func == "count")
+    k = -(-CPU_COUNT // len(parts))  # chunks per partition, so that all cores are busy
+    chunk = delayed(_join_chunk, pure=False)
+    results = compute(*[chunk(p, i, k, index, value_key, partial, agg_func) for p in parts for i in range(k)])
+    columns = value_key
+    if categorical:  # categories in order of appearance over the partitions, as when computing the column
+        vk = "cat" if partial else value_key[0]
+        columns = list(dict.fromkeys(c for r in results for c in r[vk].cat.categories))
+    if categorical and partial:  # one sparse sum: a groupby over the pairs of all chunks is much slower
+        rows = np.concatenate([r.index for r in results])
+        cols = np.concatenate(
+            [pd.Index(columns).get_indexer(r["cat"].cat.categories)[r["cat"].cat.codes] for r in results]
+        )
+        data = np.concatenate([r["n"].to_numpy() for r in results])
+    elif categorical:  # one groupby over all the matches, as in the sjoin path
+        joined = pd.concat([r.assign(**{vk: pd.Categorical(r[vk], categories=columns)}) for r in results])
+        agg = joined.assign(ones=1).groupby([joined.index, vk], observed=False)["ones"].agg(agg_func)
+        rows, cols = agg.index.get_level_values(0), pd.Index(columns).get_indexer(agg.index.get_level_values(1))
+        data = agg.to_numpy()
+    else:
+        joined = pd.concat(results)
+        if not partial:  # one groupby over all the matches, as in the sjoin path
+            agg = joined.groupby(level=0)[value_key].agg(agg_func)
+        elif agg_func == "mean":
+            s = joined.groupby(level=0).sum()
+            agg = s.xs("sum", axis=1, level=1) / s.xs("count", axis=1, level=1)
+        else:
+            agg = joined.groupby(level=0).agg(COMBINE[agg_func])
+        rows, cols = np.repeat(agg.index, len(columns)), np.tile(np.arange(len(columns)), len(agg))
+        data = agg.to_numpy().ravel()
+    X = sparse.coo_matrix((data, (rows, cols)), shape=(len(by), len(columns))).tocsr()
+    return ad.AnnData(X, obs=pd.DataFrame(index=list(map(str, by.index))), var=pd.DataFrame(index=columns))
