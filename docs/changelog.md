@@ -13,4 +13,5 @@ For developers, please consult the [contributing guide](https://github.com/scver
 
 ### Fixed
 
+- `rasterize(..., return_regions_as_labels=True)` now supports more than 65,535 labels: the output dtype is `uint16`, `uint32` or `uint64` depending on the maximum label. Labels of 2**53 or higher (also from summing overlapping labels) raise a `ValueError` instead of being silently rounded (datashader aggregates in float64).
 - Querying a `SpatialData` object with multiple (batched) bounding boxes now raises an explicit `NotImplementedError` instead of failing with an opaque `AssertionError`. Batched queries are supported when querying a `SpatialElement` directly, but not when querying a `SpatialData` object, since that would require returning one `SpatialData` object per bounding box.

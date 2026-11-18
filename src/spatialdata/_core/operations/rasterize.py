@@ -767,6 +767,13 @@ def rasterize_shapes_points(
             max_label = next(iter(reversed(label_index_to_category.keys())))
         else:
             max_label = int(agg.max().values)
+        # datashader aggregates in float64: from 2**53 on, a value may be a rounded larger integer
+        # (from large input labels or from summing overlapping labels)
+        if max_label >= 2**53:
+            raise ValueError(
+                f"Maximum label is at least {max_label}. Labels of 2**53 or higher cannot be rasterized exactly "
+                "because datashader aggregates in float64."
+            )
         agg = agg.astype(_get_uint_dtype(max_label))
         return Labels2DModel.parse(agg, transformations=transformations)
 
