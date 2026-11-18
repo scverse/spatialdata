@@ -15,7 +15,7 @@ class NgffAxis:
     """
     Representation of an axis, following the NGFF specification.
 
-    Attributes
+    Parameters
     ----------
     name
         name of the axis.
@@ -181,6 +181,10 @@ class NgffCoordinateSystem:
         ----------
         name
             name of the axis.
+
+        Returns
+        -------
+        Whether the coordinate system has an axis with the given name.
         """
         return any(axis.name == name for axis in self._axes)
 
@@ -206,6 +210,10 @@ class NgffCoordinateSystem:
 
         new_name
             name of the new coordinate system
+
+        Returns
+        -------
+        The merged coordinate system.
         """
         # common axes need to be the identical otherwise no merge is made
         common_axes = set(coord_sys1.axes_names).intersection(coord_sys2.axes_names)

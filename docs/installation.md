@@ -74,7 +74,7 @@ Update: currently (Feb 2025), due to particular versions being unavailable on `c
 
 ## Docker
 
-A `Dockerfile` is available in the repository; the image that can be built from it contains `spatialdata` (with `torch`), `spatialdata-io` and `spatialdata-plot` (not `napari-spatialdata`)'; the libaries are installed from PyPI.
+A `Dockerfile` is available in the repository; the image that can be built from it contains `spatialdata` (with `torch`), `spatialdata-io` and `spatialdata-plot` (not `napari-spatialdata`)’; the libaries are installed from PyPI.
 
 To build the image, run:
 

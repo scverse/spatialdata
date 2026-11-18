@@ -1,5 +1,5 @@
 ```{eval-rst}
-.. image:: _static/img/spatialdata_horizontal.png
+.. image:: _static/img/spatialdata_horizontal.svg
   :class: dark-light p-2
   :alt: SpatialData banner
 ```
@@ -8,7 +8,9 @@
 
 SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets. It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
 
-This page provides documentation on how to install, use, and extend the core `spatialdata` library. See the links below to learn more about other packages in the SpatialData ecosystem.
+This site documents how to install, use and extend the Python `spatialdata` library. For language-independent definitions of SpatialData datasets and their on-disk representation, see the [SpatialData specifications](https://spatialdata-spec.scverse.org/).
+
+See the links below to learn more about other packages in the SpatialData ecosystem.
 
 - `spatialdata-io`: load data from common spatial omics technologies into `spatialdata` ([repository][spatialdata-io-repo], [documentation][spatialdata-io-docs]).
 - `spatialdata-plot`: Static plotting library for `spatialdata` ([repository][spatialdata-plot-repo], [documentation][spatialdata-plot-docs]).
@@ -45,7 +47,7 @@ If you like scverse® and want to support our mission, please consider making a 
   <img
     src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
     width="200"
-  >
+>
 </a>
 </div>
 
@@ -54,6 +56,7 @@ If you like scverse® and want to support our mission, please consider making a 
    This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
 ```
 
+<!-- panache-ignore-format-start -->
 ```{eval-rst}
 .. card:: Installation
     :link: installation
@@ -61,17 +64,17 @@ If you like scverse® and want to support our mission, please consider making a 
 
     Learn how to install ``spatialdata``.
 
-.. card:: User Guide
+.. card:: How-to guides
     :link: user_guide
     :link-type: doc
 
-    Navigate your way through ``spatialdata`` tutorials.
+    Get help with common questions and tasks in ``spatialdata``.
 
 .. card:: Tutorials
     :link: tutorials/notebooks/notebooks
     :link-type: doc
 
-    Learn how to use ``spatialdata`` with hands-on examples.
+    Learn how to use ``spatialdata`` with detailed hands-on examples.
 
 .. card:: API
     :link: api
@@ -98,22 +101,50 @@ If you like scverse® and want to support our mission, please consider making a 
     Learn how to contribute to ``spatialdata``.
 
 ```
+<!-- panache-ignore-format-end -->
 
 ```{toctree}
+:caption: Getting started
 :hidden: true
 :maxdepth: 1
 
-installation.md
-user_guide.md
-api.md
-tutorials/notebooks/notebooks.md
-tutorials/notebooks/datasets/README.md
-glossary.md
-design_doc.md
-interoperability.md
-contributing.md
-changelog.md
-references.md
+installation
+quickstart
+```
+
+```{toctree}
+:caption: Guides
+:hidden: true
+:maxdepth: 1
+
+user_guide
+tutorials/notebooks/notebooks
+```
+
+```{toctree}
+:caption: Reference
+:hidden: true
+:maxdepth: 1
+
+api
+tutorials/notebooks/datasets/README
+glossary
+SpatialData specifications <https://spatialdata-spec.scverse.org/>
+design_doc
+interoperability
+```
+
+```{toctree}
+:caption: Project
+:hidden: true
+:maxdepth: 1
+
+changelog
+contributing
+citation
+references
+GitHub <https://github.com/scverse/spatialdata>
+Discourse <https://discourse.scverse.org/c/help/spatialdata/44>
 ```
 
 <!-- Links -->
@@ -123,6 +154,6 @@ references.md
 [spatialdata-plot-repo]: https://github.com/scverse/spatialdata-plot
 [napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/stable/notebooks/spatialdata.html
 [spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/stable/
-[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/api.html
+[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/
 [spatialdata-r-repo]: https://github.com/HelenaLC/spatialdataR
 [spatialdata-js-repo]: https://github.com/Taylor-CCB-Group/SpatialData.js
