@@ -90,7 +90,7 @@ interoperability
 :hidden: true
 :maxdepth: 1
 
-changelog
+Release notes <https://github.com/scverse/spatialdata/releases>
 contributing
 citation
 references
