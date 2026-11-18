@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import functools
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, assert_type
 
 import anndata as ad
 import dask as da
@@ -185,12 +184,14 @@ def aggregate(
 
         assert isinstance(by_, GeoDataFrame)
         assert isinstance(values_, GeoDataFrame | DaskDataFrame)
+        # the column of ones exists only in values_, which can be a transformed copy of the element in values_sdata
+        name = values if ONES_KEY is None and isinstance(values, str) else None
         try:
             adata = _aggregate_shapes(
                 values=values_,
                 by=by_,
-                values_sdata=values_sdata,
-                values_element_name=values if isinstance(values, str) else None,
+                values_sdata=values_sdata if name is not None else None,
+                values_element_name=name,
                 value_key=value_key,
                 agg_func=agg_func,
                 fractions=fractions,
@@ -386,23 +387,28 @@ def _aggregate_shapes(
     assert (values_sdata is None) == (values_element_name is None)
     value_key = [value_key] if isinstance(value_key, str) else list(value_key)
     by = to_polygons(by, buffer_resolution=buffer_resolution)
-    if isinstance(values, DaskDataFrame) and not fractions:
-        if values_sdata is None:
-            locations = _locate_values(value_key, element=values)
-        else:
-            locations = _locate_values(
-                value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
-            )
-        assert not (locations[0].is_categorical and agg_func == "mean"), (
-            "Incompatible choice: aggregating a categorical column with agg_func='mean'"
+    if values_sdata is None:
+        locations = _locate_values(value_key, element=values)
+    else:
+        locations = _locate_values(
+            value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
         )
-        table_values = None
+    categorical = locations[0].is_categorical
+    assert not (categorical and agg_func == "mean"), (
+        "Incompatible choice: aggregating a categorical column with agg_func='mean'"
+    )
+    # each categorical column would give a different table, and we only return one
+    if categorical and len(value_key) > 1:
+        raise ValueError(
+            "Can only aggregate one categorical column at the time. Please call aggregate() multiple times."
+        )
+    if isinstance(values, DaskDataFrame) and not fractions:
+        table_values: pd.DataFrame | None = None
         if locations[0].origin != "df":  # in memory, as in the sjoin path
-            table_values = get_values(
-                value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name
-            )
-        assert table_values is None or isinstance(table_values, pd.DataFrame)
-        return _aggregate_points_by_shapes(values, by, value_key, locations[0].is_categorical, agg_func, table_values)
+            found = get_values(value_key, sdata=values_sdata, element_name=values_element_name, table_name=table_name)
+            assert not isinstance(found, np.ndarray)
+            table_values = assert_type(found, pd.DataFrame)
+        return _aggregate_points_by_shapes(values, by, value_key, categorical, agg_func, table_values)
     return _aggregate_shapes_sjoin(
         values, by, values_sdata, values_element_name, table_name, value_key, agg_func, fractions, buffer_resolution
     )
@@ -451,9 +457,6 @@ def _aggregate_shapes_sjoin(
         assert not isinstance(values.iloc[0].geometry, Point), (
             "Fractions cannot be computed when values are points. Please use fractions=False."
         )
-    assert not (categorical and agg_func == "mean"), (
-        "Incompatible choice: aggregating a categorical column with agg_func='mean'"
-    )
 
     # we need to add a column of ones to the values dataframe to be able to count the number of instances in each zone
     # and we need to add a column with the area of each zone to be able to compute the fractions describing the overlaps
@@ -508,9 +511,6 @@ def _aggregate_shapes_sjoin(
 
     aggregated_values: ArrayLike
     if categorical:
-        # we only allow the aggregation of one categorical column at the time, because each categorical column would
-        # give a different table as result of the aggregation, and we only support single tables
-        assert len(value_key) == 1
         vk = value_key[0]
         if fractions_of_values is not None:
             joined[ONES_COLUMN] = fractions_of_values
@@ -567,37 +567,29 @@ def _aggregate_shapes_sjoin(
     return anndata
 
 
-DECOMPOSABLE = {"sum": np.add, "count": np.add, "mean": np.add, "min": np.fmin, "max": np.fmax}
+COMBINE = {"sum": "sum", "count": "sum", "min": "min", "max": "max", "mean": "sum"}  # per chunk -> over chunks
 
 
 def _join_chunk(
-    part: pd.DataFrame, i: int, k: int, index: PolygonIndex, value_key: list[str], agg_func: Any, reduce: bool
-) -> tuple[Any, ...]:
-    """Join chunk i of k of a partition to the regions; reduce it if `agg_func` allows, else return the matches."""
+    part: pd.DataFrame, i: int, k: int, index: PolygonIndex, value_key: list[str], partial: bool, agg_func: Any
+) -> pd.DataFrame:
+    """Values of chunk i of k of a partition indexed by matched region, aggregated per region if `partial`."""
     part = part.iloc[len(part) * i // k : len(part) * (i + 1) // k]
     pt, region = index.query(part["x"].to_numpy(), part["y"].to_numpy())
-    vals = part[value_key].iloc[pt]
-    if not reduce:
-        return region, vals
-    if isinstance(vals.dtypes.iloc[0], pd.CategoricalDtype):  # sum or count of ones: points per region and category
-        codes = vals.iloc[:, 0].cat.codes.to_numpy()
+    vals = part[value_key].iloc[pt].set_axis(region)
+    if not partial:
+        return vals
+    col = vals.iloc[:, 0]
+    if isinstance(col.dtype, pd.CategoricalDtype):  # points per region and category
+        codes = col.cat.codes.to_numpy()
         keep = codes >= 0  # groupby drops missing values
-        shape = (index.n_regions, len(vals.iloc[:, 0].cat.categories))
-        m = sparse.csr_matrix((np.ones(keep.sum(), np.int64), (region[keep], codes[keep])), shape=shape)
-        return m.tocoo(), vals.iloc[:, 0].cat.categories
-    v = vals.to_numpy()
-    missing = pd.isna(v)
-    present = np.zeros((index.n_regions, v.shape[1]), np.int64)
-    np.add.at(present, region, ~missing)
-    hits = np.bincount(region, minlength=index.n_regions)
-    if agg_func == "count":
-        return hits, present, present
-    dtype = {"f": np.float64, "u": np.uint64}.get(v.dtype.kind, np.int64) if agg_func == "sum" else np.float64
-    acc = np.full((index.n_regions, v.shape[1]), {"min": np.inf, "max": -np.inf}.get(agg_func, 0), dtype)
-    DECOMPOSABLE[agg_func].at(
-        acc, region, np.where(missing, np.nan if agg_func in ("min", "max") else 0, v).astype(dtype)
-    )
-    return hits, present, acc
+        shape = (index.n_regions, len(col.cat.categories))
+        m = sparse.csr_matrix((np.ones(keep.sum(), np.int64), (region[keep], codes[keep])), shape=shape).tocoo()
+        return pd.DataFrame({"n": m.data, "cat": pd.Categorical.from_codes(m.col, col.cat.categories)}, index=m.row)
+    if agg_func == "mean":  # summed in float, as pandas does
+        return vals.astype(np.float64).groupby(level=0, sort=False).agg(["sum", "count"])
+    out: pd.DataFrame = vals.groupby(level=0, sort=False).agg(agg_func)
+    return out
 
 
 def _aggregate_points_by_shapes(
@@ -623,42 +615,36 @@ def _aggregate_points_by_shapes(
         parts = [delayed(pdf, pure=False)]
     dtypes = (points.dtypes if table_values is None else table_values.dtypes)[value_key]
     numeric = all(isinstance(d, np.dtype) and d.kind in "biuf" for d in dtypes)
-    reduce = isinstance(agg_func, str) and agg_func in ({"sum", "count"} if categorical else DECOMPOSABLE)
-    reduce = reduce and (categorical or numeric or agg_func == "count")
+    partial = isinstance(agg_func, str) and agg_func in ({"sum", "count"} if categorical else COMBINE)
+    partial = partial and (categorical or numeric or agg_func == "count")
     k = -(-CPU_COUNT // len(parts))  # chunks per partition, so that all cores are busy
     chunk = delayed(_join_chunk, pure=False)
-    results = compute(*[chunk(p, i, k, index, value_key, agg_func, reduce) for p in parts for i in range(k)])
-    obs = pd.DataFrame(index=list(map(str, by.index)))
-    if reduce and not categorical:
-        hits, present = sum(r[0] for r in results), sum(r[1] for r in results)
-        acc = functools.reduce(DECOMPOSABLE[agg_func], [r[2] for r in results])
-        with np.errstate(invalid="ignore", divide="ignore"):
-            out = {"count": present, "mean": acc / present}.get(agg_func, acc)
-        out = np.where(present > 0, out, np.nan) if agg_func in ("min", "max") else out  # only missing values
-        return ad.AnnData(
-            sparse.csr_matrix(np.where(hits[:, None] > 0, out, 0)), obs=obs, var=pd.DataFrame(index=value_key)
-        )
+    results = compute(*[chunk(p, i, k, index, value_key, partial, agg_func) for p in parts for i in range(k)])
     columns = value_key
     if categorical:  # categories in order of appearance over the partitions, as when computing the column
-        cats = [r[1] if reduce else r[1].iloc[:, 0].cat.categories for r in results]
-        columns = list(dict.fromkeys(c for cs in cats for c in cs))
-    if reduce:  # categorical sum or count
-        lookup = pd.Index(columns)
-        rows = [m.row for m, _ in results]
-        cols = [lookup.get_indexer(cs)[m.col] for m, cs in results]
-        data = [m.data for m, _ in results]
-    else:  # one groupby over all the matches, as in the sjoin path
-        joined = pd.concat([v.set_axis(r) for r, v in results])
-        if categorical:
-            vk = value_key[0]
-            joined[vk] = pd.Categorical(joined[vk], categories=columns)
-            agg = joined.assign(ones=1).groupby([joined.index, vk], observed=False)["ones"].agg(agg_func)
-            rows, cols = [agg.index.get_level_values(0)], [pd.Index(columns).get_indexer(agg.index.get_level_values(1))]
-        else:
+        vk = "cat" if partial else value_key[0]
+        columns = list(dict.fromkeys(c for r in results for c in r[vk].cat.categories))
+    if categorical and partial:  # one sparse sum: a groupby over the pairs of all chunks is much slower
+        rows = np.concatenate([r.index for r in results])
+        cols = np.concatenate(
+            [pd.Index(columns).get_indexer(r["cat"].cat.categories)[r["cat"].cat.codes] for r in results]
+        )
+        data = np.concatenate([r["n"].to_numpy() for r in results])
+    elif categorical:  # one groupby over all the matches, as in the sjoin path
+        joined = pd.concat([r.assign(**{vk: pd.Categorical(r[vk], categories=columns)}) for r in results])
+        agg = joined.assign(ones=1).groupby([joined.index, vk], observed=False)["ones"].agg(agg_func)
+        rows, cols = agg.index.get_level_values(0), pd.Index(columns).get_indexer(agg.index.get_level_values(1))
+        data = agg.to_numpy()
+    else:
+        joined = pd.concat(results)
+        if not partial:  # one groupby over all the matches, as in the sjoin path
             agg = joined.groupby(level=0)[value_key].agg(agg_func)
-            rows, cols = [np.repeat(agg.index, len(columns))], [np.tile(np.arange(len(columns)), len(agg))]
-        data = [agg.to_numpy().ravel()]
-    X = sparse.coo_matrix(
-        (np.concatenate(data), (np.concatenate(rows), np.concatenate(cols))), shape=(len(by), len(columns))
-    ).tocsr()
-    return ad.AnnData(X, obs=obs, var=pd.DataFrame(index=columns))
+        elif agg_func == "mean":
+            s = joined.groupby(level=0).sum()
+            agg = s.xs("sum", axis=1, level=1) / s.xs("count", axis=1, level=1)
+        else:
+            agg = joined.groupby(level=0).agg(COMBINE[agg_func])
+        rows, cols = np.repeat(agg.index, len(columns)), np.tile(np.arange(len(columns)), len(agg))
+        data = agg.to_numpy().ravel()
+    X = sparse.coo_matrix((data, (rows, cols)), shape=(len(by), len(columns))).tocsr()
+    return ad.AnnData(X, obs=pd.DataFrame(index=list(map(str, by.index))), var=pd.DataFrame(index=columns))

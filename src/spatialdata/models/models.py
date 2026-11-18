@@ -895,6 +895,8 @@ class PointsModel:
         ddf = data if isinstance(data, DaskDataFrame) else _from_pandas(data, sort=sort, **kwargs)
         table = ddf[[coordinates[ax] for ax in axes]]
         table.columns = axes
+        if isinstance(data, pd.DataFrame) and table.dtypes.nunique() > 1:  # one dtype for all coordinates
+            table = table.astype(np.result_type(*table.dtypes))
 
         if feature_key is not None:
             if data[feature_key].dtype.name == "category":

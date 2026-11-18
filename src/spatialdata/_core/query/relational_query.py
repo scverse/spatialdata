@@ -1093,17 +1093,16 @@ def _locate_values(
                 f"{vk} has not been found in (element, sdata, element_name) = {(element, sdata, element_name)}"
             )
         locations.append(origins[0])
-    categorical_values = {x.is_categorical for x in locations}
-    origin_values = {x.origin for x in locations}
-    if len(categorical_values) == 2:
+    sources = {x.origin for x in locations}
+    if len({x.is_categorical for x in locations}) == 2:
         raise ValueError("Cannot mix categorical and non-categorical values. Please call aggregate() multiple times.")
-    if len({x.origin for x in locations}) > 1 and categorical_values.__iter__().__next__() is True:
+    if len(sources) > 1 and locations[0].is_categorical:
         raise ValueError(
             "Can only aggregate one categorical column at the time. Please call aggregate() multiple times."
         )
-    if len(origin_values) > 1:
+    if len(sources) > 1:
         raise ValueError(
-            f"Cannot mix values from different origins: {origin_values}. Please call aggregate() multiple times."
+            f"Cannot mix values from different sources: {sources}. Please call aggregate() multiple times."
         )
     return locations
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -9,7 +10,7 @@ import numba as nb
 import numpy as np
 import shapely
 
-BIG = 500  # vertices; larger geometries are tested with prepared GEOS instead of the edge loop
+BIG, BIG_CELLS = 500, 64  # geometries above both (vertices, grid cells) are tested with prepared GEOS
 
 
 def _jit(f: Callable[..., Any]) -> Any:
@@ -83,10 +84,6 @@ class PolygonIndex:
         # the parts of a geometry are contiguous, so its rings are too: one even-odd test over all of them
         first_part = np.searchsorted(owner, self.geom)
         geom_ring = np.append(part_ring[first_part], part_ring[-1]).astype(np.int64)
-        n_vertices = np.diff(ring_off[geom_ring])
-        self.big = np.flatnonzero(n_vertices > BIG)
-        self.prepared = geoms[self.geom[self.big]]
-        shapely.prepare(self.prepared)
 
         b = shapely.bounds(geoms[self.geom]).reshape(-1, 4)
         x0, y0 = (b[:, 0].min(), b[:, 1].min()) if len(b) else (0.0, 0.0)
@@ -97,24 +94,32 @@ class PolygonIndex:
         nx, ny = int(w / cs) + 1, int(h / cs) + 1
         i0, j0, i1, j1 = (((b - [x0, y0, x0, y0]) / cs).astype(np.int64)).T
         k = (i1 - i0 + 1) * (j1 - j0 + 1)  # grid cells covered by each geometry's bounding box
+        # GEOS pays off for geometries with many vertices and many points, e.g. a tissue mask, not for large cells
+        big = np.flatnonzero((np.diff(ring_off[geom_ring]) > BIG) & (k > BIG_CELLS))
+        self.big_geoms = geoms[self.geom[big]]
+        self.big_slot = np.full(len(self.geom), -1)
+        self.big_slot[big] = np.arange(len(big))
+        self.prepared: dict[int, np.ndarray] = {}  # per thread: prepared GEOS geometries are not thread-safe
         g = np.repeat(np.arange(len(b)), k)
         local = np.arange(k.sum()) - np.repeat(np.cumsum(k) - k, k)
         cell = (j0[g] + local // (i1 - i0 + 1)[g]) * nx + i0[g] + local % (i1 - i0 + 1)[g]
         g_items = g[np.argsort(cell, kind="stable")]
         g_off = np.append(0, np.cumsum(np.bincount(cell, minlength=nx * ny)))
-        big = np.zeros(len(b), np.bool_)
-        big[self.big] = True
-        coords = np.ascontiguousarray(coords[:, :2], np.float64)
-        self.grid = (b, coords, ring_off.astype(np.int64), geom_ring, big, x0, y0, cs, nx, ny, g_off, g_items)
+        coords, ring_off = np.ascontiguousarray(coords[:, :2], np.float64), ring_off.astype(np.int64)
+        self.grid = (b, coords, ring_off, geom_ring, self.big_slot >= 0, x0, y0, cs, nx, ny, g_off, g_items)
 
     def query(self, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Return (point index, geometry index) pairs."""
         x, y = np.ascontiguousarray(x, np.float64), np.ascontiguousarray(y, np.float64)
         pts, geoms = _query(x, y, self.grid)
-        if len(self.big):
-            keep = np.ones(len(pts), bool)
-            for b, poly in zip(self.big, self.prepared, strict=True):
-                cand = np.flatnonzero(geoms == b)
-                keep[cand] = shapely.intersects_xy(poly, x[pts[cand]], y[pts[cand]])
+        slot = self.big_slot[geoms]
+        big = slot >= 0
+        if big.any():
+            prepared = self.prepared.get(tid := threading.get_ident())
+            if prepared is None:
+                prepared = self.prepared[tid] = shapely.from_wkb(shapely.to_wkb(self.big_geoms))
+                shapely.prepare(prepared)
+            keep = ~big
+            keep[big] = shapely.intersects_xy(prepared[slot[big]], x[pts[big]], y[pts[big]])
             pts, geoms = pts[keep], geoms[keep]
         return pts, self.geom[geoms]
