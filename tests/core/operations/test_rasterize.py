@@ -469,6 +469,27 @@ def test_rasterize_points_selects_label_dtype():
     assert result.max().compute() == n_points
 
 
+@pytest.mark.xfail(reason="datashader aggregates in float64, so labels above 2**53 are silently rounded")
+def test_rasterize_labels_above_float64_precision():
+    label = 2**53 + 1
+    df = pd.DataFrame({"x": [0.5, 1.5], "y": [0.5, 0.5], "label": np.array([1, label], dtype=np.uint64)})
+    points = PointsModel.parse(dd.from_pandas(df, npartitions=1))
+
+    result = rasterize(
+        points,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[2, 1],
+        target_coordinate_system="global",
+        target_width=2,
+        value_key="label",
+        agg_func="first",
+        return_regions_as_labels=True,
+    )
+
+    assert int(result.max().compute()) == label
+
+
 def test_rasterize_spatialdata(full_sdata):
     sdata = full_sdata.subset(
         ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale", "points_0", "circles"]
