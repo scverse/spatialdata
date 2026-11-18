@@ -587,10 +587,12 @@ def _aggregate_points_by_shapes(
     Sum or count point values per region without loading all the points into memory.
 
     Each Dask partition is loaded, joined to the regions with a shared :class:`shapely.STRtree` and reduced to a sparse
-    regions x columns matrix on a thread pool (shapely releases the GIL). The result matches the `geopandas.sjoin()`
+    regions x columns matrix on Dask's thread pool (shapely releases the GIL). The result matches the `geopandas.sjoin()`
     path in `_aggregate_shapes()`.
     """
-    from concurrent.futures import ThreadPoolExecutor
+    from dask.base import compute
+    from dask.delayed import delayed
+    from dask.system import CPU_COUNT
 
     categories = None
     if categorical:
@@ -599,17 +601,14 @@ def _aggregate_points_by_shapes(
     columns = list(categories) if categories is not None else value_keys
     shape = (len(by), len(columns))
     tree = shapely.STRtree(by.geometry.to_numpy())
-    parts = points[["x", "y", *value_keys]].to_delayed()
-
-    def run(part: Any) -> sparse.csr_matrix:
-        # sync scheduler: the thread pool already runs one partition per thread
-        return _count_partition(
-            part.compute(scheduler="sync"), tree, value_keys, categories, agg_func == "count", shape
-        )
-
-    # ponytail: one thread per partition; points stored in a single partition run on one core
-    with ThreadPoolExecutor() as ex:
-        coo = [m.tocoo() for m in ex.map(run, parts)]
+    points = points[["x", "y", *value_keys]]
+    if points.npartitions < CPU_COUNT:  # PointsModel.parse() makes a single partition by default
+        points = points.repartition(npartitions=CPU_COUNT)
+    # pure=False: the tree is passed as is instead of being hashed for the task key
+    count = delayed(_count_partition, pure=False)
+    tasks = [count(part, tree, value_keys, categories, agg_func == "count", shape) for part in points.to_delayed()]
+    # local threads also under a distributed client, because the tree lives in this process
+    coo = [m.tocoo() for m in compute(*tasks, scheduler="threads")]
     X = sparse.coo_matrix(
         (
             np.concatenate([m.data for m in coo]),
