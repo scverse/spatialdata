@@ -10,13 +10,13 @@ import dask.dataframe as ddf
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import shapely
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from scipy import sparse
 from shapely import Point
 from xarray import DataArray, DataTree
 
+from spatialdata._core.operations._points_in_polygons import PolygonIndex
 from spatialdata._core.operations._utils import _parse_element
 from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
@@ -550,15 +550,15 @@ def _aggregate_shapes(
 
 def _count_partition(
     part: pd.DataFrame,
-    tree: shapely.STRtree,
+    index: PolygonIndex,
     value_keys: list[str],
     categories: pd.Index | None,
     count: bool,
     shape: tuple[int, int],
 ) -> sparse.csr_matrix:
     """Sum (or count) the values of the points of one partition that fall in each region."""
-    # same predicate as the default of geopandas.sjoin(): points on a region's boundary count for that region
-    pt, region = tree.query(shapely.points(part["x"].to_numpy(), part["y"].to_numpy()), predicate="intersects")
+    # same semantics as the default predicate of geopandas.sjoin(): points on a region's boundary count for that region
+    pt, region = index.query(part["x"].to_numpy(), part["y"].to_numpy())
     if categories is not None:
         codes = pd.Categorical(part[value_keys[0]], categories=categories).codes[pt]
         keep = codes >= 0  # pandas groupby drops missing categories
@@ -586,8 +586,8 @@ def _aggregate_points_by_shapes(
     """
     Sum or count point values per region without loading all the points into memory.
 
-    Each Dask partition is loaded, joined to the regions with a shared :class:`shapely.STRtree` and reduced to a sparse
-    regions x columns matrix on Dask's thread pool (shapely releases the GIL). The result matches the `geopandas.sjoin()`
+    Each Dask partition is loaded, joined to the regions with a shared numba point-in-polygon index and reduced to a
+    sparse regions x columns matrix on Dask's thread pool (the numba kernels release the GIL). The result matches the `geopandas.sjoin()`
     path in `_aggregate_shapes()`.
     """
     from dask.base import compute
@@ -600,14 +600,14 @@ def _aggregate_points_by_shapes(
         categories = (column.cat.categories if column.cat.known else column.cat.as_known().cat.categories).copy()
     columns = list(categories) if categories is not None else value_keys
     shape = (len(by), len(columns))
-    tree = shapely.STRtree(by.geometry.to_numpy())
+    index = PolygonIndex(by.geometry.to_numpy())
     points = points[["x", "y", *value_keys]]
     if points.npartitions < CPU_COUNT:  # PointsModel.parse() makes a single partition by default
         points = points.repartition(npartitions=CPU_COUNT)
-    # pure=False: the tree is passed as is instead of being hashed for the task key
+    # pure=False: the index is passed as is instead of being hashed for the task key
     count = delayed(_count_partition, pure=False)
-    tasks = [count(part, tree, value_keys, categories, agg_func == "count", shape) for part in points.to_delayed()]
-    # local threads also under a distributed client, because the tree lives in this process
+    tasks = [count(part, index, value_keys, categories, agg_func == "count", shape) for part in points.to_delayed()]
+    # local threads also under a distributed client, because the index lives in this process
     coo = [m.tocoo() for m in compute(*tasks, scheduler="threads")]
     X = sparse.coo_matrix(
         (

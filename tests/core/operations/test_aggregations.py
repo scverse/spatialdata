@@ -601,3 +601,27 @@ def test_aggregate_points_by_shapes_partitioned(agg_func: str) -> None:
         else:
             expected = joined.groupby(joined.index)[["value"]].agg(agg_func).reindex(by.index)
         np.testing.assert_allclose(X, expected.fillna(0).to_numpy())
+
+
+def test_polygon_index_matches_shapely() -> None:
+    import shapely
+
+    from spatialdata._core.operations._points_in_polygons import PolygonIndex
+
+    rng = default_rng(0)
+    t = np.linspace(0, 2 * np.pi, 9)
+    ring = np.stack([5.5 * np.cos(t), 5.5 * np.sin(t)], 1)
+    centers = np.stack(np.meshgrid(np.arange(10), np.arange(10)), -1).reshape(-1, 2) * 10.0
+    geoms = list(shapely.polygons(centers[:, None, :] + ring[None]))  # radius 5.5 on a 10 grid: neighbours overlap
+    geoms[0] = shapely.Polygon(centers[0] + ring, [centers[0] + ring * 0.3])  # hole
+    geoms[1] = shapely.MultiPolygon([geoms[1], shapely.box(-50, -50, -40, -40)])
+    x, y = rng.uniform(-60, 100, (2, 20_000))
+    x[0], y[0] = centers[2, 0] + 5.5, centers[2, 1]  # on a vertex
+    x[1], y[1] = -45, -40  # on an edge
+    x[2], y[2] = centers[0]  # inside the hole
+
+    pt, poly = PolygonIndex(np.array(geoms, dtype=object)).query(x, y)
+    ref_pt, ref_poly = shapely.STRtree(geoms).query(shapely.points(x, y), predicate="intersects")
+    assert sorted(zip(pt.tolist(), poly.tolist(), strict=True)) == sorted(
+        zip(ref_pt.tolist(), ref_poly.tolist(), strict=True)
+    )
