@@ -409,6 +409,8 @@ def _get_xarray_data_to_rasterize(
         The maximum coordinates of the bounding box for the data to be rasterized.
     target_sizes
         A dictionary containing the target size (in pixels) of each axis after rasterization.
+    target_coordinate_system
+        The coordinate system in which `min_coordinate` and `max_coordinate` are expressed.
 
     Returns
     -------

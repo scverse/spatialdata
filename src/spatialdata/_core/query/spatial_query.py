@@ -39,12 +39,12 @@ from spatialdata.transformations.transformations import (
 )
 
 MIN_COORDINATE_DOCS = """\
-    The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
+The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
         Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
 """
 MAX_COORDINATE_DOCS = """\
-    The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes)
+The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
+        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
 """
 
 
@@ -65,9 +65,9 @@ def _get_bounding_box_corners_in_intrinsic_coordinates(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-    {min_coordinate_docs}
+        {min_coordinate_docs}
     max_coordinate
-    {max_coordinate_docs}
+        {max_coordinate_docs}
     target_coordinate_system
         The coordinate system the bounding box is defined in.
 
@@ -406,15 +406,9 @@ def _bounding_box_mask_points(
     axes
         The axes that min_coordinate and max_coordinate refer to.
     min_coordinate
-        PLACEHOLDER
-        The upper left hand corners of the bounding boxes (i.e., minimum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
-    {min_coordinate_docs}
+        {min_coordinate_docs}
     max_coordinate
-        The lower right hand corners of the bounding boxes (i.e., the maximum coordinates along all dimensions).
-        Shape: (n_boxes, n_axes) or (n_axes,) for a single box.
-    {max_coordinate_docs}
-
+        {max_coordinate_docs}
 
     Returns
     -------
@@ -527,7 +521,10 @@ def bounding_box_query(
     -----
     If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
     consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
-    """  # noqa: DOC101, DOC103 (**kwargs only exists for singledispatch; nothing extra is accepted)
+    Shapes are not cut to the bounding box: a shape that intersects it is returned whole. For a `MultiPolygon` this
+    includes components that lie entirely outside the bounding box. To cut the shapes to the bounding box, use
+    :func:`polygon_query` with `clip=True` and the bounding box as polygon, e.g. `shapely.box(xmin, ymin, xmax, ymax)`.
+    """ # noqa: DOC101, DOC103 (**kwargs only exists for singledispatch; nothing extra is accepted)
     raise RuntimeError("Unsupported type for bounding_box_query: " + str(type(element)) + ".")
 
 
@@ -891,8 +888,10 @@ def polygon_query(
         Specifies whether to filter the tables to only include tables that annotate elements in the retrieved
         SpatialData object of the query.
     clip
-        If `True`, the shapes are clipped to the polygon. This behavior is implemented only when querying
-        polygons/multipolygons or circles, and it is ignored for other types of elements (images, labels, points).
+        If `True`, the shapes are clipped to the polygon. If `False`, a shape that intersects the polygon is returned
+        whole, and for a `MultiPolygon` this includes components that lie entirely outside the polygon. This behavior is
+        implemented only when querying polygons/multipolygons or circles, and it is ignored for other types of elements
+        (images, labels, points).
         Importantly, when clipping is enabled, the circles will be converted to polygons before the clipping. This may
         affect downstream operations that rely on the circle radius or on performance, so it is recommended to disable
         clipping when querying circles or when querying a `SpatialData` object that contains circles.

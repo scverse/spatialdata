@@ -143,7 +143,7 @@ class RasterSchema:
             Dimensions of the data (e.g. ['c', 'y', 'x'] for 2D image data). If the data is a :class:`xarray.DataArray`,
             the dimensions can also be inferred from the data. If the dimensions are not in the order (c)(z)yx, the data
             will be transposed to match the order.
-        c_coords : str | list[str] | None
+        c_coords
             Channel names of image data. Must be equal to the length of dimension 'c'. Only supported for `Image`
             models.
         transformations

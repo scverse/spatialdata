@@ -85,6 +85,10 @@ class NgffBaseTransformation(ABC):
         ----------
         d
             the Python dict representing the transformation.
+
+        Returns
+        -------
+        The transformation.
         """
         # d = MappingProxyType(d)
         type = d["type"]
@@ -118,7 +122,7 @@ class NgffBaseTransformation(ABC):
             The dictionary to be updated.
 
         Notes
-        -------
+        -----
         Use of this helper function.
         A transformation is saved to disk as a json string. When loaded this is represented by a dictionary.
         We allow transformations to be defined even when the input and output coordinate systems are not
@@ -365,6 +369,10 @@ class NgffAffine(NgffBaseTransformation):
             the input axes.
         output_axes
             the output axes.
+
+        Returns
+        -------
+        The affine matrix.
         """
         from spatialdata.models import C, X, Y, Z
 

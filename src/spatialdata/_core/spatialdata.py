@@ -2098,7 +2098,7 @@ class SpatialData:
 
         Returns
         -------
-            The string representation of the SpatialData object.
+        The string representation of the SpatialData object.
         """
         from spatialdata._utils import _natural_keys
 
@@ -2247,10 +2247,9 @@ class SpatialData:
         """
         Generate spatial element objects contained in the SpatialData instance.
 
-        Returns
-        -------
-        Generator[SpatialElement, None, None]
-            A generator that yields spatial element objects contained in the SpatialData instance.
+        Yields
+        ------
+        The spatial element objects contained in the SpatialData instance.
 
         """
         for _, _, element in self._gen_spatial_elements():
@@ -2260,9 +2259,9 @@ class SpatialData:
         """
         Generate the images, labels, points and shapes contained in the SpatialData instance.
 
-        Returns
-        -------
-        A generator object that returns a tuple containing the type of the element, its name, and the element itself.
+        Yields
+        ------
+        Tuples containing the type of the element, its name, and the element itself.
         """
         for element_type, elements in (
             ("images", self.images),
@@ -2284,10 +2283,9 @@ class SpatialData:
         include_tables
             Whether to also generate table elements.
 
-        Returns
-        -------
-        A generator object that returns a tuple containing the type of the element, its name, and the element
-        itself.
+        Yields
+        ------
+        Tuples containing the type of the element, its name, and the element itself.
         """
         yield from self._gen_spatial_elements()
         if include_tables:
