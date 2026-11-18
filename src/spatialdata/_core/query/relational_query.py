@@ -1070,6 +1070,44 @@ def _locate_value(
     return origins
 
 
+def _locate_values(
+    value_keys: list[str],
+    element: SpatialElement | AnnData | None = None,
+    sdata: SpatialData | None = None,
+    element_name: str | None = None,
+    table_name: str | None = None,
+) -> list[_ValueOrigin]:
+    """Locate each value key, raising if one is missing or ambiguous or if the keys cannot be aggregated together."""
+    locations = []
+    for vk in value_keys:
+        origins = _locate_value(
+            value_key=vk, element=element, sdata=sdata, element_name=element_name, table_name=table_name
+        )
+        if len(origins) > 1:
+            raise ValueError(
+                f"{vk} has been found in multiple locations of (element, sdata, element_name) = "
+                f"{(element, sdata, element_name)}: {origins}"
+            )
+        if len(origins) == 0:
+            raise ValueError(
+                f"{vk} has not been found in (element, sdata, element_name) = {(element, sdata, element_name)}"
+            )
+        locations.append(origins[0])
+    categorical_values = {x.is_categorical for x in locations}
+    origin_values = {x.origin for x in locations}
+    if len(categorical_values) == 2:
+        raise ValueError("Cannot mix categorical and non-categorical values. Please call aggregate() multiple times.")
+    if len({x.origin for x in locations}) > 1 and categorical_values.__iter__().__next__() is True:
+        raise ValueError(
+            "Can only aggregate one categorical column at the time. Please call aggregate() multiple times."
+        )
+    if len(origin_values) > 1:
+        raise ValueError(
+            f"Cannot mix values from different origins: {origin_values}. Please call aggregate() multiple times."
+        )
+    return locations
+
+
 def get_values(
     value_key: str | list[str],
     element: SpatialElement | AnnData | None = None,
@@ -1113,35 +1151,9 @@ def get_values(
     """
     el = _get_element(element=element, sdata=sdata, element_name=element_name)
     value_keys = [value_key] if isinstance(value_key, str) else value_key
-    locations = []
-    for vk in value_keys:
-        origins = _locate_value(
-            value_key=vk, element=element, sdata=sdata, element_name=element_name, table_name=table_name
-        )
-        if len(origins) > 1:
-            raise ValueError(
-                f"{vk} has been found in multiple locations of (element, sdata, element_name) = "
-                f"{(element, sdata, element_name)}: {origins}"
-            )
-        if len(origins) == 0:
-            raise ValueError(
-                f"{vk} has not been found in (element, sdata, element_name) = {(element, sdata, element_name)}"
-            )
-        locations.append(origins[0])
-    categorical_values = {x.is_categorical for x in locations}
-    origin_values = {x.origin for x in locations}
+    locations = _locate_values(value_keys, element, sdata, element_name, table_name)
+    origin = locations[0].origin
     value_key_values = [x.value_key for x in locations]
-    if len(categorical_values) == 2:
-        raise ValueError("Cannot mix categorical and non-categorical values. Please call aggregate() multiple times.")
-    if len({x.origin for x in locations}) > 1 and categorical_values.__iter__().__next__() is True:
-        raise ValueError(
-            "Can only aggregate one categorical column at the time. Please call aggregate() multiple times."
-        )
-    if len(origin_values) > 1:
-        raise ValueError(
-            f"Cannot mix values from different origins: {origin_values}. Please call aggregate() multiple times."
-        )
-    origin = origin_values.__iter__().__next__()
     if origin == "df":
         assert isinstance(el, GeoDataFrame | DaskDataFrame)
         df = el[value_key_values]
