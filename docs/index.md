@@ -27,7 +27,7 @@ Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for cit
 ```
 
 :::{note}
-With dask's partition fusion enabled (the default), user code that operates on multi-partition `Points` dataframes can fail as described in [#1064](https://github.com/scverse/spatialdata/issues/1064) and [dask#12193](https://github.com/dask/dask/issues/12193).
+With dask’s partition fusion enabled (the default), user code that operates on multi-partition `Points` dataframes can fail as described in [#1064](https://github.com/scverse/spatialdata/issues/1064) and [dask#12193](https://github.com/dask/dask/issues/12193).
 `spatialdata` avoids this internally; for your own operations, wrap them in `spatialdata.disable_dask_tune_optimization`:
 
 ```python
