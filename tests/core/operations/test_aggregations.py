@@ -13,6 +13,7 @@ from scipy.sparse import issparse
 from spatialdata import aggregate, to_polygons
 from spatialdata._core._deepcopy import deepcopy as _deepcopy
 from spatialdata._core.spatialdata import SpatialData
+from spatialdata._types import ArrayLike
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, TableModel
 from spatialdata.transformations import Affine, Identity, set_transformation
 
@@ -362,7 +363,9 @@ def test_aggregate_image_by_labels(labels_blobs, image_schema, labels_schema) ->
 
 @pytest.mark.parametrize("multiscale_values", [False, True])
 @pytest.mark.parametrize("multiscale_by", [False, True])
-def test_aggregate_image_by_labels_multiscale(labels_blobs, *, multiscale_values, multiscale_by) -> None:
+def test_aggregate_image_by_labels_multiscale(
+    labels_blobs: ArrayLike, *, multiscale_values: bool, multiscale_by: bool
+) -> None:
     """Multiscale `values` and `by` aggregate like their single-scale counterparts."""
     image = RNG.normal(size=(3,) + labels_blobs.shape)
     scale_factors = [2]
