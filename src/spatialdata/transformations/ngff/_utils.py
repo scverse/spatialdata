@@ -46,6 +46,9 @@ def get_default_coordinate_system(dims: tuple[str, ...]) -> NgffCoordinateSystem
         The dimension names to get the corresponding axes of the defeault coordinate system for.
         Names should be in ['x', 'y', 'z', 'c'].
 
+    Returns
+    -------
+    The default coordinate system with the axes corresponding to `dims`.
     """
     axes = []
     for c in dims:

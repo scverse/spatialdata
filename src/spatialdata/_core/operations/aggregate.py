@@ -74,7 +74,7 @@ def aggregate(
         Defaults to `FEATURE_KEY` for points (if present).
     agg_func
         Aggregation function to apply over point values, e.g. `"mean"`, `"sum"`, `"count"`.
-        Passed to :func:`pandas.DataFrame.groupby.agg` or to :func:`xrspatial.zonal_stats`
+        Passed to :meth:`pandas.api.typing.DataFrameGroupBy.agg` or to :func:`xrspatial.zonal.stats`
         according to the type of `values`.
     target_coordinate_system
         Coordinate system to transform to before aggregating.
@@ -109,7 +109,7 @@ def aggregate(
         Resolution parameter to pass to the of the .buffer() method to convert circles to polygons. A higher value
         results in a more accurate representation of the circle, but also in a more complex polygon and computation.
     kwargs
-        Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
+        Additional keyword arguments to pass to :func:`xrspatial.zonal.stats`.
 
     Returns
     -------
@@ -282,9 +282,9 @@ def _aggregate_image_by_labels(
         Regions to aggregate by.
     agg_func
         Aggregation function to apply over point values, e.g. "mean", "sum", "count"
-        from :func:`xrspatial.zonal_stats`.
+        from :func:`xrspatial.zonal.stats`.
     kwargs
-        Additional keyword arguments to pass to :func:`xrspatial.zonal_stats`.
+        Additional keyword arguments to pass to :func:`xrspatial.zonal.stats`.
 
     Returns
     -------
@@ -375,6 +375,14 @@ def _aggregate_shapes(
         Aggregation function to apply over grouped values. Passed to pandas.DataFrame.groupby.agg.
     table_name
         Name of the table optionally containing the value_key column.
+    fractions
+        Whether to weight the values by the fraction of the `values` region overlapping the `by` region.
+    buffer_resolution
+        Resolution parameter passed to the `.buffer()` method when converting circles to polygons.
+
+    Returns
+    -------
+    An AnnData object with one row per region in `by` and the aggregated values as columns.
     """
     from spatialdata._core.operations.vectorize import to_polygons
     from spatialdata.models import points_dask_dataframe_to_geopandas

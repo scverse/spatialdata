@@ -46,7 +46,7 @@ def map_raster(
     Parameters
     ----------
     data
-        The data to process. It can be a :class:`xarray.DataArray` or :class:`datatree.DataTree`.
+        The data to process. It can be a :class:`xarray.DataArray` or :class:`xarray.DataTree`.
         If it's a `DataTree`, the callable is applied to the first scale (`scale0`, the full-resolution data).
     func
         The callable that is applied to the data.
