@@ -235,9 +235,7 @@ def _create_sdata_from_table_and_regions(
         shapes_index_dtype = shapes.index.dtype
     elif isinstance(shapes, DataTree):
         # multiscale labels: every scale has the dtype of the full-resolution one
-        scale0 = get_pyramid_levels(shapes, n=0)
-        assert isinstance(scale0, DataArray)
-        shapes_index_dtype = scale0.dtype
+        shapes_index_dtype = get_pyramid_levels(shapes, attr="dtype", n=0)
     else:
         shapes_index_dtype = shapes.dtype
     try:
