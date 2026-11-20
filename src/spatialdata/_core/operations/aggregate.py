@@ -20,6 +20,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.query.relational_query import get_values
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._types import ArrayLike
+from spatialdata._utils import get_pyramid_levels
 from spatialdata.models import Image2DModel, Labels2DModel, PointsModel, ShapesModel, TableModel, get_model
 from spatialdata.transformations import BaseTransformation, Identity, get_transformation
 
@@ -230,7 +231,13 @@ def _create_sdata_from_table_and_regions(
 ) -> SpatialData:
     from spatialdata._core._deepcopy import deepcopy as _deepcopy
 
-    shapes_index_dtype = shapes.index.dtype if isinstance(shapes, GeoDataFrame) else shapes.dtype
+    if isinstance(shapes, GeoDataFrame):
+        shapes_index_dtype = shapes.index.dtype
+    elif isinstance(shapes, DataTree):
+        # multiscale labels: every scale has the dtype of the full-resolution one
+        shapes_index_dtype = get_pyramid_levels(shapes, attr="dtype", n=0)
+    else:
+        shapes_index_dtype = shapes.dtype
     try:
         table.obs[instance_key] = table.obs_names.copy().astype(shapes_index_dtype)
     except ValueError as err:
