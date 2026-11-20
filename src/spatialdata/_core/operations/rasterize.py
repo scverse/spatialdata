@@ -31,7 +31,7 @@ from spatialdata.models import (
     get_axes_names,
     get_model,
 )
-from spatialdata.models._utils import get_spatial_axes
+from spatialdata.models._utils import _get_uint_dtype, get_spatial_axes
 from spatialdata.transformations._utils import _get_scale, compute_coordinates
 from spatialdata.transformations.operations import get_transformation, remove_transformation, set_transformation
 from spatialdata.transformations.transformations import (
@@ -767,10 +767,14 @@ def rasterize_shapes_points(
             max_label = next(iter(reversed(label_index_to_category.keys())))
         else:
             max_label = int(agg.max().values)
-        max_uint16 = np.iinfo(np.uint16).max
-        if max_label > max_uint16:
-            raise ValueError(f"Maximum label index is {max_label}. Values higher than {max_uint16} are not supported.")
-        agg = agg.astype(np.uint16)
+        # datashader aggregates in float64: from 2**53 on, a value may be a rounded larger integer
+        # (from large input labels or from summing overlapping labels)
+        if max_label >= 2**53:
+            raise ValueError(
+                f"Maximum label is at least {max_label}. Labels of 2**53 or higher cannot be rasterized exactly "
+                "because datashader aggregates in float64."
+            )
+        agg = agg.astype(_get_uint_dtype(max_label))
         return Labels2DModel.parse(agg, transformations=transformations)
 
     agg = agg.expand_dims(dim={"c": 1}).transpose("c", "y", "x")
