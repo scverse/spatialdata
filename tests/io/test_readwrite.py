@@ -474,7 +474,7 @@ class TestReadWrite:
                         new_name=new_name,
                         sdata_container_format=sdata_container_format,
                     )
-            elif workaround == 2:
+            elif workaround == 2:  # noqa: SIM102
                 # workaround 2, unsafe but sometimes acceptable depending on the user's workflow.
 
                 # this works only if the data is not dask-backed, otherwise an exception will be raised because the code
