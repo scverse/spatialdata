@@ -256,6 +256,15 @@ def _region_props_to_polygon(region_props: RegionProperties) -> MultiPolygon | P
 
     polygon = MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
 
+    # Interior contours initially appear as nested shells. Repair them before
+    # dissolving chunk fragments: a union would otherwise fill these holes and
+    # can produce valid polygons that overlap other labels.
+    if len(polygons) > 1 and not polygon.is_valid:
+        repaired = shapely.make_valid(polygon)
+        if not isinstance(repaired, Polygon | MultiPolygon):
+            raise RuntimeError("Contour repair did not produce a polygonal geometry.")
+        polygon = repaired
+
     yoff, xoff, *_ = region_props.bbox
     return shapely.affinity.translate(polygon, xoff - 1, yoff - 1)  # account for the padding
 
