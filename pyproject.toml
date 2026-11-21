@@ -16,10 +16,9 @@ maintainers = [
 authors = [
   { name = "scverse" },
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: 3.15",
@@ -129,9 +128,9 @@ envs.hatch-check-types.scripts.check = [ "mypy" ]
 envs.hatch-check-types.dependency-groups = [ "typecheck", "test" ]
 envs.hatch-test.matrix = [
   # Test the lowest and highest supported Python versions with normal deps
-  { deps = [ "stable" ], python = [ "3.12", "3.14" ] },
+  { deps = [ "stable" ], python = [ "3.13", "3.14" ] },
   # Test the lowest supported versions of the dependencies we pin a floor for
-  { deps = [ "min" ], python = [ "3.12" ] },
+  { deps = [ "min" ], python = [ "3.13" ] },
   # Test the newest supported Python version also with pre-release deps
   { deps = [ "pre" ], python = [ "3.14" ] },
 ]
@@ -283,7 +282,7 @@ lint.pydocstyle.convention = "numpy"
 [tool.mypy]
 # TODO: extend to "tests" once the test suite carries type annotations.
 files = [ "src" ]
-python_version = "3.12"
+python_version = "3.14"
 disallow_any_generics = true
 disallow_untyped_calls = false
 disallow_untyped_defs = true

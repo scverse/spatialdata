@@ -544,7 +544,7 @@ def handle_read_errors(
     on_bad_files: Literal[BadFileHandleMethod.ERROR, BadFileHandleMethod.WARN],
     location: str,
     exc_types: type[BaseException] | tuple[type[BaseException], ...],
-) -> Generator[None, None, None]:
+) -> Generator[None]:
     """
     Handle read errors according to parameter `on_bad_files`.
 
