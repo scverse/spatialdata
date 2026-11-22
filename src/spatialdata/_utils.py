@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from itertools import islice
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 import numpy as np
 import pandas as pd
@@ -161,6 +161,10 @@ def unpad_raster(raster: DataArray | DataTree) -> DataArray | DataTree:
     return compute_coordinates(unpadded)
 
 
+@overload
+def get_pyramid_levels(image: DataTree, attr: str | None = None, n: None = None) -> list[Any]: ...
+@overload
+def get_pyramid_levels(image: DataTree, attr: str | None = None, *, n: int) -> Any: ...
 def get_pyramid_levels(image: DataTree, attr: str | None = None, n: int | None = None) -> list[Any] | Any:
     """
     Access the data/attribute of the pyramid levels of a multiscale spatial image.
@@ -200,9 +204,9 @@ def iterate_pyramid_levels(
         If `None`, return the data of the pyramid level as a `DataArray`, if not None, return the specified attribute
         within the `DataArray` data.
 
-    Returns
-    -------
-    A generator to iterate over the pyramid levels.
+    Yields
+    ------
+    The pyramid levels (or their attribute `attr`, if given).
     """
     scale0 = data["scale0"]
     assert isinstance(scale0, DataTree)

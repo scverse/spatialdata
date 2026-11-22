@@ -71,47 +71,48 @@ class SpatialData:
     The elements need to pass a validation step. To construct valid elements you can use the parsers that we
     provide:
 
-        - :class:`~spatialdata.Image2DModel`,
-        - :class:`~spatialdata.Image3DModel`,
-        - :class:`~spatialdata.Labels2DModel`,
-        - :class:`~spatialdata.Labels3DModel`,
-        - :class:`~spatialdata.PointsModel`,
-        - :class:`~spatialdata.ShapesModel`,
-        - :class:`~spatialdata.TableModel`
+        - :class:`~spatialdata.models.Image2DModel`,
+        - :class:`~spatialdata.models.Image3DModel`,
+        - :class:`~spatialdata.models.Labels2DModel`,
+        - :class:`~spatialdata.models.Labels3DModel`,
+        - :class:`~spatialdata.models.PointsModel`,
+        - :class:`~spatialdata.models.ShapesModel`,
+        - :class:`~spatialdata.models.TableModel`
 
     Parameters
     ----------
     images
-        Dict of 2D and 3D image elements. The following parsers are available: :class:`~spatialdata.Image2DModel`,
-        :class:`~spatialdata.Image3DModel`.
+        Dict of 2D and 3D image elements. The following parsers are available:
+        :class:`~spatialdata.models.Image2DModel`, :class:`~spatialdata.models.Image3DModel`.
     labels
         Dict of 2D and 3D labels elements. Labels are regions, they can't contain annotation, but they can be
-        annotated by a table. The following parsers are available: :class:`~spatialdata.Labels2DModel`,
-        :class:`~spatialdata.Labels3DModel`.
+        annotated by a table. The following parsers are available: :class:`~spatialdata.models.Labels2DModel`,
+        :class:`~spatialdata.models.Labels3DModel`.
     points
         Dict of points elements. Points can contain annotations. The following parsers is available:
-        :class:`~spatialdata.PointsModel`.
+        :class:`~spatialdata.models.PointsModel`.
     shapes
         Dict of 2D shapes elements (circles, polygons, multipolygons).
         Shapes are regions, they can't contain annotation, but they can be annotated by a table.
-        The following parsers are available: :class:`~spatialdata.ShapesModel`.
-    table
-        AnnData table containing annotations for regions (labels and shapes). The following parsers is
-        available: :class:`~spatialdata.TableModel`.
+        The following parsers are available: :class:`~spatialdata.models.ShapesModel`.
+    tables
+        Dict of AnnData tables containing annotations for SpatialElements (labels, shapes and points). The
+        following parser is available: :class:`~spatialdata.models.TableModel`.
+    attrs
+        Dictionary of global attributes on this SpatialData object.
 
     Notes
     -----
     The SpatialElements are stored with standard types:
 
-        - images and labels are stored as :class:`xarray.DataArray` or :class:`datatree.DataTree` objects.
+        - images and labels are stored as :class:`xarray.DataArray` or :class:`xarray.DataTree` objects.
         - points are stored as :class:`dask.dataframe.DataFrame` objects.
         - shapes are stored as :class:`geopandas.GeoDataFrame`.
         - the table are stored as :class:`anndata.AnnData` objects,  with the spatial coordinates stored in the obsm
             slot.
 
-    The table can annotate regions (shapes or labels) and can be used to store additional information.
-    Points are not regions but 0-dimensional locations. They can't be annotated by a table, but they can store
-    annotation directly.
+    Tables can annotate SpatialElements (labels, shapes or points) and can be used to store additional
+    information. Points can also store annotations directly, as additional dataframe columns.
     """
 
     def __init__(
@@ -1172,7 +1173,7 @@ class SpatialData:
             If `True`, overwrite the Zarr store if it already exists. If `False`, `write()` will fail if the Zarr store
             already exists.
         consolidate_metadata
-            If `True`, triggers :func:`zarr.convenience.consolidate_metadata`, which writes all the metadata in a single
+            If `True`, triggers :func:`zarr.consolidate_metadata`, which writes all the metadata in a single
             file at the root directory of the store. This makes the data cloud accessible, which is required for certain
             cloud stores (such as S3).
         update_sdata_path
@@ -1206,7 +1207,7 @@ class SpatialData:
             `spatialdata._io.format.py`.
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
-            for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+            for details. If None, uses the value from ``spatialdata.settings.shapes_geometry_encoding``.
         raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
@@ -1400,7 +1401,7 @@ class SpatialData:
              `SpatialData.write()`.
         shapes_geometry_encoding
             Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet`
-            for details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+            for details. If None, uses the value from ``spatialdata.settings.shapes_geometry_encoding``.
         raster_compressor
             A lenght-1 dictionary with as key the type of compression to use for images and labels and as value the
             compression level which should be inclusive between 0 and 9. For compression, `lz4` and `zstd` are
@@ -2097,7 +2098,7 @@ class SpatialData:
 
         Returns
         -------
-            The string representation of the SpatialData object.
+        The string representation of the SpatialData object.
         """
         from spatialdata._utils import _natural_keys
 
@@ -2246,10 +2247,9 @@ class SpatialData:
         """
         Generate spatial element objects contained in the SpatialData instance.
 
-        Returns
-        -------
-        Generator[SpatialElement, None, None]
-            A generator that yields spatial element objects contained in the SpatialData instance.
+        Yields
+        ------
+        The spatial element objects contained in the SpatialData instance.
 
         """
         for _, _, element in self._gen_spatial_elements():
@@ -2259,9 +2259,9 @@ class SpatialData:
         """
         Generate the images, labels, points and shapes contained in the SpatialData instance.
 
-        Returns
-        -------
-        A generator object that returns a tuple containing the type of the element, its name, and the element itself.
+        Yields
+        ------
+        Tuples containing the type of the element, its name, and the element itself.
         """
         for element_type, elements in (
             ("images", self.images),
@@ -2283,10 +2283,9 @@ class SpatialData:
         include_tables
             Whether to also generate table elements.
 
-        Returns
-        -------
-        A generator object that returns a tuple containing the type of the element, its name, and the element
-        itself.
+        Yields
+        ------
+        Tuples containing the type of the element, its name, and the element itself.
         """
         yield from self._gen_spatial_elements()
         if include_tables:
@@ -2623,7 +2622,7 @@ class SpatialData:
         Filter the SpatialData object based on a set of table queries.
 
         Please see
-        :func:`query.relational_query.filter_by_table_query` for the complete docstring.
+        :func:`spatialdata.filter_by_table_query` for the complete docstring.
         """
         from spatialdata._core.query.relational_query import filter_by_table_query
 

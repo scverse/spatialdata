@@ -189,7 +189,7 @@ def _get_joined_table_indices(
 
     Returns
     -------
-        The indices that of the table that match the SpatialElement indices.
+    The indices of the table that match the SpatialElement indices.
     """
     mask = np.isin(table_instance_key_column.to_numpy(), element_indices)
     if joined_indices is None:
@@ -259,7 +259,7 @@ def _get_masked_element(
 
 
 def _region_as_str_if_list_of_len_one(region: list[str]) -> str | list[str]:
-    return region if len(region) > 1 else region[0]
+    return region[0] if len(region) == 1 else region
 
 
 def _right_exclusive_join_spatialelement_table(
@@ -891,6 +891,10 @@ def match_sdata_to_table(
         unfiltered and warns, ``False`` leaves them unfiltered silently. See
         :func:`spatialdata.join_spatialelement_table` for details.
 
+    Returns
+    -------
+    A new SpatialData object containing the table and the matched elements.
+
     Notes
     -----
     For a graphical representation of the join operations, see the
@@ -965,7 +969,7 @@ def filter_by_table_query(
 
     Returns
     -------
-        The filtered SpatialData object.
+    The filtered SpatialData object.
 
     Notes
     -----
