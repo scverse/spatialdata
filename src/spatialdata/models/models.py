@@ -118,6 +118,20 @@ class RasterSchema:
         **kwargs: Any,
     ) -> DataTree: ...
 
+    @overload
+    @classmethod
+    def parse(
+        cls,
+        data: ArrayLike | DataArray | DaskArray,
+        dims: Sequence[str] | None = ...,
+        c_coords: str | list[str] | None = ...,
+        transformations: MappingToCoordinateSystem_t | None = ...,
+        scale_factors: ScaleFactors_t | None = ...,
+        method: Methods | None = ...,
+        chunks: Chunks_t | None = ...,
+        **kwargs: Any,
+    ) -> DataArray | DataTree: ...
+
     @classmethod
     def parse(
         cls,
