@@ -1250,7 +1250,7 @@ def _filter_labels_element(element: DataArray | DataTree, ids_to_keep: list[int]
     if isinstance(element, DataArray):
         return Labels2DModel.parse(_set_instance_ids_in_labels_to_zero(element, ids_to_remove))
     scales = list(element.keys())
-    scale_factors = [
+    scale_factors: list[int] = [
         round(element[scales[i]].image.shape[0] / element[scales[i + 1]].image.shape[0]) for i in range(len(scales) - 1)
     ]
     return Labels2DModel.parse(
