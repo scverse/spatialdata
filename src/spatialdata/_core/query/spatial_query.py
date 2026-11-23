@@ -521,6 +521,7 @@ def bounding_box_query(
     -----
     If the object has `points` element, depending on the number of points, it MAY suffer from performance issues. Please
     consider filtering the object before calling this function by calling the `subset()` method of `SpatialData`.
+
     Shapes are not cut to the bounding box: a shape that intersects it is returned whole. For a `MultiPolygon` this
     includes components that lie entirely outside the bounding box. To cut the shapes to the bounding box, use
     :func:`polygon_query` with `clip=True` and the bounding box as polygon, e.g. `shapely.box(xmin, ymin, xmax, ymax)`.
