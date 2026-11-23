@@ -237,7 +237,7 @@ def _get_masked_element(
     mask_values: NDArray[Any] | pd.Index | None = (
         masked_values if len(masked_values := masked_table_instance_key_column.to_numpy()) != 0 else None
     )
-    if match_rows in ["left", "right"]:
+    if match_rows in ["left", "right"] and mask_values is not None:
         left_index, _ = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
 
         if mask_values is not None and len(left_index) != len(mask_values):
@@ -250,7 +250,9 @@ def _get_masked_element(
         mask_values = np.asarray(element_indices)[order_mask]
 
     if isinstance(element, DaskDataFrame):
-        masked: SpatialElement = element.map_partitions(lambda df: df.loc[mask_values], meta=element)
+        masked: SpatialElement = element.map_partitions(
+            lambda df: df.loc[mask_values if mask_values is not None else []], meta=element
+        )
         return masked
     if not isinstance(element, GeoDataFrame):
         raise TypeError(f"Only points and shapes elements can be masked, got {type(element).__name__}.")
@@ -562,6 +564,8 @@ def _match_rows(
     element_index_df = pd.DataFrame({"index_left": element_indices})
 
     merged_df = pd.merge(element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows)
+    if merged_df.empty:
+        return pd.Index([]), pd.Index([])
     index_left = merged_df["index_left"]
     index_right = merged_df["index_right"]
 
@@ -651,6 +655,9 @@ def join_spatialelement_table(
     cases for ``'right'`` joins are symmetric to the ``'left'`` joins. In case of an ``'inner'`` join of
     SpatialElement(s) and a table, for each an element is returned only containing the rows that are present in
     both the SpatialElement and table.
+
+    If nothing matches, an empty element or a table with 0 rows is returned. `None` is only returned for the side that
+    an exclusive join never returns: the table for ``'left_exclusive'`` and the elements for ``'right_exclusive'``.
 
     For Points and Shapes elements every valid join for argument how is supported. For Labels elements only
     the ``'left'`` and ``'right_exclusive'`` joins are supported.
