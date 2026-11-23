@@ -52,6 +52,53 @@ If you like scverse® and want to support our mission, please consider making a 
 </a>
 </div>
 
+<!-- panache-ignore-format-start -->
+```{eval-rst}
+.. card:: Installation
+    :link: installation
+    :link-type: doc
+
+    Learn how to install ``spatialdata``.
+
+.. card:: How-to guides
+    :link: user_guide
+    :link-type: doc
+
+    Get help with common questions and tasks in ``spatialdata``.
+
+.. card:: Tutorials
+    :link: tutorials/notebooks/notebooks
+    :link-type: doc
+
+    Learn how to use ``spatialdata`` with detailed hands-on examples.
+
+.. card:: API
+    :link: api
+    :link-type: doc
+
+    Find a detailed documentation of ``spatialdata``.
+
+.. card:: Datasets
+    :link: tutorials/notebooks/datasets/README
+    :link-type: doc
+
+    Example datasets from 8 different technologies.
+
+.. card:: Design document
+    :link: design_doc
+    :link-type: doc
+
+    Learn about the design approach behind ``spatialdata``.
+
+.. card:: Contributing
+    :link: contributing
+    :link-type: doc
+
+    Learn how to contribute to ``spatialdata``.
+
+```
+<!-- panache-ignore-format-end -->
+
 ```{toctree}
 :caption: Getting started
 :hidden: true
