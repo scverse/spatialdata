@@ -446,6 +446,79 @@ def test_rasterize_points():
     assert d[res[1, 2]] == 4
 
 
+def test_rasterize_points_selects_label_dtype():
+    n_points = np.iinfo(np.uint16).max + 1
+    points = PointsModel.parse(
+        dd.from_pandas(
+            pd.DataFrame({"x": np.arange(n_points), "y": np.zeros(n_points)}),
+            npartitions=1,
+        )
+    )
+
+    result = rasterize(
+        points,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[n_points, 1],
+        target_coordinate_system="global",
+        target_width=n_points,
+        return_regions_as_labels=True,
+    )
+
+    assert result.dtype == np.uint32
+    assert result.max().compute() == n_points
+
+
+def _rasterize_point_labels(x, labels, agg_func):
+    df = pd.DataFrame({"x": x, "y": [0.5] * len(x), "label": np.array(labels, dtype=np.uint64)})
+    points = PointsModel.parse(dd.from_pandas(df, npartitions=1))
+    return rasterize(
+        points,
+        axes=("x", "y"),
+        min_coordinate=[0, 0],
+        max_coordinate=[2, 1],
+        target_coordinate_system="global",
+        target_width=2,
+        value_key="label",
+        agg_func=agg_func,
+        return_regions_as_labels=True,
+    )
+
+
+# (x, labels, agg_func, expected maximum label)
+_LARGE_LABEL_CASES = [
+    ([0.5, 1.5], [1, 2**53], "first", 2**53),
+    ([0.5, 1.5], [1, 2**53 + 1], "first", 2**53 + 1),
+    # overlapping labels are summed: each label is below 2**53, the sum is not
+    ([0.5, 0.5], [2**53 - 1, 2], "sum", 2**53 + 1),
+]
+
+
+def test_rasterize_labels_below_float64_precision():
+    result = _rasterize_point_labels([0.5, 1.5], [1, 2**53 - 1], "first")
+    assert result.dtype == np.uint64
+    assert int(result.max().compute()) == 2**53 - 1
+
+
+@pytest.mark.parametrize(("x", "labels", "agg_func", "expected"), _LARGE_LABEL_CASES)
+def test_rasterize_labels_above_float64_precision_raises(x, labels, agg_func, expected):
+    # until rasterization is exact for large labels, they must raise instead of being silently rounded
+    with pytest.raises(ValueError, match=r"2\*\*53"):
+        _rasterize_point_labels(x, labels, agg_func)
+
+
+@pytest.mark.xfail(
+    reason="datashader aggregates in float64, so labels of 2**53 or higher cannot be rasterized exactly",
+    strict=False,  # an unexpected pass (root cause fixed) should not fail CI; the ValueError test will flag the guard
+)
+@pytest.mark.parametrize(("x", "labels", "agg_func", "expected"), _LARGE_LABEL_CASES)
+def test_rasterize_labels_above_float64_precision(x, labels, agg_func, expected):
+    # the desired behaviour once the root cause is fixed; the ValueError guard and its test should then be removed
+    result = _rasterize_point_labels(x, labels, agg_func)
+    assert result.dtype == np.uint64
+    assert int(result.max().compute()) == expected
+
+
 def test_rasterize_spatialdata(full_sdata):
     sdata = full_sdata.subset(
         ["image2d", "image2d_multiscale", "labels2d", "labels2d_multiscale", "points_0", "circles"]
