@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "0 5 1,15 * *"
+    - cron: "0 5 * * 1" # weekly, Monday 05:00 UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -60,7 +60,8 @@ jobs:
 
     name: ${{ matrix.env.label }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ contains(matrix.env.name, 'pre') }} # make "all-green" pass even if pre-release job fails
+    # Pre-release failures must not block PRs, but scheduled runs should go red (and notify) so upstream breakage is noticed early.
+    continue-on-error: ${{ contains(matrix.env.name, 'pre') && github.event_name != 'schedule' }}
     env:
       UV_PYTHON: ${{ matrix.env.python }}
 
