@@ -41,6 +41,10 @@ autodoc_default_options = {
 }
 autodoc_process_signature = True
 myst_url_schemes = ("http", "https", "mailto")
+myst_enable_extensions = [*DEFAULTS.myst_enable_extensions, "substitution"]
+myst_substitutions = {
+    "requires_python": info["Requires-Python"],
+}
 typehints_defaults = "braces"
 always_use_bars_union = True  # use `|` instead of `Union` in types even when building with Python ≤3.14
 

@@ -6,12 +6,16 @@
 
 # An open and universal framework for processing spatial omics data.
 
-SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets. It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
+SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets.
+It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
 
-This site documents how to install, use and extend the Python `spatialdata` library. For language-independent definitions of SpatialData datasets and their on-disk representation, see the [SpatialData specifications](https://spatialdata-spec.scverse.org/).
+The Python `spatialdata` library holds images, segmentation masks, points, shapes and annotation tables together in one {class}`~spatialdata.SpatialData` object, aligned through shared coordinate systems.
+It lets you query, crop and aggregate across these elements, read and write the SpatialData Zarr format with lazy access to large data, and exchange data with AnnData, scanpy, squidpy and other tools ({doc}`interoperability`).
 
-See the links below to learn more about other packages in the SpatialData ecosystem.
+This site documents how to install, use and extend it.
+See the links below to learn more about the specifications and other packages in the SpatialData ecosystem.
 
+- [SpatialData specifications](https://spatialdata-spec.scverse.org/): language-independent definitions of SpatialData datasets and their on-disk representation.
 - `spatialdata-io`: load data from common spatial omics technologies into `spatialdata` ([repository][spatialdata-io-repo], [documentation][spatialdata-io-docs]).
 - `spatialdata-plot`: Static plotting library for `spatialdata` ([repository][spatialdata-plot-repo], [documentation][spatialdata-plot-docs]).
 - `napari-spatialdata`: napari plugin for interactive exploration and annotation of `spatialdata` ([repository][napari-spatialdata-repo], [documentation][napari-spatialdata-docs]).
@@ -21,20 +25,17 @@ See the links below to learn more about other packages in the SpatialData ecosys
 Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for citation and to learn more.
 
 :::{note}
-With dask >= 2025.2.0, users can get an error as described in [#1077](https://github.com/scverse/spatialdata/issues/1064). While we tried implementing fixes in SpatialData, it can be that
-users perform operations on the `Points` data themselves and get this error. In order to prevent it, users can use a context manager we created.
+With dask’s partition fusion enabled (the default), user code that operates on multi-partition `Points` dataframes can fail as described in [#1064](https://github.com/scverse/spatialdata/issues/1064) and [dask#12193](https://github.com/dask/dask/issues/12193).
+`spatialdata` avoids this internally; for your own operations, wrap them in `spatialdata.disable_dask_tune_optimization`:
 
 ```python
-from spatialdata import disable_dask_tune_optimization
 import contextlib
-...
+
+from spatialdata import disable_dask_tune_optimization
 
 with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nullcontext():
-    <your operation on points dask dataframe>
+    ...  # your operation on the points dask dataframe
 ```
-
-This will disable dask graph optimization if the dataframe has more than 1 partition and otherwise keep it enabled. This solves
-the problem discussed in this [dask issue](https://github.com/dask/dask/issues/12193). We are looking into an upstream fix.
 :::
 
 [//]: # "numfocus-fiscal-sponsor-attribution"
@@ -50,58 +51,6 @@ If you like scverse® and want to support our mission, please consider making a 
 >
 </a>
 </div>
-
-```{eval-rst}
-.. note::
-   This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
-```
-
-<!-- panache-ignore-format-start -->
-```{eval-rst}
-.. card:: Installation
-    :link: installation
-    :link-type: doc
-
-    Learn how to install ``spatialdata``.
-
-.. card:: How-to guides
-    :link: user_guide
-    :link-type: doc
-
-    Get help with common questions and tasks in ``spatialdata``.
-
-.. card:: Tutorials
-    :link: tutorials/notebooks/notebooks
-    :link-type: doc
-
-    Learn how to use ``spatialdata`` with detailed hands-on examples.
-
-.. card:: API
-    :link: api
-    :link-type: doc
-
-    Find a detailed documentation of ``spatialdata``.
-
-.. card:: Datasets
-    :link: tutorials/notebooks/datasets/README
-    :link-type: doc
-
-    Example datasets from 8 different technologies.
-
-.. card:: Design document
-    :link: design_doc
-    :link-type: doc
-
-    Learn about the design approach behind ``spatialdata``.
-
-.. card:: Contributing
-    :link: contributing
-    :link-type: doc
-
-    Learn how to contribute to ``spatialdata``.
-
-```
-<!-- panache-ignore-format-end -->
 
 ```{toctree}
 :caption: Getting started
