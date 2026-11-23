@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -86,6 +86,30 @@ def set_transformation(
         for location in located:
             element_type, element_name = location.split("/")
             write_to_sdata.write_transformations(element_name=element_name)
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: Literal[False] = False
+) -> BaseTransformation: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: None, get_all: Literal[True]
+) -> dict[str, BaseTransformation]: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: None = None, *, get_all: Literal[True]
+) -> dict[str, BaseTransformation]: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: bool = False
+) -> BaseTransformation | dict[str, BaseTransformation]: ...
 
 
 def get_transformation(
