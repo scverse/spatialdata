@@ -1,6 +1,6 @@
 # Installation
 
-`spatialdata` requires {{ python_requirement }}.
+`spatialdata` requires Python {{ requires_python }}.
 Installation takes a few minutes on a standard desktop computer.
 
 ## PyPI
