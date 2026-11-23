@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass
@@ -234,29 +233,20 @@ def _get_masked_element(
     """
     mask = np.isin(table_instance_key_column.to_numpy(), element_indices)
     masked_table_instance_key_column = table_instance_key_column[mask]
-    mask_values: NDArray[Any] | pd.Index | None = (
-        masked_values if len(masked_values := masked_table_instance_key_column.to_numpy()) != 0 else None
-    )
-    if match_rows in ["left", "right"] and mask_values is not None:
-        left_index, _ = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
-
-        if mask_values is not None and len(left_index) != len(mask_values):
-            mask = left_index.isin(mask_values)
-            mask_values = left_index[mask]
-        else:
-            mask_values = left_index
-    elif mask_values is not None:
+    mask_values: NDArray[Any] | pd.Index = masked_table_instance_key_column.to_numpy()
+    if match_rows in ["left", "right"]:
+        left_index, right_index = _match_rows(table_instance_key_column, mask, element_indices, match_rows)
+        mask_values = left_index[right_index.notna()]  # drop element rows without a table row
+    else:
         order_mask = np.isin(element_indices, mask_values)
         mask_values = np.asarray(element_indices)[order_mask]
 
     if isinstance(element, DaskDataFrame):
-        masked: SpatialElement = element.map_partitions(
-            lambda df: df.loc[mask_values if mask_values is not None else []], meta=element
-        )
+        masked: SpatialElement = element.map_partitions(lambda df: df.loc[mask_values], meta=element)
         return masked
     if not isinstance(element, GeoDataFrame):
         raise TypeError(f"Only points and shapes elements can be masked, got {type(element).__name__}.")
-    masked_shapes: GeoDataFrame = element.loc[mask_values if mask_values is not None else [], :]
+    masked_shapes: GeoDataFrame = element.loc[mask_values, :]
     return masked_shapes
 
 
@@ -564,19 +554,7 @@ def _match_rows(
     element_index_df = pd.DataFrame({"index_left": element_indices})
 
     merged_df = pd.merge(element_index_df, instance_id_df, left_on="index_left", right_on="instance_id", how=match_rows)
-    if merged_df.empty:
-        return pd.Index([]), pd.Index([])
-    index_left = merged_df["index_left"]
-    index_right = merged_df["index_right"]
-
-    # With labels it can be that index 0 is NaN
-    if isinstance(index_left.iloc[0], float) and math.isnan(index_left.iloc[0]):
-        index_left = index_left.iloc[1:]
-
-    if isinstance(index_right.iloc[0], float) and math.isnan(index_right.iloc[0]):
-        index_right = index_right.iloc[1:]
-
-    return pd.Index(index_left), pd.Index(index_right)
+    return pd.Index(merged_df["index_left"]), pd.Index(merged_df["index_right"])
 
 
 class JoinTypes(Enum):
