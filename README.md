@@ -1,4 +1,4 @@
-![SpatialData banner](https://github.com/scverse/spatialdata/blob/main/docs/_static/img/spatialdata_horizontal.png?raw=true)
+![SpatialData banner](https://github.com/scverse/spatialdata/blob/main/docs/_static/img/spatialdata_horizontal.svg?raw=true)
 
 # SpatialData: an open and universal framework for processing spatial omics data.
 
@@ -64,7 +64,7 @@ Another useful resource to get started is the source code of the [`spatialdata-i
 
 ## Installation
 
-Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/stable/installation.html). To get started with the "batteries included" installation, you can install via pip:
+Check out the docs for more complete [installation instructions](https://spatialdata.scverse.org/en/stable/installation.html). To get started with the “batteries included” installation, you can install via pip:
 
 ```bash
 pip install "spatialdata[extra]"

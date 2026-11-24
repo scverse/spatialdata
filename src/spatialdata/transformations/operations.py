@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -86,6 +86,30 @@ def set_transformation(
         for location in located:
             element_type, element_name = location.split("/")
             write_to_sdata.write_transformations(element_name=element_name)
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: Literal[False] = False
+) -> BaseTransformation: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: None, get_all: Literal[True]
+) -> dict[str, BaseTransformation]: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: None = None, *, get_all: Literal[True]
+) -> dict[str, BaseTransformation]: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: bool = False
+) -> BaseTransformation | dict[str, BaseTransformation]: ...
 
 
 def get_transformation(
@@ -223,12 +247,17 @@ def get_transformation_between_coordinate_systems(
 
     Parameters
     ----------
+    sdata
+        The SpatialData object containing the elements and their transformations.
     source_coordinate_system
         The source coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
         coordinate system).
     target_coordinate_system
         The target coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
         coordinate system).
+    intermediate_coordinate_systems
+        If multiple paths exist between source and target, only consider those passing through this coordinate system
+        (a SpatialElement for an intrinsic one, or a string for an extrinsic one).
     shortest_path
         Whether to return the shortest paths when multiple paths are found between the coordinate systems
         and a single shortest path is found. If `False`, an error is raised when multiple paths exist.

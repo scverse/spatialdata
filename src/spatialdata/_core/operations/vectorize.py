@@ -172,7 +172,7 @@ def to_polygons(data: SpatialElement, buffer_resolution: int | None = None) -> G
     """
     Convert a set of geometries (2D labels, 2D shapes) to approximated 2D polygons/multypolygons.
 
-    For optimal performance when converting rasters (:class:`xarray.DataArray` or :class:`datatree.DataTree`)
+    For optimal performance when converting rasters (:class:`xarray.DataArray` or :class:`xarray.DataTree`)
     to polygons, it is recommended to configure `Dask` to use 'processes' rather than 'threads'.
     For example, you can set this configuration with:
 

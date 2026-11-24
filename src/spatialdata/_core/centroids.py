@@ -47,10 +47,14 @@ def get_centroids(
     return_background
         If True, the centroid of the background label (0) is included in the output.
 
+    Returns
+    -------
+    The centroids, as a points element (Dask DataFrame) in the given coordinate system.
+
     Notes
     -----
-    For :class:`~shapely.Multipolygon`s, the centroids are the average of the centroids of the polygons that constitute
-    each :class:`~shapely.Multipolygon`.
+    For :class:`~shapely.MultiPolygon` geometries, the centroids are the average of the centroids of the polygons that
+    constitute each :class:`~shapely.MultiPolygon`.
     """
     raise ValueError(f"The object type {type(e)} is not supported.")
 

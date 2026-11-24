@@ -14,7 +14,7 @@ pip install -e . --group dev --group test --group doc --group benchmark
 
 ## Usage
 
-Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you're interested in by providing a regex pattern `-b` or `--bench` that links to a function or class method. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
+Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you’re interested in by providing a regex pattern `-b` or `--bench` that links to a function or class method. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
 
 ### Import time benchmarks
 

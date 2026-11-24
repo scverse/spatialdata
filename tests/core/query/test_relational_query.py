@@ -9,8 +9,10 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from geopandas import GeoDataFrame
+from shapely.geometry import Point
 
-from spatialdata import SpatialData, get_values, match_table_to_element
+from spatialdata import SpatialData, get_element_instances, get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
     _locate_value,
     _ValueOrigin,
@@ -18,7 +20,7 @@ from spatialdata._core.query.relational_query import (
     get_element_annotators,
     join_spatialelement_table,
 )
-from spatialdata.models.models import TableModel
+from spatialdata.models import Labels2DModel, PointsModel, ShapesModel, TableModel
 from spatialdata.testing import assert_anndata_equal, assert_geodataframe_equal
 
 
@@ -1468,3 +1470,47 @@ def test_filter_by_table_query_complex_combination(complex_sdata):
         assert ("circles", idx) in table_instance_ids
     for idx in result["poly"].index:
         assert ("poly", idx) in table_instance_ids
+
+
+@pytest.mark.parametrize("element_type", ["shapes", "points", "labels"])
+@pytest.mark.parametrize("how", ["left", "left_exclusive", "inner", "right", "right_exclusive"])
+@pytest.mark.parametrize("match_rows", ["no", "left", "right"])
+def test_join_element_and_table_without_shared_instances(
+    element_type: str, how: str, match_rows: str, request: pytest.FixtureRequest
+) -> None:
+    if element_type == "labels" and how == "inner":
+        # documented as unsupported: inner joins don't collect table rows for labels, so the table is None
+        request.applymarker(pytest.mark.xfail(reason="inner join returns no table for labels", strict=True))
+    # The element has instances 1 and 2, the table annotates instances 10 and 11 of it: nothing matches.
+    if element_type == "shapes":
+        element = ShapesModel.parse(
+            GeoDataFrame({"geometry": [Point(0, 0), Point(1, 1)], "radius": [1.0, 1.0]}, index=[1, 2])
+        )
+    elif element_type == "points":
+        element = PointsModel.parse(pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 1.0]}, index=[1, 2]))
+    else:
+        labels = np.zeros((4, 4), dtype=np.int64)
+        labels[0, 0], labels[3, 3] = 1, 2
+        element = Labels2DModel.parse(labels, dims=("y", "x"))
+    obs = pd.DataFrame({"region": pd.Categorical(["element"] * 2), "instance_id": [10, 11]})
+    table = TableModel.parse(
+        AnnData(X=np.zeros((2, 1)), obs=obs), region="element", region_key="region", instance_key="instance_id"
+    )
+    sdata = SpatialData(**{element_type: {"element": element}}, tables={"table": table})
+
+    # labels are only filtered by inner and right joins when asked to
+    kwargs = {"filter_label_pixels": True} if element_type == "labels" else {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # match_rows not supported for some joins
+        elements, joined = join_spatialelement_table(
+            sdata=sdata, spatial_element_names="element", table_name="table", how=how, match_rows=match_rows, **kwargs
+        )
+    joined_element = elements["element"]
+    n_element_instances = None if joined_element is None else len(get_element_instances(joined_element))
+
+    expected_element_instances = {"left": 2, "left_exclusive": 2, "inner": 0, "right": 0, "right_exclusive": None}[how]
+    expected_table_rows = {"left": 0, "left_exclusive": None, "inner": 0, "right": 2, "right_exclusive": 2}[how]
+    assert n_element_instances == expected_element_instances
+    assert (None if joined is None else joined.n_obs) == expected_table_rows
+    if joined is not None:
+        TableModel.validate(joined)

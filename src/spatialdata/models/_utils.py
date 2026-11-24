@@ -202,6 +202,8 @@ def points_dask_dataframe_to_geopandas(points: DaskDataFrame, suppress_z_warning
     points
         Dask DataFrame with columns "x" and "y". Eventually, it can contain a column "z" that will be not included in
         the geometry column.
+    suppress_z_warning
+        If `True`, do not warn that the "z" column is not included in the geometry.
 
     Returns
     -------
@@ -241,6 +243,8 @@ def points_geopandas_to_dask_dataframe(gdf: GeoDataFrame, suppress_z_warning: bo
     ----------
     gdf
         GeoDataFrame with a geometry column that contains 2D or 3D points.
+    suppress_z_warning
+        If `True`, do not warn about the z coordinate being taken from a separate column.
 
     Returns
     -------

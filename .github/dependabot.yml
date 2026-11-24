@@ -19,3 +19,8 @@ updates:
       actions-deps:
         patterns:
           - "*"
+  # docs/tutorials/notebooks -> scverse/spatialdata-tutorials
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly

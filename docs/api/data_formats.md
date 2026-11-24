@@ -8,11 +8,19 @@ These format subclasses are useful to ensure backward compatibility whenever a m
 
 .. autoclass:: CurrentRasterFormat
 .. autoclass:: RasterFormatV01
+.. autoclass:: RasterFormatV02
+.. autoclass:: RasterFormatV03
 .. autoclass:: CurrentShapesFormat
 .. autoclass:: ShapesFormatV01
 .. autoclass:: ShapesFormatV02
+.. autoclass:: ShapesFormatV03
 .. autoclass:: CurrentPointsFormat
 .. autoclass:: PointsFormatV01
+.. autoclass:: PointsFormatV02
 .. autoclass:: CurrentTablesFormat
 .. autoclass:: TablesFormatV01
+.. autoclass:: TablesFormatV02
+.. autoclass:: CurrentSpatialDataContainerFormat
+.. autoclass:: SpatialDataContainerFormatV01
+.. autoclass:: SpatialDataContainerFormatV02
 ```
