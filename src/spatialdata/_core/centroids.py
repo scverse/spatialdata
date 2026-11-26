@@ -16,7 +16,7 @@ from spatialdata._core.operations.transform import transform
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata.models import get_axes_names, get_table_keys
 from spatialdata.models._utils import SpatialElement
-from spatialdata.models.models import Labels2DModel, Labels3DModel, PointsModel, ShapesModel, TableModel, get_model
+from spatialdata.models.models import Labels2DModel, Labels3DModel, PointsModel, TableModel, get_model
 from spatialdata.transformations.operations import get_transformation
 from spatialdata.transformations.transformations import BaseTransformation
 
@@ -194,38 +194,30 @@ def _intrinsic_centroid_frame(
     Also returns the element the centroids live on (for labels, the ``scale0`` level of a multiscale
     raster), which carries the transformation to apply downstream.
     """
-    model = get_model(element)
-    if model in (Labels2DModel, Labels3DModel):
-        if isinstance(element, DataTree):
-            scale0 = element["scale0"]
-            assert isinstance(scale0, DataTree)
-            assert len(scale0) == 1
-            raster: SpatialElement = next(iter(scale0.values()))
-        else:
-            raster = element
-        assert isinstance(raster, DataArray)
-        df = _get_centroids_for_labels(raster, return_area=return_area)
-        if not return_background and 0 in df.index:
-            df = df.drop(index=0)  # drop the background label (its area, if any, goes with it)
-        area = df.pop("area").to_numpy() if return_area else None
-        return df, area, raster
-    if model is ShapesModel:
-        assert isinstance(element, GeoDataFrame)
+    if isinstance(element, GeoDataFrame):
         xy_df, area = _get_centroids_for_shapes(element, return_area)
         return xy_df, area, element
-    if model is PointsModel:
+    if isinstance(element, DaskDataFrame):
         if return_area:
             raise ValueError("`return_area` is not supported for points elements (points have no area).")
         axes = get_axes_names(element)
         if axes not in [("x", "y"), ("x", "y", "z")]:
             raise ValueError(f"Expected points axes to be ('x', 'y') or ('x', 'y', 'z'), got {axes}.")
-        assert isinstance(element, DaskDataFrame)
         coords: pd.DataFrame = element[list(axes)].compute()
         return coords, None, element
-    raise ValueError(
-        f"Centroids are not supported for elements modeled by {model.__name__}; "
-        f"expected a Labels, Shapes or Points element."
-    )
+    model = get_model(element)
+    if model not in (Labels2DModel, Labels3DModel):
+        raise ValueError(
+            f"Centroids are not supported for elements modeled by {model.__name__}; "
+            f"expected a Labels, Shapes or Points element."
+        )
+    # ``children`` is typed ``Mapping[str, DataTree]`` and ``data_vars`` yields ``DataArray``s.
+    raster = element if isinstance(element, DataArray) else next(iter(element.children["scale0"].data_vars.values()))
+    df = _get_centroids_for_labels(raster, return_area=return_area)
+    if not return_background and 0 in df.index:
+        df = df.drop(index=0)  # drop the background label (its area, if any, goes with it)
+    area = df.pop("area").to_numpy() if return_area else None
+    return df, area, raster
 
 
 def _points_from_centroids(
