@@ -174,7 +174,7 @@ def _get_centroids_for_shapes(e: GeoDataFrame, return_area: bool) -> tuple[pd.Da
     if isinstance(first_geometry, Point):
         xy = e.geometry.get_coordinates().values
         # shapely .area is 0 for circles (Point geometry); the radius column carries the size.
-        area = np.pi * np.asarray(e["radius"], dtype=float) ** 2 if return_area else None
+        area: np.ndarray | None = np.pi * np.asarray(e["radius"], dtype=float) ** 2 if return_area else None
     else:
         assert isinstance(first_geometry, Polygon | MultiPolygon), (
             f"Expected a GeoDataFrame either composed entirely of circles (Points with the `radius` column) or"
@@ -196,13 +196,21 @@ def _intrinsic_centroid_frame(
     """
     model = get_model(element)
     if model in (Labels2DModel, Labels3DModel):
-        raster = next(iter(element["scale0"].values())) if isinstance(element, DataTree) else element
+        if isinstance(element, DataTree):
+            scale0 = element["scale0"]
+            assert isinstance(scale0, DataTree)
+            assert len(scale0) == 1
+            raster: SpatialElement = next(iter(scale0.values()))
+        else:
+            raster = element
+        assert isinstance(raster, DataArray)
         df = _get_centroids_for_labels(raster, return_area=return_area)
         if not return_background and 0 in df.index:
             df = df.drop(index=0)  # drop the background label (its area, if any, goes with it)
         area = df.pop("area").to_numpy() if return_area else None
         return df, area, raster
     if model is ShapesModel:
+        assert isinstance(element, GeoDataFrame)
         xy_df, area = _get_centroids_for_shapes(element, return_area)
         return xy_df, area, element
     if model is PointsModel:
@@ -211,7 +219,9 @@ def _intrinsic_centroid_frame(
         axes = get_axes_names(element)
         if axes not in [("x", "y"), ("x", "y", "z")]:
             raise ValueError(f"Expected points axes to be ('x', 'y') or ('x', 'y', 'z'), got {axes}.")
-        return element[list(axes)].compute(), None, element
+        assert isinstance(element, DaskDataFrame)
+        coords: pd.DataFrame = element[list(axes)].compute()
+        return coords, None, element
     raise ValueError(
         f"Centroids are not supported for elements modeled by {model.__name__}; "
         f"expected a Labels, Shapes or Points element."
@@ -226,7 +236,8 @@ def _points_from_centroids(
     t = get_transformation(e, coordinate_system)
     assert isinstance(t, BaseTransformation)
     points = PointsModel.parse(out, transformations={coordinate_system: t})
-    return transform(points, to_coordinate_system=coordinate_system)
+    transformed: DaskDataFrame = transform(points, to_coordinate_system=coordinate_system)
+    return transformed
 
 
 @get_centroids.register(DataArray)
@@ -297,7 +308,7 @@ def _write_centroids_into_table(
     # Map each annotated instance to its centroid row (-1 where absent -> NaN). A *total* miss means the
     # instance ids never align with the element index (mismatched dtype, or no shared instances).
     keys = table.obs[instance_key].to_numpy()[mask]
-    idx = centroids.index.get_indexer(keys)
+    idx = centroids.index.get_indexer(pd.Index(keys))
     if (idx == -1).all():
         raise ValueError(
             f"No instance id annotating {element_name!r} is present in the element; check the table's "
@@ -335,7 +346,7 @@ def _write_centroids_into_table(
     if area is not None:
         col = np.full(table.n_obs, np.nan)
         if TableModel.AREA_KEY in table.obs:
-            existing_area = table.obs[TableModel.AREA_KEY]
+            existing_area = pd.Series(table.obs[TableModel.AREA_KEY])
             if not overwrite and (existing_area.notna().to_numpy() & mask).any():
                 raise ValueError(
                     f"obs['{TableModel.AREA_KEY}'] already holds values for rows annotating {element_name!r} "
@@ -379,6 +390,8 @@ def _get_centroids_sdata(
     """
     _validate_persist_args(persist_as, coordinate_system, allow_adata=True)
     element = e[element_name]
+    if isinstance(element, AnnData):
+        raise ValueError(f"{element_name!r} is a table; centroids need a Labels, Shapes or Points element.")
 
     if persist_as == "Points":
         return get_centroids(
