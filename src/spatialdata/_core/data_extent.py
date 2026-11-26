@@ -6,6 +6,7 @@ from functools import singledispatch
 
 import numpy as np
 import pandas as pd
+from anndata import AnnData
 from dask.dataframe import DataFrame as DaskDataFrame
 from geopandas import GeoDataFrame
 from shapely import MultiPolygon, Point, Polygon
@@ -106,7 +107,7 @@ def get_extent(
     has_labels: bool = True,
     has_points: bool = True,
     has_shapes: bool = True,
-    elements: list[str] | None = None,  # noqa: UP007 # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
+    elements: list[str] | None = None,  # https://github.com/scverse/spatialdata/pull/318#issuecomment-1755714287
 ) -> BoundingBoxDescription:
     """
     Get the extent (bounding box) of a SpatialData object or a SpatialElement.
@@ -115,17 +116,8 @@ def get_extent(
     ----------
     e
         The SpatialData object or SpatialElement to compute the extent of.
-
-    Returns
-    -------
-    The bounding box description.
-
-    min_coordinate
-        The minimum coordinate of the bounding box.
-    max_coordinate
-        The maximum coordinate of the bounding box.
-    axes
-        The names of the dimensions of the bounding box.
+    coordinate_system
+        The coordinate system in which the extent is computed.
     exact
         Whether the extent is computed exactly or not.
 
@@ -143,6 +135,10 @@ def get_extent(
         If `True`, shapes are included in the computation of the extent.
     elements
         If not `None`, only the elements with the given names are included in the computation of the extent.
+
+    Returns
+    -------
+    The bounding box description: a dictionary mapping each axis name to its `(min, max)` extent.
 
     Notes
     -----
@@ -177,20 +173,7 @@ def _(
     has_shapes: bool = True,
     elements: list[str] | None = None,
 ) -> BoundingBoxDescription:
-    """
-    Get the extent (bounding box) of a SpatialData object.
-
-    The resulting extent is the union of the extents of all its elements.
-
-    Parameters
-    ----------
-    e
-        The SpatialData object.
-
-    Returns
-    -------
-    The bounding box description.
-    """
+    """Get the extent of a SpatialData object (the union of the extents of its elements); see :func:`get_extent`."""
     new_min_coordinates_dict: dict[str, list[float]] = defaultdict(list)
     new_max_coordinates_dict: dict[str, list[float]] = defaultdict(list)
     mask = [has_images, has_labels, has_points, has_shapes]
@@ -207,6 +190,7 @@ def _(
         consider_element = (len(elements) == 0) or (element_name in elements)
         consider_element = consider_element and (element_type in include_spatial_elements)
         if consider_element:
+            assert not isinstance(element_obj, AnnData)
             transformations = get_transformation(element_obj, get_all=True)
             assert isinstance(transformations, dict)
             coordinate_systems = list(transformations.keys())
@@ -254,20 +238,7 @@ def _get_extent_of_shapes(e: GeoDataFrame) -> BoundingBoxDescription:
 
 @get_extent.register
 def _(e: GeoDataFrame, coordinate_system: str = "global", exact: bool = True) -> BoundingBoxDescription:
-    """
-    Get the extent (bounding box) of a SpatialData object.
-
-    The resulting extent is the union of the extents of all its elements.
-
-    Parameters
-    ----------
-    e
-        The SpatialData object.
-
-    Returns
-    -------
-    The bounding box description.
-    """
+    """Get the extent of a shapes element; see :func:`get_extent`."""
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
     if not exact:
         extent = _get_extent_of_shapes(e)
@@ -302,7 +273,10 @@ def _(e: DataArray, coordinate_system: str = "global") -> BoundingBoxDescription
 @get_extent.register
 def _(e: DataTree, coordinate_system: str = "global") -> BoundingBoxDescription:
     _check_element_has_coordinate_system(element=e, coordinate_system=coordinate_system)
-    xdata = next(iter(e["scale0"].values()))
+    scale0 = e["scale0"]
+    assert isinstance(scale0, DataTree)
+    xdata = next(iter(scale0.values()))
+    assert isinstance(xdata, DataArray)
     return _get_extent_of_data_array(xdata, coordinate_system=coordinate_system)
 
 

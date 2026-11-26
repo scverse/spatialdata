@@ -19,7 +19,8 @@ class AttrsAccessor(MutableMapping[str, str | dict[str, Any]]):
     def __init__(self, dask_obj: DaskDataFrame | DaskSeries):
         self._obj = dask_obj
         if not hasattr(dask_obj, "_attrs"):
-            dask_obj._attrs = {}
+            # `_attrs` is attached to the dask collection at runtime, so it is set dynamically.
+            setattr(dask_obj, "_attrs", {})  # noqa: B010
 
     def __getitem__(self, key: str) -> Any:
         return self._obj._attrs[key]

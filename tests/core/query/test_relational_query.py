@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import re
+import warnings
+from dataclasses import dataclass, field
+
 import annsel as an
 import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from geopandas import GeoDataFrame
+from shapely.geometry import Point
 
-from spatialdata import SpatialData, get_values, match_table_to_element
+from spatialdata import SpatialData, get_element_instances, get_values, match_table_to_element
 from spatialdata._core.query.relational_query import (
     _locate_value,
     _ValueOrigin,
@@ -14,7 +20,7 @@ from spatialdata._core.query.relational_query import (
     get_element_annotators,
     join_spatialelement_table,
 )
-from spatialdata.models.models import TableModel
+from spatialdata.models import Labels2DModel, PointsModel, ShapesModel, TableModel
 from spatialdata.testing import assert_anndata_equal, assert_geodataframe_equal
 
 
@@ -940,6 +946,172 @@ def test_filter_table_categorical_bug(shapes):
     shapes.filter_by_coordinate_system("global")
 
 
+@dataclass
+class _JoinOutcome:
+    """Expected outcome of a `join_spatialelement_table()` call, for a given `how`/`match_rows` pair."""
+
+    # expected `joined_table.obs["label"]`, in order; `None` when no table is expected to be returned
+    table_order: list[str] | None = None
+    # whether a "Matching rows '<...>' is not supported for '<...>' join." UserWarning is expected to be emitted
+    warns: bool = False
+    # expected values of `element_dict[name].index` for element name in {"a", "b"}; `None` for a element name whose
+    # returned join result is expected to be `None` (e.g. fully excluded, or not returned by this join type)
+    element_index: dict[str, list[int] | None] = field(default_factory=dict)
+
+
+def _make_interleaved_regions_sdata() -> tuple[SpatialData, dict[str, dict[str, _JoinOutcome]]]:
+    from geopandas import GeoDataFrame
+    from shapely.geometry import Point
+
+    from spatialdata.models import ShapesModel
+
+    def circles(indices):
+        # `indices` gives both the number of circles and the (non-default) row order of the element.
+        gdf = GeoDataFrame(
+            {"geometry": [Point(i, i) for i in range(len(indices))], "radius": [1.0] * len(indices)},
+            index=pd.Index(indices),
+        )
+        return ShapesModel.parse(gdf)
+
+    # assumptions/comments:
+    # - no duplicate values in the index of each spatial element (duplicate values are tested elsewhere)
+    # - no duplicate values for the instance_key column of the table (duplicate values are tested elsewhere)
+    #
+    # edge cases being tested:
+    # - instance_id values are non-monotonic
+    # - the index in each spatial element is non-monotonic
+    # - we also set the index of the table obs to random values; these should be ignored (in the code we call .index on
+    #   a region_key column, but the index is freshly reset by a nearby call of .reset_index() inside the join
+    #   machinery)
+    # - "b3" is an unmatched table row: a missing instance in a spatial element that exists
+    obs = pd.DataFrame(
+        {
+            "region": pd.Categorical(["b", "b", "a", "b", "a", "a", "b"]),
+            "instance_id": [2, 1, 2, 3, 1, 0, 0],
+            "label": ["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
+        },
+        index=np.random.default_rng(0).integers(0, 3, size=7).astype(str),
+    )
+    # "a" additionally has unmatched instance ids 5, 4, and "b" has 4, 6.
+    # These test that unmatched element rows are preserved in element order by
+    # "left" and "left_exclusive" joins.
+    shapes = {"a": circles([2, 1, 0, 5, 4]), "b": circles([1, 2, 0, 4, 6])}
+    # to make understanding easier, you may want to refer to the figure on joins from the docs:
+    # https://spatialdata.scverse.org/en/stable/tutorials/notebooks/notebooks/examples/tables.html
+    expected = {
+        "left": {
+            "no": _JoinOutcome(
+                table_order=["b2", "b1", "a2", "a1", "a0", "b0"],
+                element_index={"a": [2, 1, 0, 5, 4], "b": [1, 2, 0, 4, 6]},
+            ),
+            "left": _JoinOutcome(
+                table_order=["a2", "a1", "a0", "b1", "b2", "b0"],
+                element_index={"a": [2, 1, 0, 5, 4], "b": [1, 2, 0, 4, 6]},
+            ),
+            "right": _JoinOutcome(
+                table_order=["b2", "b1", "a2", "a1", "a0", "b0"],
+                warns=True,
+                element_index={"a": [2, 1, 0, 5, 4], "b": [1, 2, 0, 4, 6]},
+            ),
+        },
+        "left_exclusive": {
+            # by design, "left_exclusive" never returns a table (only filtered elements), regardless of
+            # match_rows or whether anything was actually excluded.
+            "no": _JoinOutcome(table_order=None, element_index={"a": [5, 4], "b": [4, 6]}),
+            "left": _JoinOutcome(table_order=None, element_index={"a": [5, 4], "b": [4, 6]}),
+            "right": _JoinOutcome(table_order=None, warns=True, element_index={"a": [5, 4], "b": [4, 6]}),
+        },
+        "inner": {
+            "no": _JoinOutcome(
+                table_order=["b2", "b1", "a2", "a1", "a0", "b0"],
+                element_index={"a": [2, 1, 0], "b": [1, 2, 0]},
+            ),
+            "left": _JoinOutcome(
+                table_order=["a2", "a1", "a0", "b1", "b2", "b0"], element_index={"a": [2, 1, 0], "b": [1, 2, 0]}
+            ),
+            "right": _JoinOutcome(
+                table_order=["b2", "b1", "a2", "a1", "a0", "b0"], element_index={"a": [2, 1, 0], "b": [2, 1, 0]}
+            ),
+        },
+        "right": {
+            "no": _JoinOutcome(
+                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
+                element_index={"a": [2, 1, 0], "b": [1, 2, 0]},
+            ),
+            "left": _JoinOutcome(
+                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
+                warns=True,
+                element_index={"a": [2, 1, 0], "b": [1, 2, 0]},
+            ),
+            "right": _JoinOutcome(
+                table_order=["b2", "b1", "a2", "b3", "a1", "a0", "b0"],
+                element_index={"a": [2, 1, 0], "b": [2, 1, 0]},
+            ),
+        },
+        "right_exclusive": {
+            "no": _JoinOutcome(table_order=["b3"], element_index={"a": None, "b": None}),
+            "left": _JoinOutcome(table_order=["b3"], warns=True, element_index={"a": None, "b": None}),
+            "right": _JoinOutcome(table_order=["b3"], element_index={"a": None, "b": None}),
+        },
+    }
+
+    table = TableModel.parse(
+        AnnData(X=np.zeros((len(obs), 1)), obs=obs),
+        region=["a", "b"],
+        region_key="region",
+        instance_key="instance_id",
+    )
+    sdata = SpatialData(shapes=shapes, tables={"table": table})
+    return sdata, expected
+
+
+@pytest.mark.parametrize("match_rows", ["no", "left", "right"])
+@pytest.mark.parametrize("how", ["left", "left_exclusive", "inner", "right", "right_exclusive"])
+def test_join_preserves_row_order_multiple_interleaved_regions(how, match_rows):
+    # generalization to all the join types of the bug reported in https://github.com/scverse/spatialdata/issues/1162
+    # covering all `how` values of `join_spatialelement_table`, crossed with all values of `match_rows`, and checking
+    # whether the row orders of the returned spatial elements and table are correct and if the "match_rows not
+    # supported" UserWarning is (or isn't) actually raised (see `_make_interleaved_regions_sdata` and `_JoinOutcome`).
+    sdata, expected_by_how_and_match_rows = _make_interleaved_regions_sdata()
+    outcome = expected_by_how_and_match_rows[how][match_rows]
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        element_dict, joined_table = join_spatialelement_table(
+            sdata=sdata,
+            spatial_element_names=["a", "b"],
+            table_name="table",
+            how=how,
+            match_rows=match_rows,
+        )
+
+    # other UserWarnings can also fire here (e.g. anndata's "Observation names are not unique", triggered by
+    # the fixture's duplicated obs_names), so only look for the one this test is actually about. The message
+    # looks like "Matching rows 'right' is not supported for 'left_exclusive' join; it will be treated as 'no'.",
+    # with the two quoted values varying by `match_rows` / `how`.
+    unsupported_match_rows_re = re.compile(
+        r"Matching rows '[^']+' is not supported for '[^']+' join; it will be treated as 'no'\."
+    )
+    unsupported_match_rows_warnings = [
+        w for w in record if issubclass(w.category, UserWarning) and unsupported_match_rows_re.search(str(w.message))
+    ]
+    assert bool(unsupported_match_rows_warnings) == outcome.warns
+
+    if outcome.table_order is None:
+        assert joined_table is None
+    else:
+        assert joined_table is not None
+        assert list(joined_table.obs["label"]) == outcome.table_order
+
+    for name, expected_index in outcome.element_index.items():
+        actual_element = element_dict[name]
+        if expected_index is None:
+            assert actual_element is None
+        else:
+            assert actual_element is not None
+            assert list(actual_element.index) == expected_index
+
+
 def test_filter_table_non_annotating(full_sdata):
     obs = pd.DataFrame({"test": ["a", "b", "c"]}, index=list(map(str, range(3))))
     adata = AnnData(obs=obs)
@@ -1298,3 +1470,47 @@ def test_filter_by_table_query_complex_combination(complex_sdata):
         assert ("circles", idx) in table_instance_ids
     for idx in result["poly"].index:
         assert ("poly", idx) in table_instance_ids
+
+
+@pytest.mark.parametrize("element_type", ["shapes", "points", "labels"])
+@pytest.mark.parametrize("how", ["left", "left_exclusive", "inner", "right", "right_exclusive"])
+@pytest.mark.parametrize("match_rows", ["no", "left", "right"])
+def test_join_element_and_table_without_shared_instances(
+    element_type: str, how: str, match_rows: str, request: pytest.FixtureRequest
+) -> None:
+    if element_type == "labels" and how == "inner":
+        # documented as unsupported: inner joins don't collect table rows for labels, so the table is None
+        request.applymarker(pytest.mark.xfail(reason="inner join returns no table for labels", strict=True))
+    # The element has instances 1 and 2, the table annotates instances 10 and 11 of it: nothing matches.
+    if element_type == "shapes":
+        element = ShapesModel.parse(
+            GeoDataFrame({"geometry": [Point(0, 0), Point(1, 1)], "radius": [1.0, 1.0]}, index=[1, 2])
+        )
+    elif element_type == "points":
+        element = PointsModel.parse(pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 1.0]}, index=[1, 2]))
+    else:
+        labels = np.zeros((4, 4), dtype=np.int64)
+        labels[0, 0], labels[3, 3] = 1, 2
+        element = Labels2DModel.parse(labels, dims=("y", "x"))
+    obs = pd.DataFrame({"region": pd.Categorical(["element"] * 2), "instance_id": [10, 11]})
+    table = TableModel.parse(
+        AnnData(X=np.zeros((2, 1)), obs=obs), region="element", region_key="region", instance_key="instance_id"
+    )
+    sdata = SpatialData(**{element_type: {"element": element}}, tables={"table": table})
+
+    # labels are only filtered by inner and right joins when asked to
+    kwargs = {"filter_label_pixels": True} if element_type == "labels" else {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # match_rows not supported for some joins
+        elements, joined = join_spatialelement_table(
+            sdata=sdata, spatial_element_names="element", table_name="table", how=how, match_rows=match_rows, **kwargs
+        )
+    joined_element = elements["element"]
+    n_element_instances = None if joined_element is None else len(get_element_instances(joined_element))
+
+    expected_element_instances = {"left": 2, "left_exclusive": 2, "inner": 0, "right": 0, "right_exclusive": None}[how]
+    expected_table_rows = {"left": 0, "left_exclusive": None, "inner": 0, "right": 2, "right_exclusive": 2}[how]
+    assert n_element_instances == expected_element_instances
+    assert (None if joined is None else joined.n_obs) == expected_table_rows
+    if joined is not None:
+        TableModel.validate(joined)

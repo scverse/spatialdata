@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Literal
 
@@ -7,17 +8,19 @@ import numpy as np
 import zarr
 from geopandas import GeoDataFrame, read_parquet
 from natsort import natsorted
-from ome_zarr.format import Format
 from shapely import from_ragged_array, to_ragged_array
+from zarr.storage import LocalStore
 
 from spatialdata._io._utils import (
     _get_transformations_from_ngff_dict,
     _write_metadata,
     overwrite_coordinate_transformations_non_raster,
 )
+from spatialdata._io.exceptions import WritingToZarrV2DeprecationWarning
 from spatialdata._io.format import (
     CurrentShapesFormat,
     ShapesFormats,
+    ShapesFormatType,
     ShapesFormatV01,
     ShapesFormatV02,
     ShapesFormatV03,
@@ -35,6 +38,8 @@ def _read_shapes(
 ) -> GeoDataFrame:
     """Read shapes from a zarr store."""
     f = zarr.open(Path(store), mode="r")  # Path avoids zarr v3 URL-parsing special chars (e.g. #) in names
+    if not isinstance(f, zarr.Group):
+        raise TypeError(f"Expected a zarr group holding a shapes element, got {type(f).__name__}.")
     version = _parse_version(f, expect_attrs_key=True)
     assert version is not None
     shape_format = ShapesFormats[version]
@@ -54,7 +59,12 @@ def _read_shapes(
             geometry = from_ragged_array(typ, coords, offsets)
             geo_df = GeoDataFrame({"geometry": geometry}, index=index)
     elif isinstance(shape_format, ShapesFormatV02 | ShapesFormatV03):
-        store_root = f.store_path.store.root
+        element_store = f.store_path.store
+        if not isinstance(element_store, LocalStore):
+            raise TypeError(
+                f"Reading a shapes element requires a local zarr store, got {type(element_store).__name__}."
+            )
+        store_root = element_store.root
         path = Path(store_root) / f.path / "shapes.parquet"
         geo_df = read_parquet(path)
     else:
@@ -62,7 +72,10 @@ def _read_shapes(
             f"Unsupported shapes format {shape_format} from version {version}. Please update the spatialdata library."
         )
 
-    transformations = _get_transformations_from_ngff_dict(f.attrs.asdict()["coordinateTransformations"])
+    ngff_transformations = f.attrs.asdict()["coordinateTransformations"]
+    if not isinstance(ngff_transformations, list):
+        raise TypeError(f"Expected coordinateTransformations to be a list, got {type(ngff_transformations).__name__}.")
+    transformations = _get_transformations_from_ngff_dict(ngff_transformations)
     _set_transformations(geo_df, transformations)
     return geo_df
 
@@ -71,7 +84,7 @@ def write_shapes(
     shapes: GeoDataFrame,
     group: zarr.Group,
     group_type: str = "ngff:shapes",
-    element_format: Format = CurrentShapesFormat(),
+    element_format: ShapesFormatType = CurrentShapesFormat(),
     geometry_encoding: Literal["WKB", "geoarrow"] | None = None,
 ) -> None:
     """Write shapes to spatialdata zarr store.
@@ -91,8 +104,13 @@ def write_shapes(
         The format of the shapes element used to store it.
     geometry_encoding
         Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
-        details. If None, uses the value from :attr:`spatialdata.settings.shapes_geometry_encoding`.
+        details. If None, uses the value from ``spatialdata.settings.shapes_geometry_encoding``.
     """
+    if element_format.zarr_format == 2:
+        warnings.warn(
+            message=WritingToZarrV2DeprecationWarning.message, category=WritingToZarrV2DeprecationWarning, stacklevel=2
+        )
+
     from spatialdata.config import settings
 
     if geometry_encoding is None:
@@ -117,7 +135,7 @@ def write_shapes(
     overwrite_coordinate_transformations_non_raster(group=group, axes=axes, transformations=transformations)
 
 
-def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: Format) -> Any:
+def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: ShapesFormatV01) -> Any:
     """Write shapes to spatialdata zarr store using format ShapesFormatV01.
 
     Parameters
@@ -128,21 +146,25 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
         The zarr group in the 'shapes' zarr group to write the shapes element to.
     element_format
         The format of the shapes element used to store it.
-    """
-    import numcodecs
 
+    Returns
+    -------
+    The attributes (metadata) to write for the shapes element.
+    """
     # np.array() creates a writable copy, needed for pandas 3.0 CoW compatibility
     # https://github.com/geopandas/geopandas/issues/3697
     geometry, coords, offsets = to_ragged_array(np.array(shapes.geometry))
     group.create_array(name="coords", data=coords)
     for i, o in enumerate(offsets):
         group.create_array(name=f"offset{i}", data=o)
+    index_values = shapes.index.to_numpy()
     if shapes.index.dtype.kind == "U" or shapes.index.dtype.kind == "O":
-        group.create_array(name="Index", data=shapes.index.values, dtype=object, object_codec=numcodecs.VLenUTF8())
+        index_array = group.create_array(name="Index", shape=index_values.shape, dtype="string")
+        index_array[:] = index_values
     else:
-        group.create_array(name="Index", data=shapes.index.values)
+        group.create_array(name="Index", data=index_values)
     if geometry.name == "POINT":
-        group.create_array(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].values)
+        group.create_array(name=ShapesModel.RADIUS_KEY, data=shapes[ShapesModel.RADIUS_KEY].to_numpy())
 
     attrs = element_format.attrs_to_dict(geometry)
     attrs["version"] = element_format.spatialdata_format_version
@@ -150,7 +172,10 @@ def _write_shapes_v01(shapes: GeoDataFrame, group: zarr.Group, element_format: F
 
 
 def _write_shapes_v02_v03(
-    shapes: GeoDataFrame, group: zarr.Group, element_format: Format, geometry_encoding: Literal["WKB", "geoarrow"]
+    shapes: GeoDataFrame,
+    group: zarr.Group,
+    element_format: ShapesFormatV02 | ShapesFormatV03,
+    geometry_encoding: Literal["WKB", "geoarrow"],
 ) -> Any:
     """Write shapes to spatialdata zarr store using format ShapesFormatV02 or ShapesFormatV03.
 
@@ -165,10 +190,17 @@ def _write_shapes_v02_v03(
     geometry_encoding
         Whether to use the WKB or geoarrow encoding for GeoParquet. See :meth:`geopandas.GeoDataFrame.to_parquet` for
         details.
+
+    Returns
+    -------
+    The attributes (metadata) to write for the shapes element.
     """
     from spatialdata.models._utils import TRANSFORM_KEY
 
-    store_root = group.store_path.store.root
+    element_store = group.store_path.store
+    if not isinstance(element_store, LocalStore):
+        raise TypeError(f"Writing a shapes element requires a local zarr store, got {type(element_store).__name__}.")
+    store_root = element_store.root
     path = store_root / group.path / "shapes.parquet"
 
     # Temporarily remove transformations from attrs to avoid serialization issues
@@ -177,6 +209,6 @@ def _write_shapes_v02_v03(
     shapes.to_parquet(path, geometry_encoding=geometry_encoding)
     shapes.attrs[TRANSFORM_KEY] = transforms
 
-    attrs = element_format.attrs_to_dict(shapes.attrs)
+    attrs = element_format.attrs_to_dict({str(k): v for k, v in shapes.attrs.items()})
     attrs["version"] = element_format.spatialdata_format_version
     return attrs

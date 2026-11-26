@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 from dask.dataframe import DataFrame as DaskDataFrame
@@ -86,6 +86,30 @@ def set_transformation(
         for location in located:
             element_type, element_name = location.split("/")
             write_to_sdata.write_transformations(element_name=element_name)
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: Literal[False] = False
+) -> BaseTransformation: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: None, get_all: Literal[True]
+) -> dict[str, BaseTransformation]: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: None = None, *, get_all: Literal[True]
+) -> dict[str, BaseTransformation]: ...
+
+
+@overload
+def get_transformation(
+    element: SpatialElement, to_coordinate_system: str | None = None, get_all: bool = False
+) -> BaseTransformation | dict[str, BaseTransformation]: ...
 
 
 def get_transformation(
@@ -193,10 +217,10 @@ def remove_transformation(
             write_to_sdata.write_transformations(element_name=element_name)
 
 
-def _build_transformations_graph(sdata: SpatialData) -> nx.Graph:
+def _build_transformations_graph(sdata: SpatialData) -> nx.DiGraph[Any]:
     import networkx as nx
 
-    g = nx.DiGraph()
+    g: nx.DiGraph[Any] = nx.DiGraph()
     gen = sdata._gen_spatial_element_values()
     for cs in sdata.coordinate_systems:
         g.add_node(cs)
@@ -223,12 +247,17 @@ def get_transformation_between_coordinate_systems(
 
     Parameters
     ----------
+    sdata
+        The SpatialData object containing the elements and their transformations.
     source_coordinate_system
         The source coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
         coordinate system).
     target_coordinate_system
         The target coordinate system. Can be a SpatialElement (intrinsic coordinate system) or a string (extrinsic
         coordinate system).
+    intermediate_coordinate_systems
+        If multiple paths exist between source and target, only consider those passing through this coordinate system
+        (a SpatialElement for an intrinsic one, or a string for an extrinsic one).
     shortest_path
         Whether to return the shortest paths when multiple paths are found between the coordinate systems
         and a single shortest path is found. If `False`, an error is raised when multiple paths exist.
@@ -313,9 +342,10 @@ def get_transformation_between_coordinate_systems(
                 f"coordinate system. Available paths are:{s}"
             )
     else:
+        intermediate: Any = intermediate_coordinate_systems
         if has_type_spatial_element(intermediate_coordinate_systems):
-            intermediate_coordinate_systems = id(intermediate_coordinate_systems)
-        paths = [p for p in paths if intermediate_coordinate_systems in p]
+            intermediate = id(intermediate_coordinate_systems)
+        paths = [p for p in paths if intermediate in p]
         if len(paths) == 0:
             # error 3
             raise RuntimeError("No path found between the two coordinate systems passing through the intermediate")
@@ -390,8 +420,9 @@ def get_transformation_between_landmarks(
         references_xy = np.stack([references_coords.geometry.x, references_coords.geometry.y], axis=1)
         moving_xy = np.stack([moving_coords.geometry.x, moving_coords.geometry.y], axis=1)
     elif isinstance(references_coords, DaskDataFrame):
-        references_xy = references_coords[["x", "y"]].to_dask_array().compute()
-        moving_xy = moving_coords[["x", "y"]].to_dask_array().compute()
+        assert isinstance(moving_coords, DaskDataFrame)
+        references_xy = np.asarray(references_coords[["x", "y"]].compute())
+        moving_xy = np.asarray(moving_coords[["x", "y"]].compute())
     else:
         raise TypeError("references_coords must be either an GeoDataFrame or a DaskDataFrame")
 

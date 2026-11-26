@@ -9,12 +9,12 @@ Note that to run code, your current working directory should be the SpatialData 
 The benchmarks use the [airspeed velocity](https://asv.readthedocs.io/en/stable/) (asv) framework. Install it with the `benchmark` option:
 
 ```
-pip install -e '.[docs,test,benchmark]'
+pip install -e . --group dev --group test --group doc --group benchmark
 ```
 
 ## Usage
 
-Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you're interested in by providing a regex pattern `-b` or `--bench` that links to a function or class method. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
+Running all the benchmarks is usually not needed. You run the benchmark using `asv run`. See the [asv documentation](https://asv.readthedocs.io/en/stable/commands.html#asv-run) for interesting arguments, like selecting the benchmarks you’re interested in by providing a regex pattern `-b` or `--bench` that links to a function or class method. You can run the benchmark in your current environment with `--python=same`. Some example benchmarks:
 
 ### Import time benchmarks
 
@@ -41,6 +41,9 @@ asv continuous --show-stderr -v -b timeraw main faster-import
 ```
 
 Replace `faster-import` with any branch name or commit hash. The `-v` flag prints per-sample timings; drop it for a shorter summary.
+
+In case you see a lot of variation in the results, you could run with an additional option `-a rounds=<x>` where `<x>` in the number of rounds to run (default=2). E.g.: `-a rounds=10`.
+This will run 10 sets of benchmark runs for both commits, interleaving them, and show you the statistics of the results.
 
 Alternatively, collect results separately and compare afterwards:
 

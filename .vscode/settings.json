@@ -1,0 +1,21 @@
+{
+    "[python][json][jsonc][yaml][markdown]": {
+        "editor.formatOnSave": true,
+    },
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "always",
+            "source.organizeImports": "always",
+        },
+    },
+    "[json][jsonc][yaml]": {
+        "editor.defaultFormatter": "biomejs.biome",
+    },
+    "[markdown]": {
+        "editor.defaultFormatter": "jolars.panache",
+    },
+    "python.analysis.typeCheckingMode": "basic",
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": ["-vv", "--color=yes"],
+}

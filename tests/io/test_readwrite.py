@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 from collections.abc import Callable
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Literal
 
@@ -15,8 +16,10 @@ import pyarrow.parquet as pq
 import pytest
 import zarr
 from anndata import AnnData
+from anndata.io import read_elem
 from numpy.random import default_rng
 from packaging.version import Version
+from pandas.testing import assert_series_equal
 from shapely import MultiPolygon, Polygon
 from upath import UPath
 from xarray import DataArray
@@ -471,7 +474,7 @@ class TestReadWrite:
                         new_name=new_name,
                         sdata_container_format=sdata_container_format,
                     )
-            elif workaround == 2:
+            elif workaround == 2:  # noqa: SIM102
                 # workaround 2, unsafe but sometimes acceptable depending on the user's workflow.
 
                 # this works only if the data is not dask-backed, otherwise an exception will be raised because the code
@@ -683,6 +686,24 @@ def test_incremental_io_in_memory(
         sdata.tables[f"additional_{k}"] = v
         with pytest.raises(KeyError, match="Key `poly` is not unique"):
             sdata["poly"] = v
+
+
+def test_table_group_keeps_anndata_encoding_metadata(tmp_path: str, table_single_annotation: SpatialData) -> None:
+    # https://github.com/scverse/spatialdata/issues/1183
+    # Writing the spatialdata attributes on the table group must not erase the
+    # `encoding-type`/`encoding-version` metadata that anndata writes on the same
+    # group; anndata-level readers (read_elem, read_lazy) dispatch on it.
+    tmpdir = Path(tmp_path) / "tmp.zarr"
+    table_single_annotation.write(tmpdir)
+
+    on_disk = json.loads((tmpdir / "tables" / "table" / "zarr.json").read_text())["attributes"]
+    assert on_disk["encoding-type"] == "anndata"
+    assert on_disk["encoding-version"] == "0.1.0"
+    # the spatialdata attributes must be present alongside, not instead
+    assert on_disk["spatialdata-encoding-type"] == "ngff:regions_table"
+
+    table_group = zarr.open_group(tmpdir, mode="r")["tables/table"]
+    assert isinstance(read_elem(table_group), AnnData)
 
 
 def test_bug_rechunking_after_queried_raster():
@@ -1278,9 +1299,11 @@ def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
     sdata_from_upath = SpatialData.read(UPath(sdata_path))
     assert sdata_from_upath.path == sdata_path
 
-    # path as zarr Group
+    # an already-open zarr Group is only accepted by read_zarr(), not by SpatialData.read()
     zarr_group = zarr.open_group(sdata_path, mode="r")
-    sdata_from_zarr_group = SpatialData.read(zarr_group)
+    with pytest.raises(TypeError, match="requires a path or URL"):
+        SpatialData.read(zarr_group)  # type: ignore[arg-type]
+    sdata_from_zarr_group = read_zarr(zarr_group)
     assert sdata_from_zarr_group.path == sdata_path
 
     # Assert all read methods produce identical SpatialData objects
@@ -1289,13 +1312,13 @@ def test_read_sdata(tmp_path: Path, points: SpatialData) -> None:
     assert_spatial_data_objects_are_identical(sdata_from_path, sdata_from_zarr_group)
 
 
-def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
+@pytest.mark.parametrize("convert_strings_to_categoricals", (True, False))
+def test_sdata_with_nan_in_obs(tmp_path: Path, convert_strings_to_categoricals: bool) -> None:
     """Test writing SpatialData with mixed string/NaN values in obs works correctly.
 
     Regression test for https://github.com/scverse/spatialdata/issues/399
     Previously this raised TypeError: expected unicode string, found nan.
-    Now the write succeeds, though NaN values in object-dtype columns are
-    converted to the string "nan" after round-trip.
+    Now the write succeeds, and NaN values are preserved round trip
     """
     from spatialdata.models import TableModel
 
@@ -1319,8 +1342,17 @@ def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
     assert sdata["table"].obs["column_only_region1"].iloc[1] is np.nan
     assert np.isnan(sdata["table"].obs["column_only_region2"].iloc[0])
 
+    dtypes_before_writing = sdata["table"].obs.dtypes.copy()
+
     path = tmp_path / "data.zarr"
-    sdata.write(path)
+    sdata.write(path, convert_table_strings_to_categoricals=convert_strings_to_categoricals)
+
+    if convert_strings_to_categoricals:
+        expected_dtypes = dtypes_before_writing
+        expected_dtypes["column_only_region1"] = "category"
+        assert_series_equal(sdata["table"].obs.dtypes, expected_dtypes)
+    else:
+        assert_series_equal(sdata["table"].obs.dtypes, dtypes_before_writing)
 
     sdata2 = SpatialData.read(path)
     assert "column_only_region1" in sdata2["table"].obs.columns
@@ -1329,8 +1361,12 @@ def test_sdata_with_nan_in_obs(tmp_path: Path) -> None:
 
     assert r1.iloc[0] == "string"
     assert r2.iloc[1] == 3
-    if Version(pd.__version__) >= Version("3"):
-        assert pd.isna(r1.iloc[1])
-    else:  # After round-trip, NaN in object-dtype column becomes string "nan" on pandas 2
-        assert r1.iloc[1] == "nan"
     assert np.isnan(r2.iloc[0])
+
+    if Version(version("pandas")) >= Version("3"):
+        assert pd.isna(r1.iloc[1])
+    else:  # After round-trip, NaN in object-dtype column becomes string
+        if convert_strings_to_categoricals:
+            assert pd.isna(r1.iloc[1])
+        else:
+            assert r1.iloc[1] == "nan"

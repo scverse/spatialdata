@@ -8,6 +8,7 @@ from typing import Any
 from warnings import warn
 
 import numpy as np
+import pandas as pd
 from anndata import AnnData
 from anndata._core.merge import StrategiesLiteral, resolve_merge_strategy
 
@@ -65,7 +66,10 @@ def _concatenate_tables(
             rename_dict[table_instance_key] = instance_key
         if len(rename_dict) > 0:
             table = copy(table)  # Shallow copy
-            table.obs = table.obs.rename(columns=rename_dict, copy=False)
+            obs = table.obs
+            if not isinstance(obs, pd.DataFrame):
+                raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+            table.obs = obs.rename(columns=rename_dict)
         tables_l.append(table)
 
     merged_table = ad.concat(tables_l, **kwargs)
@@ -202,8 +206,8 @@ def concatenate(
                 else:
                     merged_tables[k] = v
 
-    attrs_merge = resolve_merge_strategy(attrs_merge)
-    attrs = attrs_merge([sdata.attrs for sdata in sdatas])
+    resolved_attrs_merge = resolve_merge_strategy(attrs_merge)
+    attrs = resolved_attrs_merge([sdata.attrs for sdata in sdatas])
 
     sdata = SpatialData(
         images=merged_images,
@@ -252,7 +256,10 @@ def _fix_ensure_unique_element_names(
 
             # fix the region_key column
             region, region_key, _ = get_table_keys(table)
-            table.obs[region_key] = (table.obs[region_key].astype("str") + f"-{suffix}").astype("category")
+            obs = table.obs
+            if not isinstance(obs, pd.DataFrame):
+                raise TypeError(f"`table.obs` must be a pandas DataFrame, got {type(obs).__name__}.")
+            obs[region_key] = (obs[region_key].astype("str") + f"-{suffix}").astype("category")
             new_region: str | list[str]
             if isinstance(region, str):
                 new_region = f"{region}-{suffix}"

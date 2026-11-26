@@ -1,38 +1,41 @@
 ```{eval-rst}
-.. image:: _static/img/spatialdata_horizontal.png
+.. image:: _static/img/spatialdata_horizontal.svg
   :class: dark-light p-2
   :alt: SpatialData banner
 ```
 
 # An open and universal framework for processing spatial omics data.
 
-SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets. It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
+SpatialData is a data framework, a schema and a serialization format for uni- and multi-modal spatial omics datasets.
+It is supported by a growing suite of software libraries for performant access, manipulation and analysis in multiple languages, including Python, R and JavaScript.
 
-This page provides documentation on how to install, use, and extend the core `spatialdata` library. See the links below to learn more about other packages in the SpatialData ecosystem.
+The Python `spatialdata` library holds images, segmentation masks, points, shapes and annotation tables together in one {class}`~spatialdata.SpatialData` object, aligned through shared coordinate systems.
+It lets you query, crop and aggregate across these elements, read and write the SpatialData Zarr format with lazy access to large data, and exchange data with AnnData, scanpy, squidpy and other tools ({doc}`interoperability`).
 
+This site documents how to install, use and extend it.
+See the links below to learn more about the specifications and other packages in the SpatialData ecosystem.
+
+- [SpatialData specifications](https://spatialdata-spec.scverse.org/): language-independent definitions of SpatialData datasets and their on-disk representation.
 - `spatialdata-io`: load data from common spatial omics technologies into `spatialdata` ([repository][spatialdata-io-repo], [documentation][spatialdata-io-docs]).
 - `spatialdata-plot`: Static plotting library for `spatialdata` ([repository][spatialdata-plot-repo], [documentation][spatialdata-plot-docs]).
-- `napari-spatialdata-repo`: napari plugin for interactive exploration and annotation of `spatialdata` ([repository][napari-spatialdata-repo], [documentation][napari-spatialdata-docs]).
-- `SpatialData` (R): R implementation of the SpatialData framework ([repository][spatialdata-r-repo]).
+- `napari-spatialdata`: napari plugin for interactive exploration and annotation of `spatialdata` ([repository][napari-spatialdata-repo], [documentation][napari-spatialdata-docs]).
+- `spatialdataR`: R implementation of the SpatialData framework ([repository][spatialdata-r-repo]).
 - `SpatialData.js`: JavaScript/TypeScript implementation of the SpatialData framework ([repository][spatialdata-js-repo]).
 
 Please see our publication {cite}`marconatoSpatialDataOpenUniversal2024` for citation and to learn more.
 
 :::{note}
-With dask >= 2025.2.0, users can get an error as described in [#1077](https://github.com/scverse/spatialdata/issues/1064). While we tried implementing fixes in SpatialData, it can be that
-users perform operations on the `Points` data themselves and get this error. In order to prevent it, users can use a context manager we created.
+With dask’s partition fusion enabled (the default), user code that operates on multi-partition `Points` dataframes can fail as described in [#1064](https://github.com/scverse/spatialdata/issues/1064) and [dask#12193](https://github.com/dask/dask/issues/12193).
+`spatialdata` avoids this internally; for your own operations, wrap them in `spatialdata.disable_dask_tune_optimization`:
 
 ```python
-from spatialdata import disable_dask_tune_optimization
 import contextlib
-...
+
+from spatialdata import disable_dask_tune_optimization
 
 with disable_dask_tune_optimization() if data.npartitions > 1 else contextlib.nullcontext():
-    <your operation on points dask dataframe>
+    ...  # your operation on the points dask dataframe
 ```
-
-This will disable dask graph optimization if the dataframe has more than 1 partition and otherwise keep it enabled. This solves
-the problem discussed in this [dask issue](https://github.com/dask/dask/issues/12193). We are looking into an upstream fix.
 :::
 
 [//]: # "numfocus-fiscal-sponsor-attribution"
@@ -45,15 +48,11 @@ If you like scverse® and want to support our mission, please consider making a 
   <img
     src="https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png"
     width="200"
-  >
+>
 </a>
 </div>
 
-```{eval-rst}
-.. note::
-   This library is currently under active development. We may make changes to the API between versions as the community provides feedback. To ensure reproducibility, please make note of the version you are developing against.
-```
-
+<!-- panache-ignore-format-start -->
 ```{eval-rst}
 .. card:: Installation
     :link: installation
@@ -61,17 +60,17 @@ If you like scverse® and want to support our mission, please consider making a 
 
     Learn how to install ``spatialdata``.
 
-.. card:: User Guide
+.. card:: How-to guides
     :link: user_guide
     :link-type: doc
 
-    Navigate your way through ``spatialdata`` tutorials.
+    Get help with common questions and tasks in ``spatialdata``.
 
 .. card:: Tutorials
     :link: tutorials/notebooks/notebooks
     :link-type: doc
 
-    Learn how to use ``spatialdata`` with hands-on examples.
+    Learn how to use ``spatialdata`` with detailed hands-on examples.
 
 .. card:: API
     :link: api
@@ -98,21 +97,50 @@ If you like scverse® and want to support our mission, please consider making a 
     Learn how to contribute to ``spatialdata``.
 
 ```
+<!-- panache-ignore-format-end -->
 
 ```{toctree}
+:caption: Getting started
 :hidden: true
 :maxdepth: 1
 
-installation.md
-user_guide.md
-api.md
-tutorials/notebooks/notebooks.md
-tutorials/notebooks/datasets/README.md
-glossary.md
-design_doc.md
-contributing.md
-changelog.md
-references.md
+installation
+quickstart
+```
+
+```{toctree}
+:caption: Guides
+:hidden: true
+:maxdepth: 1
+
+user_guide
+tutorials/notebooks/notebooks
+```
+
+```{toctree}
+:caption: Reference
+:hidden: true
+:maxdepth: 1
+
+api
+tutorials/notebooks/datasets/README
+glossary
+SpatialData specifications <https://spatialdata-spec.scverse.org/>
+design_doc
+interoperability
+```
+
+```{toctree}
+:caption: Project
+:hidden: true
+:maxdepth: 1
+
+changelog
+contributing
+citation
+references
+GitHub <https://github.com/scverse/spatialdata>
+Discourse <https://discourse.scverse.org/c/help/spatialdata/44>
 ```
 
 <!-- Links -->
@@ -122,6 +150,6 @@ references.md
 [spatialdata-plot-repo]: https://github.com/scverse/spatialdata-plot
 [napari-spatialdata-docs]: https://spatialdata.scverse.org/projects/napari/en/stable/notebooks/spatialdata.html
 [spatialdata-io-docs]: https://spatialdata.scverse.org/projects/io/en/stable/
-[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/api.html
-[spatialdata-r-repo]: https://github.com/HelenaLC/SpatialData
+[spatialdata-plot-docs]: https://spatialdata.scverse.org/projects/plot/en/stable/
+[spatialdata-r-repo]: https://github.com/HelenaLC/spatialdataR
 [spatialdata-js-repo]: https://github.com/Taylor-CCB-Group/SpatialData.js

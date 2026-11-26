@@ -8,7 +8,7 @@ import sys
 os.environ["NUMBA_DISABLE_JIT"] = "1"
 # If a pytest plugin already imported numba before this conftest ran, patch the cached config value too.
 if "numba.core.config" in sys.modules:
-    sys.modules["numba.core.config"].NUMBA_DISABLE_JIT = 1
+    sys.modules["numba.core.config"].DISABLE_JIT = 1
 
 import copy as _copy
 from collections.abc import Callable, Sequence
@@ -43,6 +43,22 @@ from spatialdata.models import (
     ShapesModel,
     TableModel,
 )
+from spatialdata.utils.points import _make_points
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--run-network", action="store_true", default=False, help="run tests marked 'network' (e.g. dataset downloads)"
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if config.getoption("--run-network"):
+        return
+    skip_network = pytest.mark.skip(reason="need --run-network option to run")
+    for item in items:
+        if "network" in item.keywords:
+            item.add_marker(skip_network)
 
 
 def _fast_deepcopy_sdata(sd: SpatialData) -> SpatialData:
@@ -386,14 +402,6 @@ def blobs_factory(_sdata_blobs_session: SpatialData) -> Callable[[], SpatialData
         return _fast_deepcopy_sdata(_sdata_blobs_session)
 
     return _make
-
-
-def _make_points(coordinates: np.ndarray) -> DaskDataFrame:
-    """Helper function to make a Points element."""
-    k0 = int(len(coordinates) / 3)
-    k1 = len(coordinates) - k0
-    genes = np.hstack((np.repeat("a", k0), np.repeat("b", k1)))
-    return PointsModel.parse(coordinates, annotation=pd.DataFrame({"genes": genes}), feature_key="genes")
 
 
 def _make_squares(centroid_coordinates: np.ndarray, half_widths: list[float]) -> polygons:

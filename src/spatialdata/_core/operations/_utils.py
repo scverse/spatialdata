@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from anndata import AnnData
 from xarray import DataArray, DataTree
 
 from spatialdata.models import SpatialElement, get_axes_names, get_spatial_axes
@@ -108,7 +109,7 @@ def transform_to_data_extent(
         coordinate_system, maintain_positioning=True
     )
 
-    sdata_to_return_elements = {
+    sdata_to_return_elements: dict[str, SpatialElement | AnnData] = {
         **sdata_vector_transformed_inplace.shapes,
         **sdata_vector_transformed_inplace.points,
     }
@@ -128,12 +129,16 @@ def transform_to_data_extent(
                 target_depth=None,
                 return_regions_as_labels=True,
             )
+            assert isinstance(rasterized, DataArray | DataTree)
             sdata_to_return_elements[element_name] = rasterized
         else:
             sdata_to_return_elements[element_name] = element
     if not maintain_positioning:
-        for el in sdata_to_return_elements.values():
-            set_transformation(el, transformation={coordinate_system: Identity()}, set_all=True)
+        for element_value in sdata_to_return_elements.values():
+            # tables carry no transformations
+            if isinstance(element_value, AnnData):
+                continue
+            set_transformation(element_value, transformation={coordinate_system: Identity()}, set_all=True)
     for k, v in sdata.tables.items():
         sdata_to_return_elements[k] = v.copy()
     return SpatialData.init_from_elements(sdata_to_return_elements, attrs=sdata.attrs)
@@ -152,6 +157,9 @@ def _parse_element(
         )
     if sdata is not None:
         assert isinstance(element, str)
-        return sdata[element]
-    assert element is not None
+        looked_up = sdata[element]
+        if isinstance(looked_up, AnnData):
+            raise TypeError(f"Element {element!r} is a table, not a spatial element.")
+        return looked_up
+    assert not isinstance(element, str)
     return element

@@ -1,70 +1,104 @@
 name: Test
 
 on:
-    push:
-        branches: [main]
-        tags:
-            - "v*"
-    pull_request:
-        branches: "*"
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1" # weekly, Monday 05:00 UTC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-    test:
-        runs-on: ${{ matrix.os }}
-        defaults:
-            run:
-                shell: bash  # bash also on windows
+  # [tool.hatch.envs.hatch-test.matrix] in pyproject.toml is the single source of truth: the same environments run here and locally.
+  get-environments:
+    runs-on: ubuntu-slim
+    outputs:
+      envs: ${{ steps.get-envs.outputs.envs }}
+    steps:
+      - &clone
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          filter: blob:none
+          fetch-depth: 0
+          persist-credentials: false
+      - &setup-uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          prune-cache: true
+      - name: Get test environments
+        id: get-envs
+        run: |
+          ENVS_JSON=$(uvx hatch env show --json | jq -c 'to_entries
+            | map(
+                select(.key | startswith("hatch-test"))
+                | {
+                    name: .key,
+                    label: (if (.key | contains("pre")) then .key + " (PRE-RELEASE DEPENDENCIES)" else .key end),
+                    python: .value.python
+                  }
+              )')
+          echo "envs=${ENVS_JSON}" | tee $GITHUB_OUTPUT
 
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - {os: windows-latest, python: "3.12", dask-version: "2026.3.0", name: "min dask"}
-                    - {os: windows-latest, python: "3.14", dask-version: "latest"}
-                    - {os: ubuntu-latest, python: "3.12", dask-version: "latest"}
-                    - {os: ubuntu-latest, python: "3.13", dask-version: "latest"}
-                    - {os: ubuntu-latest, python: "3.14", dask-version: "latest"}
-                    - {os: macos-latest, python: "3.12", dask-version: "latest"}
-                    - {os: macos-latest, python: "3.14", prerelease: "allow", name: "prerelease"}
+  test:
+    needs: get-environments
+    permissions:
+      id-token: write # for codecov OIDC
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        env: ${{ fromJSON(needs.get-environments.outputs.envs) }}
+
+    name: ${{ matrix.env.label }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # Pre-release failures must not block PRs, but scheduled runs should go red (and notify) so upstream breakage is noticed early.
+    continue-on-error: ${{ contains(matrix.env.name, 'pre') && github.event_name != 'schedule' }}
+    env:
+      UV_PYTHON: ${{ matrix.env.python }}
+
+    steps:
+      - *clone
+      - *setup-uv
+      - name: create hatch environment
+        run: uvx hatch env create ${{ matrix.env.name }}
+      - name: list all all installed package versions
+        run: uvx hatch run ${{ matrix.env.name }}:uv pip list
+      - name: run tests using hatch
         env:
-            OS: ${{ matrix.os }}
-            PYTHON: ${{ matrix.python }}
-            DASK_VERSION: ${{ matrix.dask-version }}
-            PRERELEASE: ${{ matrix.prerelease }}
+          MPLBACKEND: agg
+          PLATFORM: ${{ matrix.os }}
+          DISPLAY: :42
+        run: uvx hatch run ${{ matrix.env.name }}:run-cov -v --color=yes -n auto --dist worksteal --run-network
+      - name: generate coverage report
+        run: |
+          # See https://coverage.readthedocs.io/page/config.html#run-patch
+          test -f .coverage || uvx hatch run ${{ matrix.env.name }}:cov-combine
+          uvx hatch run ${{ matrix.env.name }}:cov-report   # report visibly
+          uvx hatch run ${{ matrix.env.name }}:coverage xml # create report for upload
+      - name: Upload coverage
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          fail_ci_if_error: true
+          use_oidc: true
 
-        steps:
-            - uses: actions/checkout@v6
-            - uses: astral-sh/setup-uv@v7
-              id: setup-uv
-              with:
-                  version: "latest"
-                  python-version: ${{ matrix.python }}
-            - name: Install dependencies
-              run: |
-                  if [[ "${PRERELEASE}" == "allow" ]]; then
-                    uv add git+https://github.com/scverse/anndata.git
-                    uv add pandas>=3.dev0
-                  fi
-                  if [[ -n "${DASK_VERSION}" ]]; then
-                    if [[ "${DASK_VERSION}" == "latest" ]]; then
-                      uv add dask
-                    else
-                      uv add dask==${DASK_VERSION}
-                    fi
-                  fi
-                  uv sync --group=test
-            - name: Test
-              env:
-                  MPLBACKEND: agg
-                  PLATFORM: ${{ matrix.os }}
-                  DISPLAY: :42
-              run: |
-                  uv run pytest --cov --color=yes --cov-report=xml -n auto --dist worksteal
-            - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v6
-              with:
-                  name: coverage
-                  verbose: true
-                  fail_ci_if_error: true
-              env:
-                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  # One required check for branch protection, so it does not need updating whenever the matrix changes.
+  check:
+    name: Tests pass in all hatch environments
+    if: always()
+    needs:
+      - get-environments
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
+        with:
+          jobs: ${{ toJSON(needs) }}

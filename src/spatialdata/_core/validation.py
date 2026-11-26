@@ -36,7 +36,7 @@ class ValidationError(ValueError):
         )
 
 
-def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series) -> None:
+def check_target_region_column_symmetry(table: AnnData, region_key: str, target: str | pd.Series | list[str]) -> None:
     """
     Check region and region_key column symmetry.
 
@@ -295,6 +295,10 @@ class _ErrorDetailsCollector:
             Tuple of strings identifying the parent element
         expected_exception
             The class of the exception to catch. Other exceptions are raised.
+
+        Returns
+        -------
+        The collector itself, to be used as a context manager.
         """
         if isinstance(location, str):
             location = (location,)
@@ -388,7 +392,7 @@ class raise_validation_errors:
         # Exceptions were collected that we want to raise as a combined validation error.
         if self._collector.errors:
             raise ValidationError(
-                title=self._message + "\nTo fix, run `spatialdata.utils.sanitize_table(adata)`.",
+                title=self._message + "\nTo fix, run `spatialdata.sanitize_table(adata)`.",
                 errors=self._collector.errors,
             )
         return True

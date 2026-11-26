@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import Any, Literal
 
 import dask.dataframe.core
@@ -31,7 +32,7 @@ from spatialdata.models import (
 )
 from spatialdata.transformations import Identity
 
-__all__ = ["blobs", "raccoon"]
+__all__ = ["blobs", "cells", "raccoon"]
 
 
 def blobs(
@@ -58,7 +59,8 @@ def blobs(
         Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
     n_channels
         Number of channels of the image
-
+    c_coords
+        Channel names of the image. If given, overrides `n_channels`.
 
     Returns
     -------
@@ -79,6 +81,65 @@ def raccoon() -> SpatialData:
     return RaccoonDataset().raccoon()
 
 
+def _shipped_registry() -> tuple[str | None, dict[str, Any]]:
+    """Parse the ``datasets.yaml`` registry shipped inside the ``spatialdata`` package."""
+    import importlib.resources
+
+    from scverse_misc.datasets import parse_registry
+
+    registry = importlib.resources.files("spatialdata").joinpath("datasets.yaml")
+    with importlib.resources.as_file(registry) as registry_path:
+        base_url: str | None
+        datasets: dict[str, Any]
+        base_url, datasets = parse_registry(registry_path)
+    return base_url, datasets
+
+
+def _cache_dir(path: str | None) -> Path:
+    """Resolve the cache directory, defaulting to the OS cache location for ``"spatialdata"``."""
+    import pooch
+
+    return Path(path) if path is not None else Path(pooch.os_cache("spatialdata"))
+
+
+def cells(path: str | None = None) -> SpatialData:
+    """
+    Cells dataset.
+
+    Download the ``cells`` example dataset and load it as a :class:`~spatialdata.SpatialData`
+    object. The download is hash-verified and cached, so repeated calls reuse the local copy
+    instead of downloading again.
+
+    The dataset is a small region of a Xenium Prime Cervical Cancer sample and contains three
+    multiscale images (``he_aligned``, ``he_image``, ``morphology_focus``), three multiscale
+    label layers (``cell_labels``, ``nucleus_labels``, ``tissue_labels``), the ``transcripts``
+    points, the ``cell_boundaries`` and ``nucleus_boundaries`` shapes, and a cell-by-gene
+    ``table`` annotating the 94 cells.
+
+    Notes
+    -----
+    Derived from the 10x Genomics Xenium Prime Cervical Cancer FFPE dataset
+    (https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-cervical-cancer), subset to a
+    small tissue region. Licensed under `CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>`_;
+    see ``datasets.yaml`` for the attribution string shipped alongside the data.
+
+    Parameters
+    ----------
+    path
+        Directory in which to cache the downloaded data. If `None`, the default OS cache
+        location is used (:func:`pooch.os_cache` for ``"spatialdata"``).
+
+    Returns
+    -------
+    SpatialData object with the cells dataset.
+    """
+    from scverse_misc.datasets import fetch
+
+    base_url, datasets = _shipped_registry()
+    sdata: SpatialData = fetch(datasets["cells"], _cache_dir(path), base_url=base_url)
+    return sdata
+
+
 class RaccoonDataset:
     """Raccoon dataset."""
 
@@ -93,7 +154,7 @@ class RaccoonDataset:
         from skimage.segmentation import slic
 
         im_data = scipy.datasets.face()
-        im = Image2DModel.parse(im_data, dims=["y", "x", "c"])
+        im = Image2DModel.parse(np.asarray(im_data), dims=["y", "x", "c"])
         labels_data = slic(im_data, n_segments=100, compactness=10, sigma=1)
         labels = Labels2DModel.parse(labels_data, dims=["y", "x"])
         coords = np.array([[610, 450], [730, 325], [575, 300], [480, 90]])
@@ -129,6 +190,8 @@ class BlobsDataset:
             Extra coordinate space on top of the standard global coordinate space. Will have only identity transform.
         n_channels
             Number of channels of the image
+        c_coords
+            Channel names of the image. If given, overrides `n_channels`.
         """
         self.length = length
         self.n_points = n_points
@@ -243,8 +306,8 @@ class BlobsDataset:
             dims = ["z", "y", "x"]
             model = Labels3DModel
         if scale_factors is None:
-            return model.parse(out, transformations=transformations, dims=dims)
-        return model.parse(out, transformations=transformations, dims=dims, scale_factors=scale_factors)
+            return model.parse(np.asarray(out), transformations=transformations, dims=dims)
+        return model.parse(np.asarray(out), transformations=transformations, dims=dims, scale_factors=scale_factors)
 
     def _generate_blobs(self, length: int = 512, seed: int | None = None, ndim: int = 2) -> ArrayLike:
         from scipy.ndimage import gaussian_filter
@@ -324,9 +387,13 @@ class BlobsDataset:
                 ]
             )
 
+        minx: float
+        miny: float
+        maxx: float
+        maxy: float
         minx = miny = bbox[0]
         maxx = maxy = bbox[1]
-        polygons: list[Polygon] = []
+        polygons: list[Polygon | MultiPolygon] = []
         for i in range(n):
             # generate random points
             rng1 = default_rng(i)
@@ -343,16 +410,20 @@ class BlobsDataset:
                     # by translating it by the size of the first polygon.
                     poly2 = get_poly(i)
                     last = polygons.pop()
+                    # `last` was just appended above, so it is the single polygon this loop generated.
+                    assert isinstance(last, Polygon)
 
                     # Calculate the size of the polygon
+                    # note: this rebinds `maxx`/`maxy`, which `get_poly` reads on the next iteration
                     (minx, miny, maxx, maxy) = poly2.bounds
                     dx = maxx - minx
                     dy = maxy - miny
 
                     # Translate the polygon
-                    poly2 = translate(poly2, xoff=dx, yoff=dy)
+                    translated = translate(poly2, xoff=dx, yoff=dy)
+                    assert isinstance(translated, Polygon)
 
-                    polygons.append(MultiPolygon([last, poly2]))
+                    polygons.append(MultiPolygon([last, translated]))
         return polygons
 
     # function that generates random shapely points given a bounding box
@@ -391,10 +462,13 @@ def blobs_annotating_element(name: BlobsTypes) -> SpatialData:
     SpatialData object with the desired element annotated by the table.
     """
     sdata = blobs(length=50)
+    element = sdata[name]
+    assert not isinstance(element, AnnData)
     if name in ["blobs_labels", "blobs_multiscale_labels"]:
-        instance_id = get_element_instances(sdata[name]).tolist()
+        instance_id = get_element_instances(element).tolist()
     else:
-        index = sdata[name].index
+        assert isinstance(element, GeoDataFrame | DaskDataFrame)
+        index = element.index
         instance_id = index.compute().tolist() if isinstance(index, dask.dataframe.Index) else index.tolist()
     n = len(instance_id)
     obs_df = pd.DataFrame(

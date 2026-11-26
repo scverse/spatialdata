@@ -26,6 +26,7 @@ from shapely.io import to_ragged_array
 from spatial_image import to_spatial_image
 from xarray import DataArray, DataTree
 
+import spatialdata
 from spatialdata._core.spatialdata import SpatialData
 from spatialdata._core.validation import ValidationError
 from spatialdata._types import ArrayLike
@@ -624,6 +625,18 @@ class TestModels:
                     else:
                         TableModel.validate(adata)
 
+    def test_table_model_invalid_name_suggests_public_sanitizer(self):
+        adata = AnnData(np.array([[0]]), uns={"invalid name": {}})
+
+        with pytest.raises(
+            ValidationError,
+            match=r"`spatialdata\.sanitize_table\(adata\)`",
+        ):
+            TableModel.validate(adata)
+
+        spatialdata.sanitize_table(adata)
+        TableModel.validate(adata)
+
     @pytest.mark.parametrize(
         "keys",
         [
@@ -799,6 +812,45 @@ def test_force2d():
     assert_elements_are_identical(circles_3d, expected_circles_2d)
     assert_elements_are_identical(polygons_3d, expected_polygons_2d)
     assert_elements_are_identical(multipolygons_3d, expected_multipolygons_2d)
+
+
+def test_points_model_preserves_column_order():
+    # the extra columns used to be added iterating over a set, so their order in the parsed element depended on
+    # PYTHONHASHSEED. Renaming the coordinate columns changes the set of column names, which used to bypass the
+    # reordering safeguard at the end of PointsModel.parse().
+    extra_columns = ["qv", "intensity", "radius", "z_score", "nucleus_distance", "codeword_index"]
+    n = 10
+    data = pd.DataFrame(
+        {
+            "my_x": np.arange(n, dtype=float),
+            "my_y": np.arange(n, dtype=float),
+            "target": pd.Categorical(["a", "b"] * (n // 2)),
+            "cell_id": np.arange(n),
+            **{c: np.arange(n, dtype=float) for c in extra_columns},
+        }
+    )
+    expected = ["x", "y", "target", "cell_id", *extra_columns]
+
+    from_pandas = PointsModel.parse(
+        data, coordinates={"x": "my_x", "y": "my_y"}, feature_key="target", instance_key="cell_id"
+    )
+    assert list(from_pandas.columns) == expected
+
+    from_dask = PointsModel.parse(
+        dd.from_pandas(data, npartitions=2),
+        coordinates={"x": "my_x", "y": "my_y"},
+        feature_key="target",
+        instance_key="cell_id",
+    )
+    assert list(from_dask.columns) == expected
+
+    from_numpy = PointsModel.parse(
+        data[["my_x", "my_y"]].to_numpy(),
+        annotation=data.drop(columns=["my_x", "my_y"]),
+        feature_key="target",
+        instance_key="cell_id",
+    )
+    assert list(from_numpy.columns) == expected
 
 
 def test_dask_points_unsorted_index_with_warning(points):

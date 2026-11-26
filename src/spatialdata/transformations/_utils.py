@@ -60,12 +60,13 @@ def _set_transformations_to_element(element: Any, transformations: MappingToCoor
 def _set_transformations(e: SpatialElement, transformations: MappingToCoordinateSystem_t) -> None:
     """
     Set the transformation of a SpatialElement *only in memory*.
+
     Parameters
     ----------
     e
         SpatialElement
-    t
-        transformation
+    transformations
+        Mapping from coordinate system names to transformations.
 
     Notes
     -----
@@ -96,8 +97,10 @@ def _(e: DataTree, transformations: MappingToCoordinateSystem_t) -> None:
         if scale != f"scale{i}":
             pass
         assert scale == f"scale{i}"
+        assert isinstance(node, DataTree)
         assert len(dict(node)) == 1
         xdata = list(node.values())[0]
+        assert isinstance(xdata, DataArray)
         new_shape = np.array(xdata.shape)
         if i > 0:
             assert old_shape is not None
@@ -139,9 +142,12 @@ def _(e: DataTree) -> MappingToCoordinateSystem_t | None:
             "A multiscale image must not contain a transformation in the outer level; the transformations need to be "
             "stored in the inner levels."
         )
-    d = dict(e["scale0"])
+    scale0 = e["scale0"]
+    assert isinstance(scale0, DataTree)
+    d = dict(scale0)
     assert len(d) == 1
-    xdata = d.values().__iter__().__next__()
+    xdata = next(iter(d.values()))
+    assert isinstance(xdata, DataArray)
     return _get_transformations_xarray(xdata)
 
 
@@ -271,6 +277,8 @@ def convert_transformations_to_affine(sdata: SpatialData, coordinate_system: str
 
     Parameters
     ----------
+    sdata
+        The SpatialData object whose elements' transformations are converted.
     coordinate_system
         The coordinate system to convert to.
 
