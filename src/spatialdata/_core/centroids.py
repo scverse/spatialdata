@@ -131,7 +131,7 @@ def get_centroids(
 
     Notes
     -----
-    For :class:`~shapely.MultiPolygon`s, the centroid is the geometric (area-weighted) centroid computed by
+    For :class:`~shapely.MultiPolygon` geometries, the centroid is the geometric (area-weighted) centroid computed by
     ``geopandas`` (``GeoDataFrame.centroid``), i.e. sub-polygons contribute in proportion to their area. For
     multiscale labels the centroids are computed on the full-resolution ``scale0`` level.
     """
@@ -237,7 +237,7 @@ def _points_from_centroids(
 @get_centroids.register(GeoDataFrame)
 @get_centroids.register(DaskDataFrame)
 def _(
-    e: SpatialElement,
+    e: DataArray | DataTree | GeoDataFrame | DaskDataFrame,
     coordinate_system: str | None = "global",
     return_background: bool = False,
     return_area: bool = False,
