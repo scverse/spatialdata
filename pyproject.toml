@@ -28,8 +28,9 @@ classifiers = [
 dynamic = [ "version" ]
 dependencies = [
   "anndata>=0.12.7",
-  # >=0.12 for compatibility with zarr v3 / availability of read_lazy;
-  # anndata >=0.12.7 itself imposes pandas<3, avoiding the broken combination of anndata 0.12.0-0.12.6 and pandas 3
+  # need >=0.12 for zarr v3 compatibility and `read_lazy`
+  # need >=0.12.7 to rule out combining anndata 0.12.0-0.12.6 with pandas 3, which is unsupported and can break table IO
+  # combinations that work: anndata 0.12.x (>=0.12.7) with pandas 2.x; anndata >=0.13 with pandas >=2.3, including 3.x
   "annsel>=0.1.2",
   "click",
   "dask>=2026.3",
