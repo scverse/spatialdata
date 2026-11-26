@@ -27,7 +27,9 @@ classifiers = [
 ]
 dynamic = [ "version" ]
 dependencies = [
-  "anndata>=0.9.1",
+  "anndata>=0.12.7",
+  # >=0.12 for compatibility with zarr v3 / availability of read_lazy;
+  # anndata >=0.12.7 itself imposes pandas<3, avoiding the broken combination of anndata 0.12.0-0.12.6 and pandas 3
   "annsel>=0.1.2",
   "click",
   "dask>=2026.3",
@@ -143,6 +145,7 @@ envs.hatch-test.overrides.matrix.deps.env-vars = [
 envs.hatch-test.overrides.matrix.deps.extra-dependencies = [
   { value = "dask==2026.3.0", if = [ "min" ] },
   { value = "distributed==2026.3.0", if = [ "min" ] },
+  { value = "anndata==0.12.7", if = [ "min" ] },
 ]
 envs.hatch-test.dependency-groups = [ "dev", "test" ]
 # Not part of the CI matrix; run locally with `hatch run test-anndata-pandas:test`.
