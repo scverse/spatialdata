@@ -7,11 +7,12 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
+from xarray import DataTree
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances
 from spatialdata.models import Labels2DModel, Labels3DModel, PointsModel, TableModel, get_axes_names
-from spatialdata.transformations import Affine, Identity, get_transformation, set_transformation
+from spatialdata.transformations import Affine, Identity, Scale, get_transformation, set_transformation
 
 RNG = default_rng(42)
 
@@ -172,6 +173,68 @@ def test_get_centroids_labels(
         assert np.allclose(centroids.compute().values, centroids_transformed)
 
 
+def test_get_centroids_labels_area(labels):
+    # area for labels is the per-label pixel count; it rides along as a feature column of the Points.
+    element = labels["labels2d"]
+    centroids = get_centroids(element, return_area=True)
+    assert "area" in centroids.columns
+    ids, counts = np.unique(np.asarray(element.data), return_counts=True)
+    expected = dict(zip(ids, counts, strict=True))
+    got = centroids[["area"]].compute()["area"]
+    assert not (got.index == 0).any()  # background dropped
+    for label_id, area in got.items():
+        assert area == expected[label_id]
+
+
+def test_get_centroids_shapes_area_circles(shapes):
+    element = shapes["circles"]
+    centroids = get_centroids(element, return_area=True)
+    expected = np.pi * np.asarray(element["radius"], dtype=float) ** 2
+    assert np.allclose(centroids["area"].compute().to_numpy(), expected)
+
+
+@pytest.mark.parametrize("shapes_name", ["poly", "multipoly"])
+def test_get_centroids_shapes_area_polygons(shapes, shapes_name: str):
+    element = shapes[shapes_name]
+    centroids = get_centroids(element, return_area=True)
+    assert np.allclose(centroids["area"].compute().to_numpy(), element.geometry.area.to_numpy())
+
+
+def test_get_centroids_points_area_raises(points):
+    with pytest.raises(ValueError, match="not supported for points"):
+        get_centroids(points["points_0"], return_area=True)
+
+
+def _label_counts(element) -> dict[int, int]:
+    """Pixel/voxel count per label id, measured on the full-resolution level."""
+    data = next(iter(element.children["scale0"].data_vars.values())) if isinstance(element, DataTree) else element
+    ids, counts = np.unique(data.to_numpy(), return_counts=True)
+    return dict(zip(ids.tolist(), counts.tolist(), strict=True))
+
+
+def test_get_centroids_labels_area_multiscale(labels):
+    # multiscale labels are measured on the full-resolution scale0 level
+    element = labels["labels2d_multiscale"]
+    area = get_centroids(element, return_area=True)["area"].compute()
+    expected = _label_counts(element)
+    assert area.to_dict() == {k: float(v) for k, v in expected.items() if k != 0}
+
+
+def test_get_centroids_labels3d_area(labels):
+    # for 3D labels, `area` is the voxel count (a volume), as in skimage's regionprops
+    element = labels["labels3d_numpy"]
+    centroids = get_centroids(element, return_area=True, return_background=True).compute()
+    assert centroids["area"].to_dict() == {k: float(v) for k, v in _label_counts(element).items()}
+
+
+def test_get_centroids_area_non_identity_transform_raises(full_sdata):
+    # persist_as='Points' transforms the centroids but the area is intrinsic (untransformed); requesting
+    # both under a non-identity transform must raise rather than mix coordinate systems.
+    set_transformation(full_sdata["labels2d"], affine, "aligned")
+    with pytest.raises(ValueError, match="requires intrinsic coordinates"):
+        get_centroids(full_sdata["labels2d"], coordinate_system="aligned", return_area=True)
+
+
 def test_get_centroids_invalid_element(images):
     # cannot compute centroids for images
     with pytest.raises(ValueError, match="Expected a `Labels` element. Found an `Image` instead."):
@@ -192,3 +255,20 @@ def test_get_centroids_invalid_element(images):
 def test_get_centroids_invalid_coordinate_system(points):
     with pytest.raises(ValueError, match="No transformation to coordinate system"):
         get_centroids(points["points_0"], coordinate_system="invalid")
+
+
+def test_get_centroids_numerically_identity_transform_is_intrinsic(full_sdata):
+    # a mathematically-identity transform that is not the `Identity` class (e.g. Scale([1, 1])) must be
+    # accepted as intrinsic for return_area.
+    set_transformation(full_sdata["labels2d"], Scale([1.0, 1.0], axes=("x", "y")), "noop")
+    # return_area on the Points path must not raise "requires intrinsic coordinates"
+    out = get_centroids(full_sdata["labels2d"], coordinate_system="noop", return_area=True)
+    assert "area" in out.columns
+
+
+def test_get_centroids_points_area_non_identity_reports_points_not_intrinsic(points):
+    # a Points element with a non-identity transform + return_area must report the points-specific error,
+    # not the misleading "requires intrinsic coordinates" message.
+    set_transformation(points["points_0"], affine, "aligned")
+    with pytest.raises(ValueError, match="not supported for points"):
+        get_centroids(points["points_0"], coordinate_system="aligned", return_area=True)
