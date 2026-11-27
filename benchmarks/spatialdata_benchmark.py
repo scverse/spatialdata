@@ -109,3 +109,65 @@ class TimeQueriesWithScaleTransformations:
             max_coordinate=[x_max, y_max],
             target_coordinate_system="global",
         )
+
+
+class TimeJoins:
+    """Time `join_spatialelement_table` for an element whose instances are all annotated by the table.
+
+    The table rows are in a different order than the element rows, so `match_rows` has to reorder. The cases cover
+    the element masking and row matching code. For points, the joined element is computed, since masking a dask frame
+    is lazy.
+    """
+
+    params = [
+        "shapes left/left",
+        "shapes inner/left",
+        "shapes inner/right",
+        "shapes right/right",
+        "points inner/no",
+        "points right/right",
+    ]
+    param_names = ["element_type how/match_rows"]
+    n_instances = 200_000
+    number = 1
+    repeat = 5
+    rounds = 1
+    warmup_time = 0
+
+    def setup(self, case: str) -> None:
+        import geopandas as gpd
+        import pandas as pd
+        from anndata import AnnData
+
+        from spatialdata.models import PointsModel, ShapesModel, TableModel
+
+        element_type = case.split()[0]
+        n = self.n_instances
+        rng = np.random.default_rng(0)
+        coordinates = rng.random((n, 2))
+        index = pd.Index(rng.permutation(n))
+        if element_type == "shapes":
+            element = ShapesModel.parse(
+                gpd.GeoDataFrame(
+                    {"radius": np.ones(n)},
+                    geometry=gpd.points_from_xy(coordinates[:, 0], coordinates[:, 1]),
+                    index=index,
+                )
+            )
+        else:
+            element = PointsModel.parse(pd.DataFrame(coordinates, columns=["x", "y"], index=index))
+        obs = pd.DataFrame({"region": pd.Categorical(["element"] * n), "instance_id": rng.permutation(n)})
+        table = TableModel.parse(AnnData(obs=obs), region="element", region_key="region", instance_key="instance_id")
+        self.sdata = sd.SpatialData(**{element_type: {"element": element}}, tables={"table": table})
+
+    def teardown(self, *_args: object) -> None:
+        del self.sdata
+
+    def time_join(self, case: str) -> None:
+        element_type, join = case.split()
+        how, match_rows = join.split("/")
+        elements, _ = sd.join_spatialelement_table(
+            sdata=self.sdata, spatial_element_names="element", table_name="table", how=how, match_rows=match_rows
+        )
+        if element_type == "points":
+            elements["element"].compute()
