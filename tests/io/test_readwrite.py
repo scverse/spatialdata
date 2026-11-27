@@ -8,6 +8,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Literal
 
+import anndata as ad
 import dask.array as da
 import dask.dataframe as dd
 import numpy as np
@@ -20,13 +21,14 @@ from anndata.io import read_elem
 from numpy.random import default_rng
 from packaging.version import Version
 from pandas.testing import assert_series_equal
+from scipy import sparse
 from shapely import MultiPolygon, Polygon
 from upath import UPath
 from xarray import DataArray
 from zarr.errors import GroupNotFoundError
 
 import spatialdata.config
-from spatialdata import SpatialData, deepcopy, read_zarr
+from spatialdata import SpatialData, TableWriteOptionsError, deepcopy, read_zarr
 from spatialdata._core.validation import ValidationError
 from spatialdata._io._utils import _are_directories_identical, get_dask_backing_files
 from spatialdata._io.format import (
@@ -37,7 +39,7 @@ from spatialdata._io.format import (
 )
 from spatialdata._io.io_raster import write_image
 from spatialdata.datasets import blobs
-from spatialdata.models import Image2DModel
+from spatialdata.models import Image2DModel, TableModel
 from spatialdata.models._utils import get_channel_names
 from spatialdata.testing import assert_spatial_data_objects_are_identical
 from spatialdata.transformations.operations import (
@@ -56,6 +58,17 @@ from tests.conftest import (
 
 RNG = default_rng(0)
 SDATA_FORMATS = list(SpatialDataContainerFormats.values())
+SHARD_BUDGET_SMALL = 512 * 1024
+SHARD_BUDGET_LARGE = 2 * 1024 * 1024
+SDATA_FORMATS_ZARR_V3 = [f for f in SDATA_FORMATS if f.zarr_format == 3]
+SDATA_FORMATS_ZARR_V2 = [f for f in SDATA_FORMATS if f.zarr_format == 2]
+requires_shard_budget_support = pytest.mark.skipif(
+    Version(version("zarr")) < Version("3.1.6") or not hasattr(getattr(ad, "settings", None), "auto_shard_zarr_v3"),
+    reason=(
+        "a shard budget needs zarr >= 3.1.6, which is the first release to size the inner chunk correctly, and an "
+        "anndata that supports zarr v3 auto-sharding"
+    ),
+)
 
 
 @pytest.mark.filterwarnings("ignore:SpatialData is not stored in the most current format:UserWarning")
@@ -688,13 +701,23 @@ def test_incremental_io_in_memory(
             sdata["poly"] = v
 
 
-def test_table_group_keeps_anndata_encoding_metadata(tmp_path: str, table_single_annotation: SpatialData) -> None:
+@pytest.mark.parametrize(
+    "table_shard_size_bytes",
+    [
+        None,
+        pytest.param(SHARD_BUDGET_LARGE, marks=requires_shard_budget_support),
+    ],
+)
+def test_table_group_keeps_anndata_encoding_metadata(
+    tmp_path: str, table_single_annotation: SpatialData, table_shard_size_bytes: int | None
+) -> None:
     # https://github.com/scverse/spatialdata/issues/1183
     # Writing the spatialdata attributes on the table group must not erase the
     # `encoding-type`/`encoding-version` metadata that anndata writes on the same
-    # group; anndata-level readers (read_elem, read_lazy) dispatch on it.
+    # group; anndata-level readers (read_elem, read_lazy) dispatch on it. A shard budget must not change that: it is
+    # scoped around the array writes only, and released before the attributes are written.
     tmpdir = Path(tmp_path) / "tmp.zarr"
-    table_single_annotation.write(tmpdir)
+    table_single_annotation.write(tmpdir, table_shard_size_bytes=table_shard_size_bytes)
 
     on_disk = json.loads((tmpdir / "tables" / "table" / "zarr.json").read_text())["attributes"]
     assert on_disk["encoding-type"] == "anndata"
@@ -1370,3 +1393,233 @@ def test_sdata_with_nan_in_obs(tmp_path: Path, convert_strings_to_categoricals: 
             assert pd.isna(r1.iloc[1])
         else:
             assert r1.iloc[1] == "nan"
+
+
+def _shard_table(region: str | list[str] = "labels2d") -> AnnData:
+    """Build a table large enough that the shard budget measurably changes the on-disk geometry."""
+    n_obs, n_var = 4000, 2000
+    x = sparse.random(n_obs, n_var, density=0.05, format="csr", random_state=0, dtype=np.float64)
+    obs = pd.DataFrame(index=[f"cell_{i}" for i in range(n_obs)])
+    obs["instance_id"] = np.arange(n_obs)
+    obs["region"] = pd.Categorical(
+        [region] * n_obs if isinstance(region, str) else RNG.choice(region, size=n_obs).tolist()
+    )
+    adata = AnnData(X=x, obs=obs, var=pd.DataFrame(index=[f"gene_{i}" for i in range(n_var)]))
+    adata.obsm["spatial"] = RNG.normal(size=(n_obs, 2))
+    return TableModel.parse(adata, region=region, region_key="region", instance_key="instance_id")
+
+
+@pytest.fixture(scope="module")
+def shard_table() -> AnnData:
+    return _shard_table()
+
+
+def _write_shard_table(
+    path: Path,
+    table: AnnData,
+    sdata_container_format: SpatialDataContainerFormatType,
+    **kwargs: Any,
+) -> None:
+    SpatialData(tables={"table": table}).write(path, sdata_formats=sdata_container_format, **kwargs)
+
+
+def _table_only_sdata() -> SpatialData:
+    """A small table-only object: writing a labels-backed one twice trips a Windows file lock unrelated to this."""
+    return SpatialData(tables={"table": _get_table(region="labels2d")})
+
+
+def _x_data_array(path: Path) -> zarr.Array:
+    array = zarr.open_group(path, mode="r")["tables"]["table"]["X"]["data"]
+    assert isinstance(array, zarr.Array)
+    return array
+
+
+def _global_shard_state() -> tuple[Any, Any, Any]:
+    return (
+        zarr.config.get("array.target_shard_size_bytes", None),
+        ad.settings.auto_shard_zarr_v3,
+        ad.settings.zarr_write_format,
+    )
+
+
+@requires_shard_budget_support
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS_ZARR_V3)
+def test_table_shard_size_bytes_bounds_shard_size(
+    tmp_path: Path,
+    shard_table: AnnData,
+    sdata_container_format: SpatialDataContainerFormatType,
+) -> None:
+    arrays = {}
+    for label, budget in (("small", SHARD_BUDGET_SMALL), ("large", SHARD_BUDGET_LARGE)):
+        path = tmp_path / f"{label}.zarr"
+        _write_shard_table(path, shard_table, sdata_container_format, table_shard_size_bytes=budget)
+
+        array = _x_data_array(path)
+        assert array.shards is not None
+        assert array.shards[0] % array.chunks[0] == 0
+        assert array.shards[0] <= array.shape[0]
+        chunk_bytes = array.chunks[0] * array.dtype.itemsize
+        shard_bytes = array.shards[0] * array.dtype.itemsize
+        # the budget is a target, not a bound: when it is below the automatically chosen inner chunk, the shard
+        # degenerates to a single chunk, which is allowed to exceed the budget
+        assert shard_bytes <= max(budget, chunk_bytes)
+        arrays[label] = array
+
+    # the actual lever: a smaller budget must produce a smaller shard
+    assert arrays["small"].shards[0] < arrays["large"].shards[0]
+
+
+@requires_shard_budget_support
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+def test_table_shard_size_bytes_accepts_an_equivalent_float(tmp_path: Path, shard_table: AnnData) -> None:
+    # anndata only honours the budget when it reads back as an `int`, so an un-normalized float would be dropped in
+    # favour of anndata's own 1 GB default with no error and no warning; `1e8` is a natural way to write a budget
+    geometries = []
+    for label, budget in (("int", SHARD_BUDGET_LARGE), ("float", float(SHARD_BUDGET_LARGE))):
+        path = tmp_path / f"{label}.zarr"
+        _write_shard_table(path, shard_table, CurrentSpatialDataContainerFormat(), table_shard_size_bytes=budget)
+        array = _x_data_array(path)
+        geometries.append((array.chunks, array.shards))
+
+    assert geometries[0] == geometries[1]
+
+
+@requires_shard_budget_support
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+@pytest.mark.parametrize("region", ["labels2d", ["labels2d", "labels3d"]])
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS_ZARR_V3)
+def test_table_scalars_are_never_sharded(
+    tmp_path: Path,
+    region: str | list[str],
+    sdata_container_format: SpatialDataContainerFormatType,
+) -> None:
+    # zarr cannot derive a shard shape for a rank-0 array while a shard budget is set: it loops forever
+    # (https://github.com/zarr-developers/zarr-python/issues/4304). Every SpatialData table carries rank-0 string
+    # scalars in `uns/spatialdata_attrs`, so this asserts none of them ever reaches that code path.
+    path = tmp_path / "scalars.zarr"
+    _write_shard_table(path, _shard_table(region), sdata_container_format, table_shard_size_bytes=SHARD_BUDGET_SMALL)
+
+    scalars = []
+
+    def collect(group: zarr.Group, prefix: str) -> None:
+        for key, member in group.members():
+            member_path = f"{prefix}/{key}"
+            if isinstance(member, zarr.Array):
+                if member.shape == ():
+                    scalars.append((member_path, member.shards))
+            else:
+                collect(member, member_path)
+
+    collect(zarr.open_group(path, mode="r")["tables"]["table"], "tables/table")
+
+    # `region_key` and `instance_key` are always rank-0; `region` only is when a single region is annotated
+    assert any(name.endswith("/region_key") for name, _ in scalars)
+    assert [(name, shards) for name, shards in scalars if shards is not None] == []
+
+
+@requires_shard_budget_support
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS_ZARR_V3)
+def test_no_shards_key_reaches_anndata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    sdata_container_format: SpatialDataContainerFormatType,
+) -> None:
+    # a fast guard for the same non-termination: passing `shards` down to anndata would hang the write rather than
+    # fail it, and a hang under `pytest -n auto` stalls a worker with no diagnostic
+    captured: list[dict[str, Any]] = []
+
+    def record_write_adata(group: zarr.Group, name: str, table: AnnData, **kwargs: Any) -> None:
+        captured.append(kwargs)
+
+    def record_write_zarr(self: AnnData, *args: Any, **kwargs: Any) -> None:
+        captured.append(kwargs)
+
+    monkeypatch.setattr("spatialdata._io.io_table.write_adata", record_write_adata)
+    monkeypatch.setattr(AnnData, "write_zarr", record_write_zarr)
+
+    _table_only_sdata().write(
+        tmp_path / "data.zarr",
+        sdata_formats=sdata_container_format,
+        table_shard_size_bytes=SHARD_BUDGET_SMALL,
+    )
+
+    assert len(captured) == 1
+    for kwargs in captured:
+        assert "shards" not in kwargs
+        assert "shards" not in kwargs.get("dataset_kwargs", {})
+
+
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS)
+def test_table_shard_size_bytes_none_is_unchanged(
+    tmp_path: Path,
+    sdata_container_format: SpatialDataContainerFormatType,
+) -> None:
+    sdata = _table_only_sdata()
+    absent = tmp_path / "absent.zarr"
+    explicit_none = tmp_path / "explicit_none.zarr"
+    sdata.write(absent, sdata_formats=sdata_container_format, update_sdata_path=False)
+    sdata.write(
+        explicit_none, sdata_formats=sdata_container_format, update_sdata_path=False, table_shard_size_bytes=None
+    )
+
+    assert _are_directories_identical(absent, explicit_none)
+
+
+@requires_shard_budget_support
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+def test_table_shard_budget_restores_global_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before = _global_shard_state()
+
+    _table_only_sdata().write(tmp_path / "ok.zarr", table_shard_size_bytes=SHARD_BUDGET_SMALL)
+    assert _global_shard_state() == before
+
+    def boom(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("write failed")
+
+    monkeypatch.setattr("spatialdata._io.io_table.write_adata", boom)
+    monkeypatch.setattr(AnnData, "write_zarr", boom)
+
+    with pytest.raises(RuntimeError, match="write failed"):
+        _table_only_sdata().write(tmp_path / "boom.zarr", table_shard_size_bytes=SHARD_BUDGET_SMALL)
+    assert _global_shard_state() == before
+
+
+@requires_shard_budget_support
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+@pytest.mark.parametrize("sdata_container_format", SDATA_FORMATS_ZARR_V2)
+def test_table_shard_size_bytes_rejected_on_zarr_v2(
+    tmp_path: Path,
+    sdata_container_format: SpatialDataContainerFormatType,
+) -> None:
+    path = tmp_path / "v2.zarr"
+    with pytest.raises(TableWriteOptionsError, match="requires a zarr v3 table format"):
+        _table_only_sdata().write(
+            path,
+            sdata_formats=sdata_container_format,
+            table_shard_size_bytes=SHARD_BUDGET_SMALL,
+        )
+    # the argument is validated before any element reaches disk
+    assert not path.exists()
+
+
+@pytest.mark.filterwarnings("ignore:The table is annotating:UserWarning")
+@pytest.mark.parametrize("invalid", [0, -1])
+def test_table_shard_size_bytes_validation(tmp_path: Path, invalid: int) -> None:
+    sdata = _table_only_sdata()
+    path = tmp_path / "invalid.zarr"
+    with pytest.raises(TableWriteOptionsError, match="must be a positive int"):
+        sdata.write(path, table_shard_size_bytes=invalid)
+    assert not path.exists()
+
+    backing = tmp_path / "backed.zarr"
+    sdata.write(backing)
+    sdata["table2"] = deepcopy(sdata["table"])
+    with pytest.raises(TableWriteOptionsError, match="must be a positive int"):
+        sdata.write_element("table2", table_shard_size_bytes=invalid)
+    assert not (backing / "tables" / "table2").exists()
