@@ -814,6 +814,26 @@ def test_force2d():
     assert_elements_are_identical(multipolygons_3d, expected_multipolygons_2d)
 
 
+def test_force2d_preserves_holes():
+    exterior = [(0, 0), (10, 0), (10, 10), (0, 10)]
+    hole = [(4, 4), (6, 4), (6, 6), (4, 6)]
+    polygon_2d = Polygon(exterior, [hole])
+    polygon_3d = Polygon([(x, y, 1) for x, y in exterior], [[(x, y, 1) for x, y in hole]])
+
+    polygons_3d = ShapesModel.parse(GeoDataFrame({"geometry": [polygon_3d]}))
+    multipolygons_3d = ShapesModel.parse(GeoDataFrame({"geometry": [MultiPolygon([polygon_3d])]}))
+
+    force_2d(polygons_3d)
+    force_2d(multipolygons_3d)
+
+    assert polygons_3d.geometry.area.tolist() == [96.0]
+    assert multipolygons_3d.geometry.area.tolist() == [96.0]
+    assert_elements_are_identical(polygons_3d, ShapesModel.parse(GeoDataFrame({"geometry": [polygon_2d]})))
+    assert_elements_are_identical(
+        multipolygons_3d, ShapesModel.parse(GeoDataFrame({"geometry": [MultiPolygon([polygon_2d])]}))
+    )
+
+
 def test_points_model_preserves_column_order():
     # the extra columns used to be added iterating over a set, so their order in the parsed element depended on
     # PYTHONHASHSEED. Renaming the coordinate columns changes the set of column names, which used to bypass the
