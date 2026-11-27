@@ -190,5 +190,5 @@ def test_get_centroids_invalid_element(images):
 
 
 def test_get_centroids_invalid_coordinate_system(points):
-    with pytest.raises(AssertionError, match="No transformation to coordinate system"):
+    with pytest.raises(ValueError, match="No transformation to coordinate system"):
         get_centroids(points["points_0"], coordinate_system="invalid")
