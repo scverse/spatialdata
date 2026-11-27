@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from anndata import AnnData
 from numpy.random import default_rng
+from xarray import DataTree
 
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances
@@ -211,6 +212,28 @@ def test_get_centroids_shapes_area_polygons(shapes, shapes_name: str):
 def test_get_centroids_points_area_raises(points):
     with pytest.raises(ValueError, match="not supported for points"):
         get_centroids(points["points_0"], return_area=True)
+
+
+def _label_counts(element) -> dict[int, int]:
+    """Pixel/voxel count per label id, measured on the full-resolution level."""
+    data = next(iter(element.children["scale0"].data_vars.values())) if isinstance(element, DataTree) else element
+    ids, counts = np.unique(data.to_numpy(), return_counts=True)
+    return dict(zip(ids.tolist(), counts.tolist(), strict=True))
+
+
+def test_get_centroids_labels_area_multiscale(labels):
+    # multiscale labels are measured on the full-resolution scale0 level
+    element = labels["labels2d_multiscale"]
+    area = get_centroids(element, return_area=True)["area"].compute()
+    expected = _label_counts(element)
+    assert area.to_dict() == {k: float(v) for k, v in expected.items() if k != 0}
+
+
+def test_get_centroids_labels3d_area(labels):
+    # for 3D labels, `area` is the voxel count (a volume), as in skimage's regionprops
+    element = labels["labels3d_numpy"]
+    centroids = get_centroids(element, return_area=True, return_background=True).compute()
+    assert centroids["area"].to_dict() == {k: float(v) for k, v in _label_counts(element).items()}
 
 
 def test_get_centroids_area_non_identity_transform_raises(full_sdata):
