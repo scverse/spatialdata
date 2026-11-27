@@ -23,10 +23,11 @@ BoundingBoxDescription = dict[str, tuple[float, float]]
 def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> None:
     d = get_transformation(e, get_all=True)
     assert isinstance(d, dict)
-    assert coordinate_system in d, (
-        f"No transformation to coordinate system {coordinate_system} is available for the given element.\n"
-        f"Available coordinate systems: {list(d.keys())}"
-    )
+    if coordinate_system not in d:
+        raise ValueError(
+            f"No transformation to coordinate system {coordinate_system!r} is available for the given element. "
+            f"Available coordinate systems: {list(d.keys())}"
+        )
 
 
 @singledispatch
@@ -45,7 +46,7 @@ def get_centroids(
     coordinate_system
         The coordinate system in which the centroids are computed.
     return_background
-        If True, the centroid of the background label (0) is included in the output.
+        If True, the centroid of the background label (0) is included in the output (labels only).
 
     Returns
     -------
@@ -53,8 +54,9 @@ def get_centroids(
 
     Notes
     -----
-    For :class:`~shapely.MultiPolygon` geometries, the centroids are the average of the centroids of the polygons that
-    constitute each :class:`~shapely.MultiPolygon`.
+    For :class:`~shapely.MultiPolygon` geometries, the centroid is the geometric (area-weighted) centroid computed by
+    ``geopandas`` (``GeoDataFrame.centroid``), i.e. sub-polygons contribute in proportion to their area. For
+    multiscale labels, the centroids are computed on the full-resolution ``scale0`` level.
     """
     raise ValueError(f"The object type {type(e)} is not supported.")
 
@@ -78,7 +80,7 @@ def _get_centroids_for_labels(xdata: xr.DataArray) -> pd.DataFrame:
     coord_grids = np.meshgrid(*[xdata[ax].to_numpy() for ax in axes], indexing="ij")
     data: dict[str, np.ndarray] = {}
     for ax, grid in zip((str(ax) for ax in axes), coord_grids, strict=True):
-        coord_sums = np.bincount(flat_inverse, weights=grid.ravel().astype(float))
+        coord_sums = np.bincount(flat_inverse, weights=grid.ravel().astype(float, copy=False))
         data[ax] = coord_sums / counts  # counts > 0 by construction (unique guarantees this)
 
     return pd.DataFrame(data, index=label_ids)
@@ -143,7 +145,8 @@ def _(e: DaskDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
     """Get the centroids of a Points element."""
     _validate_coordinate_system(e, coordinate_system)
     axes = get_axes_names(e)
-    assert axes in [("x", "y"), ("x", "y", "z")]
+    if axes not in [("x", "y"), ("x", "y", "z")]:
+        raise ValueError(f"Expected points axes to be ('x', 'y') or ('x', 'y', 'z'), got {axes}.")
     coords = e[list(axes)].compute()
     return _points_from_centroids(coords, e, coordinate_system)
 
