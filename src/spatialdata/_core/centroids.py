@@ -105,7 +105,10 @@ def _(
     """Get the centroids of a Labels element (2D or 3D)."""
     model = get_model(e)
     if model not in [Labels2DModel, Labels3DModel]:
-        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
+        raise ValueError(
+            f"Centroids are not supported for elements modeled by {model.__name__}; "
+            f"expected a Labels, Shapes or Points element."
+        )
     _validate_coordinate_system(e, coordinate_system)
 
     if isinstance(e, DataTree):
