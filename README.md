@@ -11,6 +11,8 @@
 [![Documentation][badge-pypi]][link-pypi]
 [![Anaconda-Server Badge](https://anaconda.org/conda-forge/spatialdata/badges/version.svg)](https://anaconda.org/conda-forge/spatialdata)
 
+[![SPEC 0 — Minimum Supported Dependencies](https://img.shields.io/badge/SPEC-0%20(aspiring!)-green?labelColor=%23004811&color=%235CA038)](https://scientific-python.org/specs/spec-0000/)
+
 [badge-pypi]: https://badge.fury.io/py/spatialdata.svg
 [link-pypi]: https://pypi.org/project/spatialdata/
 

@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 @contextmanager
 def pytest_warns_multiple(
     expected_warning: type[Warning] | tuple[type[Warning], ...] = Warning, matches: Iterable[str] = ()
-) -> Generator[None, None, None]:
+) -> Generator:
     """
     Assert that code raises warnings matching particular patterns.
 
