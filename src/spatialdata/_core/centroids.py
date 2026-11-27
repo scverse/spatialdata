@@ -133,7 +133,7 @@ def get_centroids(
     -----
     For :class:`~shapely.MultiPolygon` geometries, the centroid is the geometric (area-weighted) centroid computed by
     ``geopandas`` (``GeoDataFrame.centroid``), i.e. sub-polygons contribute in proportion to their area. For
-    multiscale labels the centroids are computed on the full-resolution ``scale0`` level.
+    multiscale labels, the centroids are computed on the full-resolution ``scale0`` level.
     """
     raise ValueError(f"The object type {type(e)} is not supported.")
 
