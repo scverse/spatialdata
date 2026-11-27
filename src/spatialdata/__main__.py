@@ -15,8 +15,8 @@ import click
 
 @click.command(help="Peek inside the SpatialData .zarr dataset")
 @click.argument("path", default=False, type=str)
-@click.argument("selection", type=click.Choice(["images", "labels", "points", "shapes", "table"]), nargs=-1)
-def peek(path: str, selection: tuple[Literal["images", "labels", "points", "shapes", "table"]]) -> None:
+@click.argument("selection", type=click.Choice(["images", "labels", "points", "shapes", "tables"]), nargs=-1)
+def peek(path: str, selection: tuple[Literal["images", "labels", "points", "shapes", "tables"], ...]) -> None:
     """
     Peek inside the SpatialData .zarr dataset.
 
@@ -29,7 +29,7 @@ def peek(path: str, selection: tuple[Literal["images", "labels", "points", "shap
     path
         The path to the .zarr dataset to be inspected.
     selection
-        Optional, a list of keys (among images, labels, points, shapes, table) to load only a subset of the dataset.
+        Optional, a list of keys (among images, labels, points, shapes, tables) to load only a subset of the dataset.
         Example: `python -m spatialdata peek data.zarr images labels`
     """
     import spatialdata as sd
@@ -46,7 +46,7 @@ def peek(path: str, selection: tuple[Literal["images", "labels", "points", "shap
             f"Error: .zarr storage not found at {path}. Please specify a valid OME-NGFF spatial data (.zarr) file. "
             "Examples "
             '"python -m spatialdata peek data.zarr"'
-            '"python -m spatialdata peek https://remote/.../data.zarr labels table"'
+            '"python -m spatialdata peek https://remote/.../data.zarr labels tables"'
         )
 
 
