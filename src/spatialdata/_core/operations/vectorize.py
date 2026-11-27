@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -147,7 +147,8 @@ def _get_centroids(element: SpatialElement) -> pd.DataFrame:
     if INTRINSIC_COORDINATE_SYSTEM in d:
         raise RuntimeError(f"The name {INTRINSIC_COORDINATE_SYSTEM} is reserved.")
     d[INTRINSIC_COORDINATE_SYSTEM] = Identity()
-    centroids = get_centroids(element, coordinate_system=INTRINSIC_COORDINATE_SYSTEM).compute()
+    # get_centroids returns DaskDataFrame for elements (only the SpatialData overload returns SpatialData).
+    centroids = cast(DaskDataFrame, get_centroids(element, coordinate_system=INTRINSIC_COORDINATE_SYSTEM)).compute()
     del d[INTRINSIC_COORDINATE_SYSTEM]
     computed_centroids: pd.DataFrame = centroids
     return computed_centroids
