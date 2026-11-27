@@ -84,6 +84,15 @@ def _get_centroids_for_labels(xdata: xr.DataArray) -> pd.DataFrame:
     return pd.DataFrame(data, index=label_ids)
 
 
+def _points_from_centroids(df: pd.DataFrame, e: SpatialElement, coordinate_system: str) -> DaskDataFrame:
+    """Build a Points element from the intrinsic centroids of ``e``, transformed into ``coordinate_system``."""
+    t = get_transformation(e, coordinate_system)
+    assert isinstance(t, BaseTransformation)
+    points = PointsModel.parse(df, transformations={coordinate_system: t})
+    transformed: DaskDataFrame = transform(points, to_coordinate_system=coordinate_system)
+    return transformed
+
+
 @get_centroids.register(DataArray)
 @get_centroids.register(DataTree)
 def _(
@@ -108,18 +117,13 @@ def _(
     df = _get_centroids_for_labels(e)
     if not return_background and 0 in df.index:
         df = df.drop(index=0)  # drop the background label
-    t = get_transformation(e, coordinate_system)
-    centroids = PointsModel.parse(df, transformations={coordinate_system: t})
-    transformed: DaskDataFrame = transform(centroids, to_coordinate_system=coordinate_system)
-    return transformed
+    return _points_from_centroids(df, e, coordinate_system)
 
 
 @get_centroids.register(GeoDataFrame)
 def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
     """Get the centroids of a Shapes element (circles or polygons/multipolygons)."""
     _validate_coordinate_system(e, coordinate_system)
-    t = get_transformation(e, coordinate_system)
-    assert isinstance(t, BaseTransformation)
     # separate points from (multi-)polygons
     first_geometry = e["geometry"].iloc[0]
     if isinstance(first_geometry, Point):
@@ -131,9 +135,7 @@ def _(e: GeoDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
         )
         xy = e.centroid.get_coordinates().to_numpy()
     xy_df = pd.DataFrame(xy, columns=["x", "y"], index=e.index.copy())
-    points = PointsModel.parse(xy_df, transformations={coordinate_system: t})
-    transformed_points: DaskDataFrame = transform(points, to_coordinate_system=coordinate_system)
-    return transformed_points
+    return _points_from_centroids(xy_df, e, coordinate_system)
 
 
 @get_centroids.register(DaskDataFrame)
@@ -143,11 +145,7 @@ def _(e: DaskDataFrame, coordinate_system: str = "global") -> DaskDataFrame:
     axes = get_axes_names(e)
     assert axes in [("x", "y"), ("x", "y", "z")]
     coords = e[list(axes)].compute()
-    t = get_transformation(e, coordinate_system)
-    assert isinstance(t, BaseTransformation)
-    centroids = PointsModel.parse(coords, transformations={coordinate_system: t})
-    transformed_centroids: DaskDataFrame = transform(centroids, to_coordinate_system=coordinate_system)
-    return transformed_centroids
+    return _points_from_centroids(coords, e, coordinate_system)
 
 
 ##
