@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+import dask.array as da
 import numpy as np
 import pytest
 from geopandas import GeoDataFrame
@@ -15,6 +16,7 @@ from spatialdata._core.operations.vectorize import (
     to_polygons,
 )
 from spatialdata.datasets import blobs
+from spatialdata.models import Labels2DModel
 from spatialdata.models.models import ShapesModel
 from spatialdata.testing import assert_elements_are_identical
 
@@ -63,6 +65,40 @@ def test_chunked_labels_2d_to_polygons(sdata) -> None:
     union = chunks_polygons.union(no_chunks_polygons)
 
     (no_chunks_polygons.area == union.area).all()
+
+
+@pytest.mark.parametrize("chunk_size", [4, 8, 12])
+def test_labels_with_occupied_hole_to_polygons(chunk_size: int) -> None:
+    """Preserve holes before dissolving fragments of a label across chunks."""
+    labels = np.zeros((12, 12), dtype=np.uint32)
+    labels[1:11, 1:11] = 1
+    labels[4:6, 4:6] = 2
+    element = Labels2DModel.parse(da.from_array(labels, chunks=(chunk_size, chunk_size)))
+
+    polygons = to_polygons(element)
+    outer, inner = polygons.loc[1].geometry, polygons.loc[2].geometry
+    assert polygons.geometry.is_valid.all()
+    assert outer.intersection(inner).area == 0
+    assert inner.contains(Point(4.5, 4.5))
+    assert not outer.covers(Point(4.5, 4.5))
+
+
+def test_labels_with_hole_and_disconnected_island_to_polygons() -> None:
+    """Retain an interior hole and a disconnected island of the same label."""
+    labels = np.zeros((21, 21), dtype=np.uint32)
+    labels[1:20, 1:20] = 1
+    labels[5:16, 5:16] = 0
+    labels[9:12, 9:12] = 1
+    element = Labels2DModel.parse(da.from_array(labels, chunks=labels.shape))
+
+    geometry = to_polygons(element).loc[1].geometry
+    assert geometry.is_valid
+    assert geometry.geom_type == "MultiPolygon"
+    assert len(geometry.geoms) == 2
+    assert sum(len(part.interiors) for part in geometry.geoms) == 1
+    assert geometry.contains(Point(2, 2))
+    assert not geometry.covers(Point(6, 6))
+    assert geometry.contains(Point(10, 10))
 
 
 # conversion from circles
