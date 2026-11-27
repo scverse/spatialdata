@@ -20,7 +20,8 @@ from spatialdata.transformations.transformations import BaseTransformation
 BoundingBoxDescription = dict[str, tuple[float, float]]
 
 
-def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> None:
+def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> dict[str, BaseTransformation]:
+    """Return the element's ``{coordinate_system: transformation}`` map, raising if ``coordinate_system`` is absent."""
     d = get_transformation(e, get_all=True)
     assert isinstance(d, dict)
     if coordinate_system not in d:
@@ -28,6 +29,7 @@ def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> No
             f"No transformation to coordinate system {coordinate_system!r} is available for the given element. "
             f"Available coordinate systems: {list(d.keys())}"
         )
+    return d
 
 
 def _is_identity(transformation: BaseTransformation, e: SpatialElement) -> bool:
@@ -42,19 +44,21 @@ def _is_identity(transformation: BaseTransformation, e: SpatialElement) -> bool:
     return bool(np.allclose(matrix, np.eye(len(axes) + 1)))
 
 
-def _validate_return_area(e: SpatialElement, coordinate_system: str, return_area: bool) -> None:
-    """Require an identity transformation for ``return_area``.
+def _validate_return_area(
+    e: SpatialElement, coordinate_system: str, transformation: BaseTransformation, return_area: bool
+) -> None:
+    """Validate ``return_area``.
 
-    The area is computed in intrinsic (untransformed) units, but the centroids are transformed into
-    ``coordinate_system``; returning both under a non-identity transformation would leave area and
-    centroids in different coordinate systems, so intrinsic coordinates (a system whose transformation is the
-    identity) are required.
+    Points have no area (raises). For labels/shapes the area is computed in intrinsic (untransformed)
+    units, but the Points centroids *are* transformed into ``coordinate_system``; returning both under a
+    non-identity transform would leave area and centroids in different coordinate systems, so intrinsic
+    coordinates (a system whose transformation is the identity) are required.
     """
     if not return_area:
         return
-    t = get_transformation(e, coordinate_system)
-    assert isinstance(t, BaseTransformation)
-    if not _is_identity(t, e):
+    if get_model(e) is PointsModel:
+        raise ValueError("`return_area` is not supported for points elements (points have no area).")
+    if not _is_identity(transformation, e):
         raise ValueError(
             f"`return_area=True` requires intrinsic coordinates: pass a "
             f"coordinate system whose transformation is the identity. The area is not transformed, so "
@@ -103,11 +107,13 @@ def get_centroids(
     raise ValueError(f"The object type {type(e)} is not supported.")
 
 
-def _get_centroids_for_labels(xdata: xr.DataArray) -> tuple[pd.DataFrame, np.ndarray]:
+def _get_centroids_for_labels(xdata: xr.DataArray, return_area: bool = False) -> pd.DataFrame:
     """
-    Compute centroids and pixel (voxel) counts for all labels in a DataArray in a single O(n_voxels) pass.
+    Compute centroids for all labels in a DataArray in a single O(n_voxels) pass.
 
-    Works for any number of spatial dimensions (2D and 3D labels).
+    Works for any number of spatial dimensions (2D and 3D labels). When ``return_area`` is True, an
+    ``area`` column (the per-label pixel/voxel count) is added; it is already computed for the
+    centroids, so this is free.
     """
     arr = xdata.data.compute()
     axes = list(xdata.dims)
@@ -125,94 +131,88 @@ def _get_centroids_for_labels(xdata: xr.DataArray) -> tuple[pd.DataFrame, np.nda
         coord_sums = np.bincount(flat_inverse, weights=grid.ravel().astype(float, copy=False))
         data[ax] = coord_sums / counts  # counts > 0 by construction (unique guarantees this)
 
-    return pd.DataFrame(data, index=label_ids), counts
+    df = pd.DataFrame(data, index=label_ids)
+    if return_area:
+        df["area"] = counts.astype(float)
+    return df
 
 
-def _points_from_centroids(df: pd.DataFrame, e: SpatialElement, coordinate_system: str) -> DaskDataFrame:
-    """Build a Points element from the intrinsic centroids of ``e``, transformed into ``coordinate_system``."""
+def _get_centroids_for_shapes(e: GeoDataFrame, return_area: bool) -> tuple[pd.DataFrame, np.ndarray | None]:
+    """Intrinsic per-shape centroids (``x, y`` columns indexed by the element's index) and optional area."""
+    first_geometry = e["geometry"].iloc[0]
+    if isinstance(first_geometry, Point):
+        xy = e.geometry.get_coordinates().values
+        # shapely .area is 0 for circles (Point geometry); the radius column carries the size.
+        area: np.ndarray | None = np.pi * np.asarray(e["radius"], dtype=float) ** 2 if return_area else None
+    else:
+        assert isinstance(first_geometry, Polygon | MultiPolygon), (
+            f"Expected a GeoDataFrame either composed entirely of circles (Points with the `radius` column) or"
+            f" Polygons/MultiPolygons. Found {type(first_geometry)} instead."
+        )
+        xy = e.centroid.get_coordinates().values
+        area = e.geometry.area.to_numpy() if return_area else None
+    xy_df = pd.DataFrame(xy, columns=["x", "y"], index=e.index.copy())
+    return xy_df, area
+
+
+def _intrinsic_centroid_frame(
+    element: SpatialElement, return_background: bool, return_area: bool
+) -> tuple[pd.DataFrame, np.ndarray | None, SpatialElement]:
+    """Per-instance intrinsic centroids (coordinate columns, indexed by instance id), optional area.
+
+    Also returns the element the centroids live on (for labels, the ``scale0`` level of a multiscale
+    raster), which carries the transformation to apply downstream.
+    """
+    if isinstance(element, GeoDataFrame):
+        xy_df, area = _get_centroids_for_shapes(element, return_area)
+        return xy_df, area, element
+    if isinstance(element, DaskDataFrame):
+        if return_area:
+            raise ValueError("`return_area` is not supported for points elements (points have no area).")
+        axes = get_axes_names(element)
+        if axes not in [("x", "y"), ("x", "y", "z")]:
+            raise ValueError(f"Expected points axes to be ('x', 'y') or ('x', 'y', 'z'), got {axes}.")
+        coords: pd.DataFrame = element[list(axes)].compute()
+        return coords, None, element
+    model = get_model(element)
+    if model not in (Labels2DModel, Labels3DModel):
+        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
+    # ``children`` is typed ``Mapping[str, DataTree]`` and ``data_vars`` yields ``DataArray``s.
+    raster = element if isinstance(element, DataArray) else next(iter(element.children["scale0"].data_vars.values()))
+    df = _get_centroids_for_labels(raster, return_area=return_area)
+    if not return_background and 0 in df.index:
+        df = df.drop(index=0)  # drop the background label (its area, if any, goes with it)
+    area = df.pop("area").to_numpy() if return_area else None
+    return df, area, raster
+
+
+def _points_from_centroids(
+    df: pd.DataFrame, area: np.ndarray | None, e: SpatialElement, coordinate_system: str
+) -> DaskDataFrame:
+    """Build a Points element from intrinsic centroids, transformed into ``coordinate_system``."""
+    out = df.assign(area=np.asarray(area, dtype=float)) if area is not None else df
     t = get_transformation(e, coordinate_system)
     assert isinstance(t, BaseTransformation)
-    points = PointsModel.parse(df, transformations={coordinate_system: t})
+    points = PointsModel.parse(out, transformations={coordinate_system: t})
     transformed: DaskDataFrame = transform(points, to_coordinate_system=coordinate_system)
     return transformed
 
 
 @get_centroids.register(DataArray)
 @get_centroids.register(DataTree)
-def _(
-    e: DataArray | DataTree,
-    coordinate_system: str = "global",
-    return_background: bool = False,
-    return_area: bool = False,
-) -> DaskDataFrame:
-    """Get the centroids of a Labels element (2D or 3D)."""
-    model = get_model(e)
-    if model not in [Labels2DModel, Labels3DModel]:
-        raise ValueError("Expected a `Labels` element. Found an `Image` instead.")
-    _validate_coordinate_system(e, coordinate_system)
-    _validate_return_area(e, coordinate_system, return_area)
-
-    if isinstance(e, DataTree):
-        scale0 = e["scale0"]
-        assert isinstance(scale0, DataTree)
-        assert len(scale0) == 1
-        variable = next(iter(scale0.values()))
-        assert isinstance(variable, DataArray)
-        e = variable
-
-    df, counts = _get_centroids_for_labels(e)
-    if return_area:
-        df["area"] = counts.astype(float)
-    if not return_background and 0 in df.index:
-        df = df.drop(index=0)  # drop the background label
-    return _points_from_centroids(df, e, coordinate_system)
-
-
 @get_centroids.register(GeoDataFrame)
-def _(
-    e: GeoDataFrame,
-    coordinate_system: str = "global",
-    return_background: bool = False,
-    return_area: bool = False,
-) -> DaskDataFrame:
-    """Get the centroids of a Shapes element (circles or polygons/multipolygons)."""
-    _validate_coordinate_system(e, coordinate_system)
-    _validate_return_area(e, coordinate_system, return_area)
-    # separate points from (multi-)polygons
-    first_geometry = e["geometry"].iloc[0]
-    if isinstance(first_geometry, Point):
-        xy = e.geometry.get_coordinates().values
-    else:
-        assert isinstance(first_geometry, Polygon | MultiPolygon), (
-            f"Expected a GeoDataFrame either composed entirely of circles (Points with the `radius` column) or"
-            f" Polygons/MultiPolygons. Found {type(first_geometry)} instead."
-        )
-        xy = e.centroid.get_coordinates().to_numpy()
-    xy_df = pd.DataFrame(xy, columns=["x", "y"], index=e.index.copy())
-    if return_area:
-        # circles are Point geometries (shapely area 0); their size is carried by the radius column
-        is_circle = isinstance(first_geometry, Point)
-        area = np.pi * e["radius"].to_numpy(dtype=float) ** 2 if is_circle else e.geometry.area.to_numpy()
-        xy_df["area"] = area
-    return _points_from_centroids(xy_df, e, coordinate_system)
-
-
 @get_centroids.register(DaskDataFrame)
 def _(
-    e: DaskDataFrame,
+    e: DataArray | DataTree | GeoDataFrame | DaskDataFrame,
     coordinate_system: str = "global",
     return_background: bool = False,
     return_area: bool = False,
 ) -> DaskDataFrame:
-    """Get the centroids of a Points element."""
-    if return_area:
-        raise ValueError("`return_area` is not supported for points elements (points have no area).")
-    _validate_coordinate_system(e, coordinate_system)
-    axes = get_axes_names(e)
-    if axes not in [("x", "y"), ("x", "y", "z")]:
-        raise ValueError(f"Expected points axes to be ('x', 'y') or ('x', 'y', 'z'), got {axes}.")
-    coords = e[list(axes)].compute()
-    return _points_from_centroids(coords, e, coordinate_system)
+    """Get the centroids of a Labels, Shapes or Points element."""
+    transformations = _validate_coordinate_system(e, coordinate_system)
+    _validate_return_area(e, coordinate_system, transformations[coordinate_system], return_area)
+    df, area, raster = _intrinsic_centroid_frame(e, return_background, return_area)
+    return _points_from_centroids(df, area, raster, coordinate_system)
 
 
 ##
