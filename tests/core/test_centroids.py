@@ -274,7 +274,7 @@ def test_get_centroids_area_does_not_change_centroids(labels):
 
 def test_get_centroids_invalid_element(images):
     # cannot compute centroids for images
-    with pytest.raises(ValueError, match="Expected a `Labels` element. Found an `Image` instead."):
+    with pytest.raises(ValueError, match="Centroids are not supported for elements modeled by Image2DModel"):
         get_centroids(images["image2d"])
 
     # cannot compute centroids for tables
