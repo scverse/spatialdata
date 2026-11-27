@@ -32,39 +32,16 @@ def _validate_coordinate_system(e: SpatialElement, coordinate_system: str) -> di
     return d
 
 
-def _is_identity(transformation: BaseTransformation, e: SpatialElement) -> bool:
-    """Return True if ``transformation`` is a mathematical no-op (its affine matrix equals the identity).
+def _area_scale_factor(e: SpatialElement, coordinate_system: str) -> float:
+    """Factor by which areas (2D) or volumes (3D) of ``e`` scale when mapped into ``coordinate_system``.
 
-    Compares the affine matrix rather than checking ``isinstance(..., Identity)``, so a numerically
-    identity ``Scale([1, 1])`` / ``Translation([0, 0])`` / ``Affine(np.eye(...))`` / ``Sequence([Identity()])``
-    also counts as intrinsic.
+    For an affine map, every area/volume scales by ``|det|`` of its linear part, regardless of position.
     """
+    t = get_transformation(e, coordinate_system)
+    assert isinstance(t, BaseTransformation)
     axes = get_axes_names(e)
-    matrix = transformation.to_affine_matrix(input_axes=axes, output_axes=axes)
-    return bool(np.allclose(matrix, np.eye(len(axes) + 1)))
-
-
-def _validate_return_area(
-    e: SpatialElement, coordinate_system: str, transformation: BaseTransformation, return_area: bool
-) -> None:
-    """Validate ``return_area``.
-
-    Points have no area (raises). For labels/shapes the area is computed in intrinsic (untransformed)
-    units, but the Points centroids *are* transformed into ``coordinate_system``; returning both under a
-    non-identity transform would leave area and centroids in different coordinate systems, so intrinsic
-    coordinates (a system whose transformation is the identity) are required.
-    """
-    if not return_area:
-        return
-    if get_model(e) is PointsModel:
-        raise ValueError("`return_area` is not supported for points elements (points have no area).")
-    if not _is_identity(transformation, e):
-        raise ValueError(
-            f"`return_area=True` requires intrinsic coordinates: pass a "
-            f"coordinate system whose transformation is the identity. The area is not transformed, so "
-            f"pairing it with the non-identity transform to {coordinate_system!r} would put area and "
-            f"centroids in different coordinate systems."
-        )
+    matrix = t.to_affine_matrix(input_axes=axes, output_axes=axes)
+    return float(abs(np.linalg.det(matrix[:-1, :-1])))
 
 
 @singledispatch
@@ -86,13 +63,11 @@ def get_centroids(
     return_background
         If True, the centroid of the background label (0) is included in the output (labels only).
     return_area
-        If True, also return the per-instance area: the pixel/voxel count for labels and the geometric
-        area for shapes (``pi * r**2`` for circles). Not supported for points (raises). It is
-        added as a feature column of the returned Points element.
-        The area is always computed in intrinsic (untransformed) units, so it is only allowed together
-        with intrinsic coordinates: ``return_area=True`` requires a
-        coordinate system whose transformation is the identity (otherwise area and centroids would live
-        in different coordinate systems).
+        If True, an ``area`` column with the size of each geometry, measured in ``coordinate_system``, is added.
+        Labels are measured by counting pixels, circles as ``pi * radius**2`` and polygons by their geometric
+        area; the result is then scaled by the absolute determinant of the linear part of the transformation to
+        ``coordinate_system``. For 3D labels the voxels are counted, so ``area`` is a volume (as in
+        ``skimage.measure.regionprops``). Not supported for points.
 
     Returns
     -------
@@ -102,7 +77,7 @@ def get_centroids(
     -----
     For :class:`~shapely.MultiPolygon` geometries, the centroid is the geometric (area-weighted) centroid computed by
     ``geopandas`` (``GeoDataFrame.centroid``), i.e. sub-polygons contribute in proportion to their area. For
-    multiscale labels, the centroids are computed on the full-resolution ``scale0`` level.
+    multiscale labels, centroids and sizes are computed on the full-resolution ``scale0`` level.
     """
     raise ValueError(f"The object type {type(e)} is not supported.")
 
@@ -189,8 +164,15 @@ def _intrinsic_centroid_frame(
 def _points_from_centroids(
     df: pd.DataFrame, area: np.ndarray | None, e: SpatialElement, coordinate_system: str
 ) -> DaskDataFrame:
-    """Build a Points element from intrinsic centroids, transformed into ``coordinate_system``."""
-    out = df.assign(area=np.asarray(area, dtype=float)) if area is not None else df
+    """Build a Points element from intrinsic centroids, transformed into ``coordinate_system``.
+
+    The intrinsic ``area``, if given, is scaled into ``coordinate_system`` as well.
+    """
+    out = (
+        df.assign(area=np.asarray(area, dtype=float) * _area_scale_factor(e, coordinate_system))
+        if area is not None
+        else df
+    )
     t = get_transformation(e, coordinate_system)
     assert isinstance(t, BaseTransformation)
     points = PointsModel.parse(out, transformations={coordinate_system: t})
@@ -209,8 +191,7 @@ def _(
     return_area: bool = False,
 ) -> DaskDataFrame:
     """Get the centroids of a Labels, Shapes or Points element."""
-    transformations = _validate_coordinate_system(e, coordinate_system)
-    _validate_return_area(e, coordinate_system, transformations[coordinate_system], return_area)
+    _validate_coordinate_system(e, coordinate_system)
     df, area, raster = _intrinsic_centroid_frame(e, return_background, return_area)
     return _points_from_centroids(df, area, raster, coordinate_system)
 
